@@ -3,3 +3,4 @@
 *.pickle
 *.h5
 *.png
+*.pth

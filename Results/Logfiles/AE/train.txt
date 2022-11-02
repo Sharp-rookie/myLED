@@ -1,0 +1,7 @@
+model_name:AE:memory:288.6875:total_training_time:35.73729872703552:min_val_total_loss:7.615980102668624e-05
+model_name:AE:memory:359.53515625:total_training_time:43.50087594985962:min_val_total_loss:7.615980102668624e-05
+model_name:AE:memory:298.609375:total_training_time:39.39509892463684:min_val_total_loss:7.615980102668624e-05
+model_name:AE:memory:302.31640625:total_training_time:44.17636847496033:min_val_total_loss:7.615980102668624e-05
+model_name:AE:memory:299.9609375:total_training_time:41.80936670303345:min_val_total_loss:7.615980102668624e-05
+model_name:AE:memory:361.93359375:total_training_time:36.97485160827637:min_val_total_loss:7.615980102668624e-05
+model_name:AE:memory:379.93359375:total_training_time:37.00240659713745:min_val_total_loss:7.615980102668624e-05
