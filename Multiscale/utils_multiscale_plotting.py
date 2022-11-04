@@ -118,7 +118,7 @@ def getMacroAndMicroSteps(model,
             macro_steps_ = int(float(temp[-1]))
             micro_steps_ = int(float(temp[-3]))
             result_ = values[field]
-
+            
             if macro_steps_ >= prediction_horizon:
                 result_iterative = values[field]
                 result_iterative_found = True
@@ -136,12 +136,9 @@ def getMacroAndMicroSteps(model,
     micro_steps = np.array(micro_steps)
     result = np.array(result)
     if not result_iterative_found:
-        raise ValueError(
-            "[utils_multiscale_plotting] Result from iterative forecasting, or result from macro_steps>prediction_horizon not found."
-        )
+        raise ValueError("[utils_multiscale_plotting] Result from iterative forecasting, or result from macro_steps>prediction_horizon not found.")
     if not result_equations_found:
-        warnings.warn(
-            "[utils_multiscale_plotting] Result from equations not found.")
+        warnings.warn("[utils_multiscale_plotting] Result from equations not found.")
         result_equations = None
 
     result_iterative = np.array(result_iterative)

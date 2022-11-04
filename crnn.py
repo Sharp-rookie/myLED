@@ -1,3 +1,4 @@
+import json
 import time
 import torch
 import random
@@ -16,6 +17,7 @@ from Multiscale import utils_multiscale
 
 
 class crnn():
+
     def __init__(self, params):
 
         super(crnn, self).__init__()
@@ -45,34 +47,6 @@ class crnn():
         torch.manual_seed(self.random_seed)
         if self.gpu: torch.cuda.manual_seed(self.random_seed)
 
-
-        ##################################################################
-        # TODO
-        ##################################################################
-        self.iterative_propagation_during_training_is_latent = params["iterative_propagation_during_training_is_latent"]
-        self.iterative_loss_schedule_and_gradient = params["iterative_loss_schedule_and_gradient"]
-        self.iterative_loss_validation = params["iterative_loss_validation"]
-        if self.iterative_loss_schedule_and_gradient not in [
-                "none",
-                "exponential_with_gradient",
-                "linear_with_gradient",
-                "inverse_sigmoidal_with_gradient",
-                "exponential_without_gradient",
-                "linear_without_gradient",
-                "inverse_sigmoidal_without_gradient",
-        ]:
-            raise ValueError("Iterative loss schedule {:} not recognized.".format(self.iterative_loss_schedule_and_gradient))
-        else:
-            if "without_gradient" in self.iterative_loss_schedule_and_gradient or "none" in self.iterative_loss_schedule_and_gradient:
-                self.iterative_loss_gradient = 0
-            elif "with_gradient" in self.iterative_loss_schedule_and_gradient:
-                self.iterative_loss_gradient = 1
-            else:
-                raise ValueError("self.iterative_loss_schedule_and_gradient={:} not recognized.".format(self.iterative_loss_schedule_and_gradient))
-        # The number of IC to test on
-        self.num_test_ICS = params["num_test_ICS"]
-
-
         ##################################################################
         # PATH SET
         ##################################################################
@@ -97,7 +71,7 @@ class crnn():
         ##################################################################
         self.RNN_activation_str = params['RNN_activation_str'] # tanh, ...
         self.RNN_activation_str_output = params['RNN_activation_str_output'] # tanh, ...
-        self.RNN_cell_type = params['RNN_cell_type'] # mlp, lstm, ...
+        self.RNN_cell_type = params['RNN_cell_type'] # mlp, lstm, gru
         self.input_dim = params['input_dim']
         self.channels = params['channels']
         self.Dz, self.Dy, self.Dx = Utils.getChannels(self.channels, params)
@@ -116,25 +90,85 @@ class crnn():
         self.RNN_trainable_init_hidden_state = params['RNN_trainable_init_hidden_state'] # If the initial state of the RNN is trainable
         self.RNN_statefull = params['RNN_statefull'] # If the RNN is statefull, iteratively propagating the hidden state during training
 
+        # TODO
+        self.iterative_propagation_during_training_is_latent = params["iterative_propagation_during_training_is_latent"]
+        self.iterative_loss_schedule_and_gradient = params["iterative_loss_schedule_and_gradient"]
+        self.iterative_loss_validation = params["iterative_loss_validation"]
+        if self.iterative_loss_schedule_and_gradient not in [
+                "none",
+                "exponential_with_gradient",
+                "linear_with_gradient",
+                "inverse_sigmoidal_with_gradient",
+                "exponential_without_gradient",
+                "linear_without_gradient",
+                "inverse_sigmoidal_without_gradient",
+        ]:
+            raise ValueError("Iterative loss schedule {:} not recognized.".format(self.iterative_loss_schedule_and_gradient))
+        else:
+            if "without_gradient" in self.iterative_loss_schedule_and_gradient or "none" in self.iterative_loss_schedule_and_gradient:
+                self.iterative_loss_gradient = False
+            elif "with_gradient" in self.iterative_loss_schedule_and_gradient:
+                self.iterative_loss_gradient = True
+            else:
+                raise ValueError("self.iterative_loss_schedule_and_gradient={:} not recognized.".format(self.iterative_loss_schedule_and_gradient))
+        
+        # The number of IC to test on
+        self.num_test_ICS = params["num_test_ICS"]
 
         ##################################################################
         # AUTOENCODER SET
         ##################################################################
-        # TODO
-        # Whether the autoencoder is convolutional or not
-        self.AE_convolutional = False
+        # Convolutional AE Set
+        self.AE_convolutional = False 
         self.AE_batch_norm = params["AE_batch_norm"]
         self.AE_conv_transpose = params["AE_conv_transpose"]
         self.AE_pool_type = params["AE_pool_type"]
-        # Beta variational autoencoder
+
+        # Beta-Vae Set
         self.beta_vae = params["beta_vae"]
         self.beta_vae_weight_max = params["beta_vae_weight_max"]
-        # TODO
-        self.c1_latent_smoothness_loss = params["c1_latent_smoothness_loss"]
-        self.c1_latent_smoothness_loss_factor = params["c1_latent_smoothness_loss_factor"]
-        if self.c1_latent_smoothness_loss:
-            assert self.sequence_length > 1, "c1_latent_smoothness_loss cannot be used with sequence_length={:}<1.".format(self.sequence_length)
 
+        ##################################################################
+        # AE and RNN Layers Set
+        ##################################################################
+        # Check RNN exist
+        self.layers_rnn = [self.params['RNN_layers_size']] * self.params['RNN_layers_num']
+        self.has_rnn = len(self.layers_rnn) > 0
+
+        # Adding the AE and RNN latent dimension
+        if bool(params["latent_state_dim"]): # micro, both RNN and AE
+            if not self.AE_convolutional:
+                # encoder layers
+                self.layers_encoder = [self.params['AE_layers_size']] * self.params['AE_layers_num']
+                self.layers_decoder = self.layers_encoder[::-1]
+                self.latent_state_dim = params["latent_state_dim"]
+                # rnn layers
+                self.RNN_state_dim = self.latent_state_dim
+                # decoder layers
+                self.decoder_input_dim = self.RNN_state_dim
+            
+            self.iterative_propagation_during_training_is_latent = params["iterative_propagation_during_training_is_latent"]
+            self.has_dummy_autoencoder = False
+        
+        else: # macro, only RNN and no AE
+            self.layers_encoder = []
+
+            if self.RNN_convolutional:
+                assert False, "RNN_convolutional not implmented!"
+                self.RNN_state_dim = params['input_dim']
+                self.has_dummy_autoencoder = False
+                assert self.RNN_kernel_size > 0
+            else:
+                if self.channels == 1:
+                    total_dim = params['input_dim'] * self.Dx
+                elif self.channels == 2:
+                    total_dim = params['input_dim'] * self.Dx * self.Dy
+                else:
+                    raise ValueError("Not implemented.")
+                self.RNN_state_dim = total_dim
+                self.has_dummy_autoencoder = True
+
+            self.iterative_propagation_during_training_is_latent = False
 
         ##################################################################
         # TRAINING PARAMETERS
@@ -151,51 +185,22 @@ class crnn():
         self.retrain = params['retrain'] # whether to retrain or not
         self.overfitting_patience = params['overfitting_patience']
         
+        # Training object
         self.train_AE_only = params["train_AE_only"]
         self.train_RNN_only = params["train_RNN_only"]
         self.load_trained_AE = params["load_trained_AE"]
-        # TODO
-        self.output_forecasting_loss = params["output_forecasting_loss"]
-        self.latent_forecasting_loss = params["latent_forecasting_loss"]
-        self.reconstruction_loss = params["reconstruction_loss"]
+
+        # Loss function type
+        self.output_forecasting_loss = params["output_forecasting_loss"] # AE+Vae+RNN
+        self.latent_forecasting_loss = params["latent_forecasting_loss"] # RNN
+        self.reconstruction_loss = params["reconstruction_loss"] # AE
+        self.c1_latent_smoothness_loss = params["c1_latent_smoothness_loss"] # RNN smoothing
+        self.c1_latent_smoothness_loss_factor = params["c1_latent_smoothness_loss_factor"]
         self.has_autoencoder = bool(params["latent_state_dim"])
+        if self.c1_latent_smoothness_loss:
+            assert self.sequence_length > 1, "c1_latent_smoothness_loss cannot be used with sequence_length={:}<1.".format(self.sequence_length)
         if (self.latent_forecasting_loss == True or self.reconstruction_loss == True) and (self.has_autoencoder == False):
             raise ValueError("latent_forecasting_loss and reconstruction_loss are not meaningfull without latent state (Autoencoder mode).")
-
-        self.layers_rnn = [self.params['RNN_layers_size']] * self.params['RNN_layers_num']
-        self.has_rnn = len(self.layers_rnn) > 0
-
-        # Adding the autoencoder latent dimension
-        if bool(params["latent_state_dim"]):
-            if not self.AE_convolutional:
-                self.layers_encoder = [self.params['AE_layers_size']] * self.params['AE_layers_num']
-                self.layers_decoder = self.layers_encoder[::-1]
-                self.latent_state_dim = params["latent_state_dim"]
-                self.RNN_state_dim = self.latent_state_dim
-                self.decoder_input_dim = self.RNN_state_dim
-            
-            # TODO
-            self.iterative_propagation_during_training_is_latent = params["iterative_propagation_during_training_is_latent"]
-            self.has_dummy_autoencoder = False
-        else:
-            self.layers_encoder = []
-
-            if self.RNN_convolutional:
-                self.RNN_state_dim = params['input_dim']
-                self.has_dummy_autoencoder = False
-                assert self.RNN_kernel_size > 0
-            else:
-                if self.channels == 1:
-                    total_dim = params['input_dim'] * self.Dx
-                elif self.channels == 2:
-                    total_dim = params['input_dim'] * self.Dx * self.Dy
-                else:
-                    raise ValueError("Not implemented.")
-                self.RNN_state_dim = total_dim
-                self.has_dummy_autoencoder = True
-
-            self.iterative_propagation_during_training_is_latent = 0
-
 
         ##################################################################
         # BUILD MODEL
@@ -298,7 +303,7 @@ class crnn():
                 self.previous_round_converged = False
                 self.learning_rate_round = self.learning_rate_round * self.lr_reduction_factor
 
-            # TODO: 为什么每轮都要加载上轮的模型？
+            # Load best model in last iter and build a optimizer for it
             if self.rounds_iter > 0:
                 # Restore the model
                 self.model.load_state_dict(torch.load(self.saving_model_path))
@@ -306,27 +311,32 @@ class crnn():
                 del self.optimizer
                 self.declareOptimizer(self.learning_rate_round)
 
-            # TODO: 这里训练是干什么？不是在下面训练吗？
-            # Train Epoch
-            losses_train, ifp_train, time_train, beta_vae_weight = self.trainEpoch(data_loader_train, is_train=False, dataset=dataset_train)
-            if self.iterative_loss_validation: assert (ifp_train == 1.0)
-            # Validate Epoch
+            # TODO: 这里训练是干什么？不是在下面训练吗？先关掉
+            # # Train Epoch
+            # losses_train, ifp_train, time_train, beta_vae_weight = self.trainEpoch(data_loader_train, is_train=False, dataset=dataset_train)
+            # if self.iterative_loss_validation: assert (ifp_train == 1.0)
+            # # Validate Epoch
+            # losses_val, ifp_val, time_val, beta_vae_weight = self.trainEpoch(data_loader_val, is_train=False, dataset=dataset_val)
+            # if self.iterative_loss_validation: assert (ifp_val == 1.0)
+            # self.printLosses("TRAIN", losses_train)
+            # self.printLosses("VAL  ", losses_val)
+
+            # self.min_val_total_loss = losses_val[0]
+            # self.loss_total_train = losses_train[0]
+            # RNN_loss_round_val_vec = []
+            # RNN_loss_round_val_vec.append(losses_val[0])
+            # self.loss_total_train_vec.append(losses_train[0])
+            # self.loss_total_val_vec.append(losses_val[0])
+            # self.losses_train_vec.append(losses_train)
+            # self.losses_time_train_vec.append(time_train)
+            # self.losses_val_vec.append(losses_val)
+            # self.losses_time_val_vec.append(time_val)
+
+            # Record the best cal loss in last iter
             losses_val, ifp_val, time_val, beta_vae_weight = self.trainEpoch(data_loader_val, is_train=False, dataset=dataset_val)
-            if self.iterative_loss_validation: assert (ifp_val == 1.0)
-            self.printLosses("TRAIN", losses_train)
-            self.printLosses("VAL  ", losses_val)
-
             self.min_val_total_loss = losses_val[0]
-            self.loss_total_train = losses_train[0]
+            
             RNN_loss_round_val_vec = []
-            RNN_loss_round_val_vec.append(losses_val[0])
-            self.loss_total_train_vec.append(losses_train[0])
-            self.loss_total_val_vec.append(losses_val[0])
-            self.losses_train_vec.append(losses_train)
-            self.losses_time_train_vec.append(time_train)
-            self.losses_val_vec.append(losses_val)
-            self.losses_time_val_vec.append(time_val)
-
             for epochs_iter in range(self.epochs_iter, self.max_epochs + 1):
                 epochs_in_round = epochs_iter - self.epochs_iter
                 self.epochs_iter_global = epochs_iter
@@ -385,9 +395,6 @@ class crnn():
             if self.beta_vae:
                 Utils.plotScheduleKLLoss(self, self.beta_vae_weight_vec)
 
-        if self.gpu and self.params["gpu_monitor_every"]:
-            self.gpu_monitor_process.stop()
-
     
     def trainEpoch(self, data_loader, is_train=False, dataset=None):
         epoch_losses_vec = []
@@ -434,7 +441,7 @@ class crnn():
             if self.noise_level > 0.0:
                 input_batch += self.noise_level * torch.randn_like(input_batch)
 
-            # Forward
+            # Warm up
             output_batch, last_hidden_state, latent_states, latent_states_pred, RNN_outputs, input_batch_decoded, time_latent_prop, beta_vae_mu, beta_vae_logvar = self.model.forward(
                 input_batch,
                 initial_hidden_states,
@@ -484,7 +491,7 @@ class crnn():
                 is_iterative_forecasting = True
                 # ----------------------------------------
                 iterative_forecasting_gradient = False
-            elif self.iterative_loss_schedule_and_gradient in ["none"]:
+            elif self.iterative_loss_schedule_and_gradient in ["none"]: # only AE, no RNN
                 iterative_forecasting_prob = 0.0
                 # Latent iterative propagation is relevant only when: is_iterative_forecasting = True
                 iterative_propagation_is_latent = False
@@ -526,7 +533,7 @@ class crnn():
             if detach_output: 
                 del input_batch
 
-            # Loss: 
+            # Loss: RNN (with AE, Vae)
             if self.output_forecasting_loss:
                 output_batch = output_batch[:, -self.params["prediction_length"]:]
                 target_batch = target_batch[:, -self.params["prediction_length"]:]
@@ -545,7 +552,7 @@ class crnn():
             else:
                 loss_kl = self.torch_dtype([0.0])[0]
 
-            # Loss: 
+            # Loss: RNN
             if self.latent_forecasting_loss:
                 outputs = latent_states_pred[:, :-1, :]
                 targets = latent_states[:, 1:, :]
@@ -556,15 +563,15 @@ class crnn():
             else:
                 loss_dyn_fwd = self.torch_dtype([0.0])[0]
 
-            # Loss: 
+            # Loss: AE
             if self.reconstruction_loss:
                 loss_auto_fwd = self.getLoss(input_batch_decoded, input_batch)
             else:
                 loss_auto_fwd = self.torch_dtype([0.0])[0]
 
-            # Loss: 
+            # Loss: RNN smoothing predict loss(MSE)
             if self.c1_latent_smoothness_loss and not self.has_rnn:
-                loss_auto_fwd_c1 = self.getC1Loss(latent_states, )
+                loss_auto_fwd_c1 = self.getC1Loss(latent_states)
             else:
                 loss_auto_fwd_c1 = self.torch_dtype([0.0])[0]
 
@@ -580,7 +587,7 @@ class crnn():
             if self.reconstruction_loss:
                 loss_batch += loss_auto_fwd
                 num_losses += 1
-            if self.c1_latent_smoothness_loss and (not self.has_rnn):
+            if self.c1_latent_smoothness_loss and not self.has_rnn:
                 loss_auto_fwd_c1 *= self.c1_latent_smoothness_loss_factor
                 loss_batch += loss_auto_fwd_c1
                 num_losses += 1
@@ -1174,6 +1181,13 @@ class crnn():
 if __name__ == '__main__':
     
     parser = argparser.defineParser().parse_args().__dict__
+
+    # Load shell params for debug
+    # with open('5_args.txt', 'w') as f:
+        # json.dump(parser, f, indent=2)
+    # exit(0) 
+    with open('5_args.txt', 'r') as f:
+        parser = json.load(f)
 
     M = crnn(params=parser)
 

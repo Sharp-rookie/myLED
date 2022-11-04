@@ -6,7 +6,7 @@ from .activations import getActivation
 
 
 class MLPViewModule(nn.Module):
-    """== x.view(x.shape[0], -1)"""
+    """x: (batchsize, input_dim, Dx)  --->   x.view(batchsize, -1)"""
 
     def __init__(self, input_dim, channels, Dx=1, Dy=1):
         super(MLPViewModule, self).__init__()
@@ -102,7 +102,7 @@ class MLPEncoder(nn.Module):
         self.layers_idx.append(self.layers_num - 1)
 
         for ln in range(len(self.layers_size) - 1):
-            # self.layers.append(nn.Linear(self.layers_size[ln], self.layers_size[ln + 1], bias=True))
+            
             self.layers.append(LinearResidualLayer(self.layers_size[ln], self.layers_size[ln + 1], bias=True))
             self.layers_num += 1
             if ln < len(self.layers_size) - 2:
@@ -110,8 +110,7 @@ class MLPEncoder(nn.Module):
                 self.layers.append(nn.Dropout(p=1 - self.dropout_keep_prob))
                 self.layers_num += 1
             else:
-                self.layers.append(
-                    getActivation(self.activation_output))
+                self.layers.append(getActivation(self.activation_output))
                 self.layers_num += 1
 
             self.layers_idx.append(self.layers_num - 1)
@@ -200,7 +199,7 @@ class MLPDecoder(nn.Module):
         self.layers = nn.ModuleList()
 
         for ln in range(len(self.layers_size) - 1):
-            # self.layers.append(nn.Linear(self.layers_size[ln], self.layers_size[ln + 1], bias=True))
+            
             self.layers.append(LinearResidualLayer(self.layers_size[ln], self.layers_size[ln + 1], bias=True))
             self.layers_num += 1
             if ln < len(self.layers_size) - 2:

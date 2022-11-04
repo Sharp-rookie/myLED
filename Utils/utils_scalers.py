@@ -135,10 +135,8 @@ class scaler(object):
                     check_bounds=True):
         if verbose:
             print("[utils_scalers] # descaleData() #")
-            print("[utils_scalers] max = {:} ".format(
-                np.max(batch_of_sequences_scaled)))
-            print("[utils_scalers] min = {:} ".format(
-                np.min(batch_of_sequences_scaled)))
+            print("[utils_scalers] max = {:} ".format(np.max(batch_of_sequences_scaled)))
+            print("[utils_scalers] min = {:} ".format(np.min(batch_of_sequences_scaled)))
 
         if single_sequence:
             batch_of_sequences_scaled = batch_of_sequences_scaled[np.newaxis]
@@ -154,18 +152,13 @@ class scaler(object):
         self.data_shape_length = len(self.data_shape)
         if self.scaler_type == "MinMaxZeroOne":
 
-            data_min = self.repeatScalerParam(
-                self.data_min, self.data_shape)
-            data_max = self.repeatScalerParam(
-                self.data_max, self.data_shape)
+            data_min = self.repeatScalerParam(self.data_min, self.data_shape)
+            data_max = self.repeatScalerParam(self.data_max, self.data_shape)
 
-            assert (np.all(
-                np.shape(batch_of_sequences_scaled) == np.shape(data_min)))
-            assert (np.all(
-                np.shape(batch_of_sequences_scaled) == np.shape(data_max)))
+            assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_min)))
+            assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_max)))
 
-            batch_of_sequences = np.array(batch_of_sequences_scaled *
-                                          (data_max - data_min) + data_min)
+            batch_of_sequences = np.array(batch_of_sequences_scaled * (data_max - data_min) + data_min)
 
             if check_bounds:
                 assert (np.all(batch_of_sequences >= data_min))
@@ -173,19 +166,13 @@ class scaler(object):
 
         elif self.scaler_type == "MinMaxMinusOneOne":
 
-            data_min = self.repeatScalerParam(
-                self.data_min, self.data_shape)
-            data_max = self.repeatScalerParam(
-                self.data_max, self.data_shape)
+            data_min = self.repeatScalerParam(self.data_min, self.data_shape)
+            data_max = self.repeatScalerParam(self.data_max, self.data_shape)
 
-            assert (np.all(
-                np.shape(batch_of_sequences_scaled) == np.shape(data_min)))
-            assert (np.all(
-                np.shape(batch_of_sequences_scaled) == np.shape(data_max)))
+            assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_min)))
+            assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_max)))
 
-            batch_of_sequences = np.array(batch_of_sequences_scaled *
-                                          (data_max - data_min) + data_min +
-                                          data_max) / 2.0
+            batch_of_sequences = np.array(batch_of_sequences_scaled * (data_max - data_min) + data_min + data_max) / 2.0
 
             if check_bounds:
                 assert (np.all(batch_of_sequences >= data_min))
@@ -193,18 +180,13 @@ class scaler(object):
 
         elif self.scaler_type == "Standard":
 
-            data_mean = self.repeatScalerParam(
-                self.data_mean, self.data_shape)
-            data_std = self.repeatScalerParam(
-                self.data_std, self.data_shape)
+            data_mean = self.repeatScalerParam(self.data_mean, self.data_shape)
+            data_std = self.repeatScalerParam(self.data_std, self.data_shape)
 
-            assert (np.all(
-                np.shape(batch_of_sequences_scaled) == np.shape(data_mean)))
-            assert (np.all(
-                np.shape(batch_of_sequences_scaled) == np.shape(data_std)))
+            assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_mean)))
+            assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_std)))
 
-            batch_of_sequences = np.array(batch_of_sequences_scaled *
-                                          data_std + data_mean)
+            batch_of_sequences = np.array(batch_of_sequences_scaled * data_std + data_mean)
 
         else:
             raise ValueError("Scaler not implemented.")

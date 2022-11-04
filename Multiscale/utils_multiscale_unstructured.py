@@ -61,28 +61,14 @@ def predictIndexes(mclass, data_loader, dt, set_name, testing_mode):
             dt,
             prediction_horizon=prediction_horizon)
 
-        prediction = model.data_info_dict["scaler"].descaleData(
-            prediction,
-            single_sequence=True,
-            check_bounds=False,
-            verbose=False)
-        target = model.data_info_dict["scaler"].descaleData(
-            target, single_sequence=True, check_bounds=False, verbose=False)
+        prediction = model.data_info_dict["scaler"].descaleData(prediction, single_sequence=True, check_bounds=False, verbose=False)
+        target = model.data_info_dict["scaler"].descaleData(target, single_sequence=True, check_bounds=False, verbose=False)
 
-        prediction_augment = model.data_info_dict["scaler"].descaleData(
-            prediction_augment,
-            single_sequence=True,
-            check_bounds=False,
-            verbose=False)
-        target_augment = model.data_info_dict["scaler"].descaleData(
-            target_augment,
-            single_sequence=True,
-            check_bounds=False,
-            verbose=False)
+        prediction_augment = model.data_info_dict["scaler"].descaleData(prediction_augment, single_sequence=True, check_bounds=False, verbose=False)
+        target_augment = model.data_info_dict["scaler"].descaleData(target_augment, single_sequence=True, check_bounds=False, verbose=False)
 
-        errors = Utils.computeErrors(target, prediction,
-                                     model.data_info_dict)
         # Updating the error
+        errors = Utils.computeErrors(target, prediction, model.data_info_dict)
         for error in errors:
             error_dict[error].append(errors[error])
 
@@ -116,23 +102,17 @@ def predictIndexes(mclass, data_loader, dt, set_name, testing_mode):
     # Computing the average over time
     error_dict_avg = {}
     for key in error_dict:
-        # print(np.shape(error_dict[key]))
         error_dict_avg[key + "_avg"] = np.mean(error_dict[key])
     Utils.printErrors(error_dict_avg)
 
     # Computing additional errors based on all predictions (e.g. frequency spectra)
-    additional_results_dict, additional_errors_dict = Utils.computeAdditionalResults(
-        model, predictions_all, targets_all, dt)
+    additional_results_dict, additional_errors_dict = Utils.computeAdditionalResults(model, predictions_all, targets_all, dt)
     error_dict_avg = {**error_dict_avg, **additional_errors_dict}
 
-    state_statistics = Utils.computeStateDistributionStatistics(
-        model, targets_all, predictions_all)
-    state_statistics = Systems.computeStateDistributionStatisticsSystem(
-        model, state_statistics, targets_all, predictions_all)
+    state_statistics = Utils.computeStateDistributionStatistics(model, targets_all, predictions_all)
+    state_statistics = Systems.computeStateDistributionStatisticsSystem(model, state_statistics, targets_all, predictions_all)
 
-    fields_2_save_2_logfile = [
-        "time_total_per_iter",
-    ]
+    fields_2_save_2_logfile = ["time_total_per_iter"]
     fields_2_save_2_logfile += list(error_dict_avg.keys())
 
     results = {
@@ -179,8 +159,8 @@ def predictSequence(
         prediction_horizon = model.prediction_horizon
 
     N = np.shape(input_sequence)[0]
-    """ Prediction length """
-    if N - model.n_warmup != prediction_horizon:
+    
+    if N - model.n_warmup != prediction_horizon: # Prediction length
         raise ValueError("Error! N ({:}) - model.n_warmup ({:}) != prediction_horizon ({:})".format(N, model.n_warmup, prediction_horizon))
 
     assert model.n_warmup > 1, "Warm up steps cannot be <= 1. Increase the iterative prediction length."
@@ -195,12 +175,11 @@ def predictSequence(
 
     target = input_sequence[model.n_warmup:model.n_warmup + prediction_horizon]
 
-    if torch.is_tensor(target): target = target.detach().cpu().numpy()
     if torch.is_tensor(target):
+        target = target.detach().cpu().numpy()
         warmup_data_target = warmup_data_target.detach().cpu().numpy()
 
-    warmup_data_output, last_hidden_state, warmup_latent_states, latent_states_pred, _ = model.forward(
-        warmup_data_input, initial_hidden_states)
+    warmup_data_output, last_hidden_state, warmup_latent_states, latent_states_pred, _ = model.forward(warmup_data_input, initial_hidden_states)
 
     """ Multiscale forecasting """
     iterative_propagation_is_latent = True
@@ -218,8 +197,10 @@ def predictSequence(
 
     for round_ in range(multiscale_rounds):
 
+        ###################################################
+        # AE-RNN for FHN (Macro)
+        ###################################################
         multiscale_macro_steps = macro_steps_per_round[round_]
-
         if multiscale_macro_steps > 0:
 
             prediction_model_dyn, last_hidden_state, latent_states_, latent_states_pred, time_latent_prop_t = model.forecast(
@@ -232,17 +213,14 @@ def predictSequence(
 
             if round_ == 0:
                 prediction = prediction_model_dyn
-                # latent_states = latent_states_
                 latent_states = latent_states_pred
             else:
-                prediction = np.concatenate((prediction, prediction_model_dyn),
-                                            axis=1)
-                latent_states = np.concatenate(
-                    (latent_states, latent_states_pred), axis=1)
+                prediction = np.concatenate((prediction, prediction_model_dyn), axis=1)
+                latent_states = np.concatenate((latent_states, latent_states_pred), axis=1)
 
             init_state = prediction_model_dyn[-1][-1]
 
-        elif round_ == 0:
+        elif round_ == 0: # macro=0, only LB methods
             init_state = input_sequence[model.n_warmup - 1]
             init_state = init_state  #.cpu().detach().numpy()
 
@@ -251,10 +229,14 @@ def predictSequence(
             init_state = prediction_sys_dyn[:, -1:, :]
             init_state = init_state[0, 0]
 
+        ###################################################
+        # Lattice Boltzman Methods for FHN (Micro)
+        ###################################################
         if round_ < len(micro_steps_per_round):
             multiscale_micro_steps = micro_steps_per_round[round_]
 
-            init_state = np.reshape(init_state, (1, *np.shape(init_state)))
+            # np.reshape(init_state, (1, *np.shape(init_state)))
+            init_state = init_state[np.newaxis]
             
             """ How much time to cover with the fine scale dynamics """
             total_time = multiscale_micro_steps * dt
@@ -299,12 +281,10 @@ def predictSequence(
                 prediction_sys_dyn = prediction_sys_dyn[np.newaxis]
                 """ Concatenating the prediction """
 
-                prediction = prediction_sys_dyn if (
-                    multiscale_macro_steps == 0
-                    and round_ == 0) else np.concatenate(
-                        (prediction, prediction_sys_dyn), axis=1)
+                prediction = prediction_sys_dyn if (multiscale_macro_steps == 0 and round_ == 0) else np.concatenate((prediction, prediction_sys_dyn), axis=1)
 
-                init_state = np.reshape(init_state, (1, *np.shape(init_state)))
+                # init_state = np.reshape(init_state, (1, *np.shape(init_state)))
+                init_state = init_state[np.newaxis]
                 """
                 In order to update the last hidden state,
                 we need to feed the high scale dynamics up to input_t
@@ -314,19 +294,14 @@ def predictSequence(
                 idle_dynamics = prediction_sys_dyn[:, :-1, :].copy()
                 idle_dynamics = np.concatenate((init_state, idle_dynamics),axis=1)
 
-                _, last_hidden_state, latent_states_, latent_states_pred, time_latent_prop_t = model.forward(
-                    idle_dynamics,
-                    last_hidden_state,
-                )
+                _, last_hidden_state, latent_states_, latent_states_pred, time_latent_prop_t = model.forward(idle_dynamics, last_hidden_state)
 
                 time_latent_prop += time_latent_prop_t
 
                 if (multiscale_macro_steps == 0 and round_ == 0):
                     latent_states = latent_states_pred
                 else:
-                    # latent_states = self.concatenateStates(latent_states, latent_states_pred, axis=1)
-                    latent_states = np.concatenate(
-                        (latent_states, latent_states_pred), axis=1)
+                    latent_states = np.concatenate((latent_states, latent_states_pred), axis=1)
 
             else:
                 prediction_sys_dyn = prediction_model_dyn
@@ -353,9 +328,7 @@ def predictSequence(
     """
     if "multiscale" in testing_mode:
         if multiscale_macro_steps == 0:
-            print(
-                "[Utils_multiscale_unsctructured] Tracking the time when using the original dynamics..."
-            )
+            print("[Utils_multiscale_unsctructured] Tracking the time when using the original dynamics...")
             time_total = time_dynamics
         else:
             time_total = time_latent_prop + time_dynamics
@@ -381,12 +354,9 @@ def predictSequence(
         ))
 
     if model.n_warmup > 1:
-        target_augment = np.concatenate((warmup_data_target[0], target),
-                                        axis=0)
-        prediction_augment = np.concatenate(
-            (warmup_data_output[0], prediction), axis=0)
-        latent_states_augmented = np.concatenate(
-            (warmup_latent_states[0], latent_states), axis=0)
+        target_augment = np.concatenate((warmup_data_target[0], target), axis=0)
+        prediction_augment = np.concatenate((warmup_data_output[0], prediction), axis=0)
+        latent_states_augmented = np.concatenate((warmup_latent_states[0], latent_states), axis=0)
     else:
         target_augment = target
         prediction_augment = prediction

@@ -94,9 +94,6 @@ def testEncodeDecodeOnHDF5(model, data_loader, dt, set_name, testing_mode, datas
                 raise ValueError("Prediction horizon cannot be {:}.".format(model.prediction_horizon))
             input_sequence = input_sequence[:model.prediction_horizon]
 
-        if model.prediction_horizon > np.shape(input_sequence)[0]:
-            warnings.warn("Warning: model.prediction_horizon={:} is bigger than the length of the sequence {:}.".format(model.prediction_horizon, np.shape(input_sequence)[0]))
-
         input_sequence = input_sequence[np.newaxis, :]
 
         outputs, latent_states = model.encodeDecode(input_sequence)

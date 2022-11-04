@@ -2,3 +2,5 @@ model_name:RNN:memory:586.37890625:total_training_time:44.43345022201538:min_val
 model_name:RNN:memory:588.578125:total_training_time:82.20304107666016:min_val_total_loss:0.0022030905880091136
 model_name:RNN:memory:582.42578125:total_training_time:38.466864585876465:min_val_total_loss:0.0022030905880091136
 model_name:RNN:memory:651.03515625:total_training_time:41.164386510849:min_val_total_loss:0.0022030905880091136
+model_name:RNN:memory:647.15234375:total_training_time:39.679192304611206:min_val_total_loss:0.002651365519038547
+model_name:RNN:memory:680.828125:total_training_time:42.464012145996094:min_val_total_loss:0.0033820109580804084

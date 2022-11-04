@@ -135,6 +135,7 @@ class multiscaleTestingClass:
                 steps += steps_to_go
             else:
                 raise ValueError("This was not supposed to happen.")
+            
             steps_to_go = prediction_horizon - steps
             if steps_to_go >= multiscale_micro_steps:
                 micro_steps_per_round.append(multiscale_micro_steps)
@@ -143,10 +144,10 @@ class multiscaleTestingClass:
                 micro_steps_per_round.append(steps_to_go)
                 steps += steps_to_go
 
-        print("[utils_multiscale] macro_steps_per_round: \n[utils_multiscale] {:}".format(macro_steps_per_round))
-        print("[utils_multiscale] micro_steps_per_round: \n[utils_multiscale] {:}".format(micro_steps_per_round))
+        print("macro_steps_per_round: {:}".format(macro_steps_per_round))
+        print("micro_steps_per_round: {:}".format(micro_steps_per_round))
         multiscale_rounds = np.max([len(micro_steps_per_round), len(macro_steps_per_round)])
-        print("[utils_multiscale] multiscale_rounds: \n[utils_multiscale] {:}". format(multiscale_rounds))
+        print("multiscale_rounds: {:}". format(multiscale_rounds))
         
         return multiscale_rounds, macro_steps_per_round, micro_steps_per_round, multiscale_micro_steps, multiscale_macro_steps
     

@@ -12,6 +12,7 @@ from .dummy import viewEliminateChannels, viewAddChannels
 
 
 class crnn_model(nn.Module):
+
     def __init__(self, model):
         super(crnn_model, self).__init__()
         self.parent = model
@@ -100,7 +101,6 @@ class crnn_model(nn.Module):
         if self.parent.has_rnn:
             if self.parent.RNN_cell_type == "mlp":
                 """ dummy wrapper to implement an MLP ignoring the hidden state """
-                from .. import rnn_mlp_wrapper
                 input_size = self.parent.RNN_state_dim
                 self.RNN.append(RNN_MLP_wrapper(
                         input_size=input_size,
@@ -122,19 +122,16 @@ class crnn_model(nn.Module):
                             self.RNN_cell = nn.LSTMCell
                         elif self.parent.RNN_cell_type == "gru":
                             self.RNN_cell = nn.GRUCell
-                        elif self.parent.RNN_cell_type == "mlp": # in case of dummy MLP propagator
-                            pass
                         else:
-                            assert False, "Convolutional RNN not implemented"
+                            assert False, "{:} not implemented".format(self.parent.RNN_cell_type)
 
                     input_size = self.parent.RNN_state_dim
                     for ln in range(len(self.parent.layers_rnn)):
                         self.RNN.append(ZoneoutLayer(
-                            self.RNN_cell( input_size=input_size, hidden_size=self.parent.layers_rnn[ln]), 
+                            self.RNN_cell(input_size=input_size, hidden_size=self.parent.layers_rnn[ln]), 
                             self.parent.zoneout_keep_prob
                             )
                         )
-                        input_size = self.parent.layers_rnn[ln]
                 else:
                     assert False, "Convolutional RNN not implemented"
                     input_size = self.parent.RNN_state_dim
@@ -161,7 +158,7 @@ class crnn_model(nn.Module):
                         input_size = self.parent.layers_rnn[ln]
         
         # Initial RNN hidden states (in case of trainable)
-        if self.parent.RNN_trainable_init_hidden_state:
+        if self.parent.RNN_trainable_init_hidden_state: # TODO: 初始化权重的取值还能训练优化？
             self.augmentRNNwithTrainableInitialHiddenState()
 
         ##################################################################
@@ -174,7 +171,7 @@ class crnn_model(nn.Module):
 
                 self.RNN_OUTPUT.extend([nn.Identity()])
 
-            else:
+            elif self.parent.RNN_cell_type == 'lstm':
                 if not self.parent.RNN_convolutional:
                     self.RNN_OUTPUT.extend([
                         nn.Linear(
@@ -207,6 +204,8 @@ class crnn_model(nn.Module):
                         ])
                     # Here RNN is at the output (output activation string)
                     self.RNN_OUTPUT.extend([getActivation(self.parent.RNN_activation_str_output)])
+            else:
+                assert False, "{:} not implemented!".format(self.parent.RNN_cell_type)
 
         ##################################################################
         # Part5: DECODER
@@ -437,8 +436,8 @@ class crnn_model(nn.Module):
         if self.parent.has_rnn and self.parent.train_RNN_only:
             self.setBatchNormalizationLayersToEvalMode()
 
-        # Time spent in propagation of the latent state
-        time_latent_prop = 0.0
+        time_latent_prop = 0.0 # Time spent in propagation of the latent state
+
         with torch.set_grad_enabled(is_train):
 
             inputsize = inputs.size()
@@ -447,10 +446,12 @@ class crnn_model(nn.Module):
             # Swapping the inputs to RNN [K,T,LD]->[T, K, LD] (time first) LD=latent dimension
             inputs = inputs.transpose(1, 0)
 
-            if (K != self.parent.batch_size and is_train == True
-                    and (not self.parent.device_count > 1)):
+            if (K != self.parent.batch_size and is_train == True and (not self.parent.device_count > 1)):
                 raise ValueError("Batch size {:d} does not match {:d} and model not in multiple GPUs.".format(K, self.parent.batch_size))
 
+            ########################
+            # ENCODER
+            ########################
             if (self.parent.has_autoencoder or self.parent.has_dummy_autoencoder) and not is_latent:
                 if D != self.parent.input_dim:
                     raise ValueError("Input dimension D={:d} does not match self.parent.input_dim={:d}.".format(D, self.parent.input_dim))
@@ -463,6 +464,9 @@ class crnn_model(nn.Module):
                 del inputs
                 encoder_output = encoder_output.detach()
 
+            ########################
+            # BETA VAE
+            ########################
             if self.parent.beta_vae:
                 latent_state_shape = encoder_output.size()
                 n_dims = len(list(encoder_output.size()))
@@ -482,6 +486,9 @@ class crnn_model(nn.Module):
 
             latent_states = encoder_output
 
+            ########################
+            # DECODER
+            ########################
             if not detach_output:
                 if self.parent.has_autoencoder or self.parent.has_dummy_autoencoder:
                     inputs_decoded = self.forwardDecoder(decoder_input)
@@ -490,8 +497,11 @@ class crnn_model(nn.Module):
             else:
                 inputs_decoded = []
 
+            ########################
+            # RNN
+            ########################
             if self.parent.has_rnn:
-                time0 = time.time()
+                time_start = time.time()
 
                 if not self.parent.beta_vae:
                     rnn_input = encoder_output
@@ -510,8 +520,7 @@ class crnn_model(nn.Module):
                 if self.has_latent_scaler:
                     latent_states_pred = self.descaleLatentState(latent_states_pred)
 
-                time1 = time.time()
-                time_latent_prop += (time1 - time0)
+                time_latent_prop += (time.time() - time_start)
 
                 # The predicted latent states are the autoencoded states AFTER being past through the RNN, before beeing decoded
                 decoder_input_pred = latent_states_pred
@@ -523,8 +532,7 @@ class crnn_model(nn.Module):
                 # TRANSPOSE BACK FROM LAYER FIRST TO BATCH FIRST
                 next_hidden_state = self.transposeHiddenState(next_hidden_state)
 
-                # Output of the RNN (after the MLP) has dimension
-                # [T, K, latend_dim]
+                # Output of the RNN (after the MLP) has dimension: [T, K, latend_dim]
 
                 if not detach_output:
                     if self.parent.has_autoencoder or self.parent.has_dummy_autoencoder:
@@ -812,10 +820,10 @@ class crnn_model(nn.Module):
 
         self.latent_state_min = torch.nn.Parameter(latent_state_min)
         self.latent_state_max = torch.nn.Parameter(latent_state_max)
-        self.latent_state_min.requires_grad = False
-        self.latent_state_max.requires_grad = False
         self.latent_state_mean = torch.nn.Parameter(latent_state_mean)
         self.latent_state_std = torch.nn.Parameter(latent_state_std)
+        self.latent_state_min.requires_grad = False
+        self.latent_state_max.requires_grad = False
         self.latent_state_mean.requires_grad = False
         self.latent_state_std.requires_grad = False
     
