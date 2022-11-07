@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import warnings
 import numpy as np
 
@@ -154,10 +155,13 @@ def testIterativeOnHDF5(model, data_loader, dt, set_name, testing_mode):
     ic_num = 1
     ic_indexes = []
 
-    for sequence in data_loader:
-        if ic_num > num_test_ICS: break
-        if model.params["display_output"]:
-            print("IC {:}/{:}, {:2.3f}%".format(ic_num, num_test_ICS, ic_num / num_test_ICS * 100))
+    for sequence in tqdm(data_loader):
+
+        if ic_num > num_test_ICS: 
+            break
+
+        # if model.params["display_output"]:
+        #     print("IC {:}/{:}, {:2.3f}%".format(ic_num, num_test_ICS, ic_num / num_test_ICS * 100))
         sequence = sequence[0]
 
         # STARTING TO PREDICT THE SEQUENCE IN model.predict_on=model.sequence_length
@@ -214,9 +218,9 @@ def testIterativeOnHDF5(model, data_loader, dt, set_name, testing_mode):
     targets_augmented_all = np.array(targets_augmented_all)
     latent_states_augmented_all = np.array(latent_states_augmented_all)
 
-    print("Shape of trajectories:")
-    print("{:}:".format(np.shape(targets_all)))
-    print("{:}:".format(np.shape(predictions_all)))
+    # print("Shape of trajectories:")
+    # print("{:}:".format(np.shape(targets_all)))
+    # print("{:}:".format(np.shape(predictions_all)))
 
     error_dict_avg = Utils.getErrorDictAvg(error_dict)
 

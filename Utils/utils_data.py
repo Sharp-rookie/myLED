@@ -48,8 +48,7 @@ class HDF5Dataset(data.Dataset):
 
             # Truncating the number of batches in the data
             if "truncate_data_batches" in data_info_dict:
-                self.truncate_data_batches = data_info_dict[
-                    "truncate_data_batches"]
+                self.truncate_data_batches = data_info_dict["truncate_data_batches"]
             else:
                 self.truncate_data_batches = None
 

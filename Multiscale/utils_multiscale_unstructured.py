@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import time
 import torch
 import warnings
@@ -195,7 +196,7 @@ def predictSequence(
     time_dynamics = 0.0
     time_latent_prop = 0.0
 
-    for round_ in range(multiscale_rounds):
+    for round_ in tqdm(range(multiscale_rounds)):
 
         ###################################################
         # AE-RNN for FHN (Macro)

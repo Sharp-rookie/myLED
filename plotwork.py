@@ -89,7 +89,7 @@ def plot(model, testing_mode):
             if model.params["plot_testing_ics_examples"]:
                 max_index = np.min([1, np.shape(results["targets_all"])[0]])
                 for idx in range(max_index):
-                    print("[common_plot] IC {:}".format(idx))
+                    # print("[common_plot] IC {:}".format(idx))
 
                     results_idx = {
                         "Reference": targets_all[idx],

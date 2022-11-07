@@ -144,10 +144,10 @@ class multiscaleTestingClass:
                 micro_steps_per_round.append(steps_to_go)
                 steps += steps_to_go
 
-        print("macro_steps_per_round: {:}".format(macro_steps_per_round))
-        print("micro_steps_per_round: {:}".format(micro_steps_per_round))
+        # print("macro_steps_per_round: {:}".format(macro_steps_per_round))
+        # print("micro_steps_per_round: {:}".format(micro_steps_per_round))
         multiscale_rounds = np.max([len(micro_steps_per_round), len(macro_steps_per_round)])
-        print("multiscale_rounds: {:}". format(multiscale_rounds))
+        # print("multiscale_rounds: {:}". format(multiscale_rounds))
         
         return multiscale_rounds, macro_steps_per_round, micro_steps_per_round, multiscale_micro_steps, multiscale_macro_steps
     

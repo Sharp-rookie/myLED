@@ -48,7 +48,7 @@ def error2LabelDictAverage():
         "mnad_in": "MNAD$(v, \\tilde{v})$",
         "state_dist_L1_hist_error": "L1-NHD",
         "state_dist_wasserstein_distance": "WD",
-        # "mse_avg": "MSE",
+        "MSE": "MSE",
         # "rmse_avg": "RMSE",
         # "abserror_avg": "ABS",
         # "state_dist_L1_hist_error_all": "L1-NHD",
@@ -72,7 +72,7 @@ def error2LabelDictTime():
         "mnad_in": "NAD$(v, \\tilde{v})$",
         "state_dist_L1_hist_error": "L1-NHD",
         "state_dist_wasserstein_distance": "WD",
-        # "mse_avg": "MSE",
+        "MSE": "MSE",
         # "rmse_avg": "RMSE",
         # "abserror_avg": "ABS",
         # "state_dist_L1_hist_error_all": "L1-NHD",
@@ -189,10 +189,6 @@ def makeBarPlot(
     result_plot_min = np.min(result_plot, axis=(1))
     result_plot_max = np.max(result_plot, axis=(1))
 
-    # print(result_plot_mean)
-    # print(result_plot_min)
-    # print(result_plot_max)
-
     labels = rho_plot
     x_pos = np.arange(len(labels))
     y_mean = result_plot_mean
@@ -268,7 +264,7 @@ def makeErrorTimePlot(
         vpt_label = "VPT"
         time_label = "$t$"
 
-    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(10, 5))
+    fig, axes = plt.subplots(nrows=1, ncols=1, figsize=(16, 5))
 
     # print("micro_step\n{:}".format(micro_step))
     indexes = micro_steps == micro_step
@@ -308,11 +304,8 @@ def makeErrorTimePlot(
         # label = "T_{m}=" + "{:.2f}".format(float(macro_steps_plot[i]) * dt)
         # if micro_step>0: label = label + ", \, \\rho=" + "{:.2f}".format(float(macro_steps_plot[i]/micro_step))
         # label = "$" + label + "$"
-        label = "Multiscale Forecasting $T_{\mu}=" + "{:.0f}".format(
-            float(micro_step) * dt) + "$, $T_{m}=" + "{:.0f}".format(
-                float(macro_steps_plot[i_color]) *
-                dt) + "$" + ", $\\rho=" + "{:.2f}".format(
-                    float(macro_steps_plot[i_color] / micro_step)) + "$"
+        label = "Multiscale $T_{\mu}=" + "{:.0f}".format(float(micro_step) * dt) + "$, $T_{m}=" + "{:.0f}".format(float(macro_steps_plot[i_color]) *dt) + "$"
+        # + ", $\\rho=" + "{:.2f}".format(float(macro_steps_plot[i_color] / micro_step)) + "$"
 
         plt.plot(time_vector,
                  result_plot[i_color],
@@ -460,7 +453,6 @@ def makeTimeBarPlot(
 
 def plotMultiscaleResultsComparison(model, dicts_to_compare, set_name,
                                     fields_to_compare, dt):
-    # print(fields_to_compare)
     # print(ark)
     # FIGTYPE = "pdf"
     FIGTYPE = "png"
@@ -495,6 +487,8 @@ def plotMultiscaleResultsComparison(model, dicts_to_compare, set_name,
             if field in [
                     "CORR",
                     "RMSE",
+                    "MSE",
+                    "NAD",
                     "mnad_in",
                     "mnad_act",
             ]:
@@ -514,12 +508,14 @@ def plotMultiscaleResultsComparison(model, dicts_to_compare, set_name,
             if field in [
                     "CORR",
                     "RMSE",
+                    "MSE",
+                    "NAD",
                     "mnad_act",
                     "mnad_in",
             ]:
 
-                for with_legend in [True, False]:
-
+                # for with_legend in [True, False]:
+                for with_legend in [True]:
                     makeErrorTimePlot(
                         model,
                         field,

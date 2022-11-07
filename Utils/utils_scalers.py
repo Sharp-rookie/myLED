@@ -133,10 +133,10 @@ class scaler(object):
                     single_batch=False,
                     verbose=True,
                     check_bounds=True):
-        if verbose:
-            print("[utils_scalers] # descaleData() #")
-            print("[utils_scalers] max = {:} ".format(np.max(batch_of_sequences_scaled)))
-            print("[utils_scalers] min = {:} ".format(np.min(batch_of_sequences_scaled)))
+        # if verbose:
+        #     print("[utils_scalers] # descaleData() #")
+        #     print("[utils_scalers] max = {:} ".format(np.max(batch_of_sequences_scaled)))
+        #     print("[utils_scalers] min = {:} ".format(np.min(batch_of_sequences_scaled)))
 
         if single_sequence:
             batch_of_sequences_scaled = batch_of_sequences_scaled[np.newaxis]

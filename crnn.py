@@ -277,9 +277,12 @@ class crnn():
 
         self.beta_vae_weight_vec = []
 
+        # tqdm
+        bar_format = '{desc}{n_fmt:>2s}/{total_fmt:<3s}|{bar}|{postfix}'
+        pbar = tqdm(range(self.max_rounds), desc='Round', bar_format=bar_format)
+
         # Termination criterion:
         # If the training procedure completed the maximum number of epochs
-
         self.epochs_iter = 0
         self.epochs_iter_global = self.epochs_iter
         self.rounds_iter = 0
@@ -338,6 +341,9 @@ class crnn():
             
             RNN_loss_round_val_vec = []
             for epochs_iter in range(self.epochs_iter, self.max_epochs + 1):
+
+                pbar.set_description(f'\33[36m🌌 Epoch {epochs_iter}/{self.max_epochs}')
+
                 epochs_in_round = epochs_iter - self.epochs_iter
                 self.epochs_iter_global = epochs_iter
 
@@ -358,9 +364,6 @@ class crnn():
 
                 self.learning_rate_vec.append(self.learning_rate_round)
 
-                self.printLosses("TRAIN", losses_train)
-                self.printLosses("VAL  ", losses_val)
-
                 # Save best model
                 if losses_val[0] < self.min_val_total_loss:
                     self.min_val_total_loss = losses_val[0]
@@ -375,6 +378,12 @@ class crnn():
                     if all(self.min_val_total_loss < np.array(RNN_loss_round_val_vec[-self.overfitting_patience:])):
                         self.previous_round_converged = True
                         break
+                
+                # self.printLosses("TRAIN", losses_train)
+                # self.printLosses("VAL  ", losses_val)
+                pbar.set_postfix_str(f'Val  total:{losses_val[0]:.5f}, E2E:{losses_val[1]:.5f}, RNN:{losses_val[2]:.5f}, AE:{losses_val[3]:.5f}, \
+                    VAE:{losses_val[4]:.5f}, smooth:{losses_val[5]:.5f}')
+                pbar.update()
 
             self.rounds_iter += 1
             self.epochs_iter = epochs_iter
@@ -547,7 +556,7 @@ class crnn():
                     assert input_batch.size() == input_batch_decoded.size(), "ERROR: Output of DECODER network ({:}) does not match INPUT ({:}).".format(input_batch_decoded.size(), input_batch.size())
 
             # Loss: Beta-Vae
-            if self.beta_vae and not self.has_rnn:
+            if self.beta_vae and not self.has_rnn: # TODO: 为什么有RNN就不能单独算VAE的KL Loss呢？
                 loss_kl = self.getKLLoss(beta_vae_mu, beta_vae_logvar)
             else:
                 loss_kl = self.torch_dtype([0.0])[0]
@@ -863,10 +872,10 @@ class crnn():
         latent_states = np.array(latent_states)
         if self.has_rnn: RNN_outputs = np.array(RNN_outputs)
 
-        print("Shapes of prediction/target/latent_states:")
-        print("{:}".format(np.shape(prediction)))
-        print("{:}".format(np.shape(target)))
-        print("{:}".format(np.shape(latent_states)))
+        # print("Shapes of prediction/target/latent_states:")
+        # print("{:}".format(np.shape(prediction)))
+        # print("{:}".format(np.shape(target)))
+        # print("{:}".format(np.shape(latent_states)))
 
         if self.n_warmup > 1:
             warmup_data_target = warmup_data_target.cpu().detach().numpy()
@@ -1119,10 +1128,18 @@ class crnn():
     def printLosses(self, label, losses):
         
         self.losses_labels = ["Total", "FWD", "DYN-FWD", "AUTO-REC", "KL", "C1"] # loss vector include these item
+        loss_name = {
+            "Total": "Avg", 
+            "FWD": "AE+RNN", 
+            "DYN-FWD": "RNN", 
+            "AUTO-REC": "AE", 
+            "KL": "VAE", 
+            "C1": "RNN-smooth"
+        }
         idx = np.nonzero(losses)[0] # choose non-zero item and print
         to_print = "[{:s}] Loss: ".format(label)
         for i in range(len(idx)):
-            to_print += "{:}={:6} |".format(self.losses_labels[idx[i]], losses[idx[i]])
+            to_print += "{:}={:.6} |".format(loss_name[self.losses_labels[idx[i]]], losses[idx[i]])
         print(to_print)
     
 
@@ -1182,14 +1199,15 @@ if __name__ == '__main__':
     
     parser = argparser.defineParser().parse_args().__dict__
 
-    # Load shell params for debug
+    # Load shell \params for debug
     # with open('5_args.txt', 'w') as f:
-        # json.dump(parser, f, indent=2)
+    #     json.dump(parser, f, indent=2)
     # exit(0) 
     with open('5_args.txt', 'r') as f:
         parser = json.load(f)
 
     M = crnn(params=parser)
+    print(M.model)
 
     if parser['mode'] == 'all':
         M.train()

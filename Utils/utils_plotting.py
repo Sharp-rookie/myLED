@@ -1365,8 +1365,7 @@ def plotTestingContourEvolution(
         if with_multiscale_bar:
             # Add a bar plot demonstrating where it is with_multiscale_bar and where not
             axes[5].set_title("Multiscale?")
-            multiscale_rounds, macro_steps_per_round, micro_steps_per_round, _, _ = model.parent.getMultiscaleParams(
-                testing_mode, prediction_horizon)
+            multiscale_rounds, macro_steps_per_round, micro_steps_per_round, _, _ = model.parent.getMultiscaleParams(testing_mode, prediction_horizon)
 
             start_idx = 0
             for round_ in range(multiscale_rounds):
