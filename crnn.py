@@ -1216,10 +1216,10 @@ if __name__ == '__main__':
     parser = argparser.defineParser().parse_args().__dict__
 
     # Load shell \params for debug
-    # with open('4_args.txt', 'w') as f:
+    # with open('args.txt', 'w') as f:
     #     json.dump(parser, f, indent=2)
     # exit(0)
-    # with open('4_args.txt', 'r') as f:
+    # with open('args.txt', 'r') as f:
     #     parser = json.load(f)
 
     M = crnn(params=parser)
@@ -1229,8 +1229,9 @@ if __name__ == '__main__':
         M.train()
         # M.test()
         # M.plot()
+        pass
 
     elif 'multiscale' in parser['mode']:
         multiscale_testing = utils_multiscale.multiscaleTestingClass(M, parser)
-        # multiscale_testing.test()
+        multiscale_testing.test()
         multiscale_testing.plot()

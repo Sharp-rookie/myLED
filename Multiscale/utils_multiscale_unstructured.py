@@ -314,7 +314,6 @@ def predictSequence(
                     input_t = latent_states_pred[:, -1:, :].clone()
 
                 input_t = latent_states_pred[:, -1:, :]
-
             else:
                 raise ValueError("Not supposed to happen.")
                 # Next to feed, the last predicted state (from the dynamics)

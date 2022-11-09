@@ -104,6 +104,9 @@ def getMacroAndMicroSteps(model,
     
     for key, values in dicts_to_compare.items():
 
+        # if key.split('_')[-1] in ['2','4','6','8','10','12','14',]:
+        #     continue
+
         if "iterative" in key:
             result_iterative = values[field]
             result_iterative_found = True
@@ -214,6 +217,8 @@ def makeBarPlot(
     for i_color in range(len(barlist[:-1])):
         barlist[i_color].set_color(color_labels[int(i_color%len(color_labels))])
     barlist[-1].set_color("tab:red")
+
+    ax.set_ylim (0, 0.2)
 
     ax.set_xticks(x_pos)
     ax.set_xticklabels(labels)

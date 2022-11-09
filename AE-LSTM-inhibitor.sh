@@ -2,10 +2,13 @@
 
 # Mode
 mode="only_inhibitor"
-model_name="AE-LSTM-only_inhibitor"
 CUDA_DEVICES=0
 gpu_id=$CUDA_DEVICES
 input_dim=1
+num_test_ICS=1
+max_epochs=500
+max_rounds=30
+model_name=AE-LSTM-only_inhibitor-epoch$max_epochs
 
 
 # ---------------------------------------------- Train ----------------------------------------------
@@ -22,8 +25,6 @@ random_seed_in_AE_name=$random_seed
 train_RNN_only=0
 load_trained_AE=0
 retrain=0
-max_epochs=300
-max_rounds=20
 overfitting_patience=10
 batch_size=32
 learning_rate=0.001
@@ -36,9 +37,6 @@ iterative_loss_schedule_and_gradient=none
 reconstruction_loss=1
 output_forecasting_loss=1
 latent_forecasting_loss=1
-
-# Testing
-num_test_ICS=10
 
 # Log
 plotting=1
@@ -181,8 +179,6 @@ random_seed_in_AE_name=$random_seed
 train_RNN_only=0
 load_trained_AE=0
 retrain=0
-max_epochs=300
-max_rounds=20
 overfitting_patience=10
 batch_size=32
 learning_rate=0.001
@@ -197,7 +193,6 @@ output_forecasting_loss=1
 latent_forecasting_loss=1
 
 # Testing
-num_test_ICS=32
 multiscale_testing=1
 plot_multiscale_results_comparison=1
 
@@ -328,19 +323,12 @@ CUDA_VISIBLE_DEVICES=$CUDA_DEVICES python crnn.py \
 --multiscale_micro_steps_list 10 \
 --multiscale_macro_steps_list 0 \
 --multiscale_macro_steps_list 1 \
---multiscale_macro_steps_list 2 \
 --multiscale_macro_steps_list 3 \
---multiscale_macro_steps_list 4 \
 --multiscale_macro_steps_list 5 \
---multiscale_macro_steps_list 6 \
 --multiscale_macro_steps_list 7 \
---multiscale_macro_steps_list 8 \
 --multiscale_macro_steps_list 9 \
---multiscale_macro_steps_list 10 \
 --multiscale_macro_steps_list 11 \
---multiscale_macro_steps_list 12 \
 --multiscale_macro_steps_list 13 \
---multiscale_macro_steps_list 14 \
 --multiscale_macro_steps_list 15 \
 --multiscale_macro_steps_list 50 \
 --multiscale_macro_steps_list 100 \
