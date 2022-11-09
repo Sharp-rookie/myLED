@@ -10,6 +10,12 @@ def getParserSystem(parser):
                         type=str,
                         required=False,
                         default='all')
+    
+    parser.add_argument("--gpu_id",
+                        help="gpu_id",
+                        type=int,
+                        required=False,
+                        default=0)
 
     parser.add_argument("--system_name",
                         help="system_name",
@@ -19,6 +25,12 @@ def getParserSystem(parser):
 
     parser.add_argument("--input_dim",
                         help="input_dim",
+                        type=int,
+                        required=False,
+                        default=2)
+    
+    parser.add_argument("--output_dim",
+                        help="output_dim",
                         type=int,
                         required=False,
                         default=2)

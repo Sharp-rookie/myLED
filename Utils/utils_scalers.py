@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 
 
@@ -47,10 +48,8 @@ class scaler(object):
         self.data_shape_length = len(self.data_shape)
 
         if self.scaler_type == "MinMaxZeroOne":
-            data_min = self.repeatScalerParam(
-                self.data_min, self.data_shape)
-            data_max = self.repeatScalerParam(
-                self.data_max, self.data_shape)
+            data_min = self.repeatScalerParam(self.data_min, self.data_shape)
+            data_max = self.repeatScalerParam(self.data_max, self.data_shape)
 
             assert (np.all(np.shape(batch_of_sequences) == np.shape(data_min)))
             assert (np.all(np.shape(batch_of_sequences) == np.shape(data_max)))
@@ -62,10 +61,8 @@ class scaler(object):
                 assert (np.all(batch_of_sequences_scaled <= 1.0))
 
         elif self.scaler_type == "MinMaxMinusOneOne":
-            data_min = self.repeatScalerParam(
-                self.data_min, self.data_shape)
-            data_max = self.repeatScalerParam(
-                self.data_max, self.data_shape)
+            data_min = self.repeatScalerParam(self.data_min, self.data_shape)
+            data_max = self.repeatScalerParam(self.data_max, self.data_shape)
 
             assert (np.all(np.shape(batch_of_sequences) == np.shape(data_min)))
             assert (np.all(np.shape(batch_of_sequences) == np.shape(data_max)))
@@ -158,7 +155,10 @@ class scaler(object):
             assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_min)))
             assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_max)))
 
-            batch_of_sequences = np.array(batch_of_sequences_scaled * (data_max - data_min) + data_min)
+            if isinstance(batch_of_sequences_scaled, torch.Tensor):
+                batch_of_sequences = np.array(batch_of_sequences_scaled.cpu() * (data_max - data_min) + data_min)
+            else:
+                batch_of_sequences = np.array(batch_of_sequences_scaled * (data_max - data_min) + data_min)
 
             if check_bounds:
                 assert (np.all(batch_of_sequences >= data_min))
@@ -172,7 +172,10 @@ class scaler(object):
             assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_min)))
             assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_max)))
 
-            batch_of_sequences = np.array(batch_of_sequences_scaled * (data_max - data_min) + data_min + data_max) / 2.0
+            if isinstance(batch_of_sequences_scaled, torch.Tensor):
+                batch_of_sequences = np.array(batch_of_sequences_scaled.cpu() * (data_max - data_min) + data_min + data_max) / 2.0
+            else:
+                batch_of_sequences = np.array(batch_of_sequences_scaled * (data_max - data_min) + data_min + data_max) / 2.0
 
             if check_bounds:
                 assert (np.all(batch_of_sequences >= data_min))
@@ -186,7 +189,10 @@ class scaler(object):
             assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_mean)))
             assert (np.all(np.shape(batch_of_sequences_scaled) == np.shape(data_std)))
 
-            batch_of_sequences = np.array(batch_of_sequences_scaled * data_std + data_mean)
+            if isinstance(batch_of_sequences_scaled, torch.Tensor):
+                batch_of_sequences = np.array(batch_of_sequences_scaled.cpu() * data_std + data_mean)
+            else:
+                batch_of_sequences = np.array(batch_of_sequences_scaled * data_std + data_mean)
 
         else:
             raise ValueError("Scaler not implemented.")

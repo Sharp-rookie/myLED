@@ -8,6 +8,7 @@ from .beta_vae import Beta_Vae
 from .zoneoutlayer import ZoneoutLayer
 from .rnn_mlp_wrapper import RNN_MLP_wrapper
 from .mlp_autoencoders import MLPEncoder, MLPDecoder
+from .conv_1D_autoencoder import getEncoderModel, getDecoderModel
 from .dummy import viewEliminateChannels, viewAddChannels
 
 
@@ -58,10 +59,10 @@ class crnn_model(nn.Module):
                 )
                 self.ENCODER = encoder.layers
             elif self.parent.AE_convolutional:
-                assert False, "Convolutional AE not implemented"
                 if self.parent.channels == 1:
-                    encoder = conv_mlp_model_1D.getEncoderModel(self.parent)
+                    encoder = getEncoderModel(self.parent, self.parent.mode)
                 elif self.parent.channels == 2:
+                    assert False, "2D Convolutional AE not implemented"
                     encoder = conv_mlp_model_2D.getEncoderModel(self.parent)
                 else:
                     raise ValueError("Not implemented.")
@@ -78,7 +79,7 @@ class crnn_model(nn.Module):
         # Part2: BETA_VAE
         ##################################################################
         if self.parent.has_autoencoder and self.parent.AE_convolutional:
-            assert False, "Convolutional AE not implemented"
+            # assert False, "Convolutional AE not implemented"
             sizes = encoder.printDimensions()
             latent_state_dim = sizes[-1]
             iter_ = 1
@@ -218,7 +219,7 @@ class crnn_model(nn.Module):
                     input_dim=self.parent.latent_state_dim,
                     Dx=self.parent.Dx,
                     Dy=self.parent.Dy,
-                    output_dim=self.parent.input_dim,
+                    output_dim=self.parent.output_dim,
                     activation=self.parent.params["activation_str_general"],
                     activation_output=self.parent.params["activation_str_output"],
                     layers_size=self.parent.layers_decoder,
@@ -227,10 +228,10 @@ class crnn_model(nn.Module):
                 self.DECODER = decoder.layers
 
             elif self.parent.AE_convolutional:
-                assert False, "Convolutional AE not implemented"
                 if self.parent.channels == 1:
-                    decoder = conv_mlp_model_1D.getDecoderModel(self.parent, encoder)
+                    decoder = getDecoderModel(self.parent, encoder, self.parent.mode)
                 elif self.parent.channels == 2:
+                    assert False, "2D Convolutional AE not implemented"
                     decoder = conv_mlp_model_2D.getDecoderModel(self.parent, encoder)
                 else:
                     raise ValueError("Not implemented.")
@@ -245,7 +246,7 @@ class crnn_model(nn.Module):
         self.module_list = [self.ENCODER, self.BETA_VAE, self.DECODER, self.RNN, self.RNN_OUTPUT]
 
         if self.parent.has_autoencoder and self.parent.AE_convolutional:
-            assert False, "Convolutional AE not implemented"
+            # assert False, "Convolutional AE not implemented"
             latent_state_dim = sizes[-1]
             iter_ = 1
             for dim in latent_state_dim:
@@ -344,6 +345,7 @@ class crnn_model(nn.Module):
             assert (T > 0)
             assert (horizon > 0)
             time_latent_prop = 0.0
+            
             for t in range(horizon):
                 # BE CAREFULL: input may be the latent input!
                 output, next_hidden_state, latent_state, latent_state_pred, RNN_output, input_decoded, time_latent_prop_t, _, _ = self.forward_(
@@ -353,6 +355,7 @@ class crnn_model(nn.Module):
                     is_latent=input_is_latent)
                 time_latent_prop += time_latent_prop_t
 
+                # TODO: iterative_forecasting_prob决定前向推理时，依概率决定，迭代的是输入的真实数据还是自身推理的中间预测值
                 # Settting the next input if t < horizon - 1
                 if t < horizon - 1:
                     if iterative_forecasting_prob > 0.0:
@@ -383,10 +386,20 @@ class crnn_model(nn.Module):
                         else:
                             if iterative_forecasting_gradient:
                                 # Forecasting the prediction as a tensor in graph
-                                input_t = output
+                                if 'only_inhibitor' in self.parent.mode:
+                                    input_t = output[:,:,1].unsqueeze(-2)
+                                elif 'only_activator' in self.parent.mode:
+                                    input_t = output[:,:,0].unsqueeze(-2)
+                                else:
+                                    input_t = output
                             else:
                                 # Deatching, and propagating the prediction as data
-                                input_t = Variable(output.data)
+                                if 'only_inhibitor' in self.parent.mode:
+                                    input_t = Variable(output[:,:,1].unsqueeze(-2).data)
+                                elif 'only_activator' in self.parent.mode:
+                                    input_t = Variable(output[:,:,0].unsqueeze(-2).data)
+                                else:
+                                    input_t = Variable(output.data)
 
                 outputs.append(output[:, 0])
                 inputs_decoded.append(input_decoded[:, 0])
@@ -454,7 +467,12 @@ class crnn_model(nn.Module):
             ########################
             if (self.parent.has_autoencoder or self.parent.has_dummy_autoencoder) and not is_latent:
                 if D != self.parent.input_dim:
-                    raise ValueError("Input dimension D={:d} does not match self.parent.input_dim={:d}.".format(D, self.parent.input_dim))
+                    if 'only_inhibitor' in self.parent.mode:
+                        inputs = inputs[:,:,1].unsqueeze(-2)
+                    elif 'only_activator' in self.parent.mode:
+                        inputs = inputs[:,:,0].unsqueeze(-2)
+                    else:
+                        raise ValueError("Input dimension D={:d} does not match self.parent.input_dim={:d}.".format(D, self.parent.input_dim))
                 # Forward the encoder only in the original space
                 encoder_output = self.forwardEncoder(inputs)
             else:
@@ -757,6 +775,7 @@ class crnn_model(nn.Module):
 
 
     def defineLatentStateParams(self):
+        import ipdb;ipdb.set_trace()
         if self.parent.params["latent_space_scaler"] == "MinMaxZeroOne":
             assert self.parent.RNN_activation_str_output == "tanhplus", "Latent space scaler is {:}, while activation at the output of the RNN is {:}.".format(self.parent.params["latent_space_scaler"], self.parent.RNN_activation_str_output)
         elif self.parent.params["latent_space_scaler"] == "Standard":

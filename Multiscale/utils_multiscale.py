@@ -72,12 +72,14 @@ class multiscaleTestingClass:
             self.model.data_info_dict,
             batch_size=1,
             shuffle=False,
+            gpu=self.model.gpu,
+            mode=self.model.mode
         )
 
         self.testingRoutine(data_loader_test, dt, set_, data_set)
     
 
-    def testingRoutine(self, data_loader, dt, set_, data_set,):
+    def testingRoutine(self, data_loader, dt, set_, data_set):
 
         for testing_mode in self.getMultiscaleTestingModes():
             self.testOnMode(data_loader, dt, set_, testing_mode, data_set)
@@ -195,61 +197,61 @@ class multiscaleTestingClass:
                 # Loading the results
                 data_path = Utils.getResultsDir(self.model) + "/results_{:}_{:}".format(testing_mode, set_name)
                 results = Utils.loadData(data_path, self.model.save_format)
-
-                # Plotting the state distributions specific to a system
-                if self.model.params["plot_system"]:
-                    Systems.plotSystem(self.model, results, set_name, testing_mode)
-
-                if self.model.params["plot_errors_in_time"]:
-                    Utils.plotErrorsInTime(self.model, results, set_name, testing_mode)
-
-                ic_indexes = results["ic_indexes"]
-                dt = results["dt"]
-                n_warmup = results["n_warmup"]
-
-                predictions_augmented_all = results["predictions_augmented_all"]
-                targets_augmented_all = results["targets_augmented_all"]
-
-                predictions_all = results["predictions_all"]
-                targets_all = results["targets_all"]
-                latent_states_all = results["latent_states_all"]
-
-                latent_states_dict[testing_mode] = latent_states_all
-
                 results_dict = {}
+                
                 for field in fields_to_compare:
                     results_dict[field] = results[field]
                 dicts_to_compare[testing_mode] = results_dict
 
-                if self.model.params["plot_testing_ics_examples"]:
+            #     # Plotting the state distributions specific to a system
+            #     if self.model.params["plot_system"]:
+            #         Systems.plotSystem(self.model, results, set_name, testing_mode)
 
-                    max_index = np.min([3, np.shape(results["targets_all"])[0]])
+            #     if self.model.params["plot_errors_in_time"]:
+            #         Utils.plotErrorsInTime(self.model, results, set_name, testing_mode)
 
-                    for idx in range(max_index):
-                        print("[utils_multiscale] Plotting IC {:}/{:}.".format(idx, max_index))
+            #     ic_indexes = results["ic_indexes"]
+            #     dt = results["dt"]
+            #     n_warmup = results["n_warmup"]
 
-                        # Plotting the latent dynamics for these examples
-                        if self.model.params["plot_latent_dynamics"]:
-                            Utils.plotLatentDynamics(self.model, set_name, latent_states_all[idx], idx, testing_mode)
+            #     predictions_augmented_all = results["predictions_augmented_all"]
+            #     targets_augmented_all = results["targets_augmented_all"]
 
-                        results_idx = {
-                            "Reference": targets_all[idx],
-                            "prediction": predictions_all[idx],
-                            "latent_states": latent_states_all[idx],
-                            "fields_2_save_2_logfile": [],
-                        }
+            #     predictions_all = results["predictions_all"]
+            #     targets_all = results["targets_all"]
+            #     latent_states_all = results["latent_states_all"]
 
-                        self.model.parent = self
-                        Utils.createIterativePredictionPlots(self.model, \
-                            targets_all[idx], \
-                            predictions_all[idx], \
-                            dt, idx, set_name, \
-                            testing_mode=testing_mode, \
-                            latent_states=latent_states_all[idx], \
-                            warm_up=n_warmup, \
-                            target_augment=targets_augmented_all[idx], \
-                            prediction_augment=predictions_augmented_all[idx], \
-                            )
+            #     latent_states_dict[testing_mode] = latent_states_all
+
+            #     if self.model.params["plot_testing_ics_examples"]:
+
+            #         max_index = np.min([3, np.shape(results["targets_all"])[0]])
+
+            #         for idx in range(max_index):
+            #             print("[utils_multiscale] Plotting IC {:}/{:}.".format(idx, max_index))
+
+            #             # Plotting the latent dynamics for these examples
+            #             if self.model.params["plot_latent_dynamics"]:
+            #                 Utils.plotLatentDynamics(self.model, set_name, latent_states_all[idx], idx, testing_mode)
+
+            #             results_idx = {
+            #                 "Reference": targets_all[idx],
+            #                 "prediction": predictions_all[idx],
+            #                 "latent_states": latent_states_all[idx],
+            #                 "fields_2_save_2_logfile": [],
+            #             }
+
+            #             self.model.parent = self
+            #             Utils.createIterativePredictionPlots(self.model, \
+            #                 targets_all[idx], \
+            #                 predictions_all[idx], \
+            #                 dt, idx, set_name, \
+            #                 testing_mode=testing_mode, \
+            #                 latent_states=latent_states_all[idx], \
+            #                 warm_up=n_warmup, \
+            #                 target_augment=targets_augmented_all[idx], \
+            #                 prediction_augment=predictions_augmented_all[idx], \
+            #                 )
 
             if self.model.params["plot_multiscale_results_comparison"]:
                 utils_multiscale_plotting.plotMultiscaleResultsComparison(

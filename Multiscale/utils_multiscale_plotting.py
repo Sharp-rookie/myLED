@@ -31,7 +31,6 @@ color_labels = [
     'tab:pink',
     'tab:gray',
     'tab:purple',
-    # 'tab:red',
 ]
 
 linestyles = ['-', '--', '-.', ':', '-', '--', '-.', ':']
@@ -102,7 +101,7 @@ def getMacroAndMicroSteps(model,
     macro_steps, micro_steps, result = [], [], []
     result_iterative_found = False
     result_equations_found = False
-
+    
     for key, values in dicts_to_compare.items():
 
         if "iterative" in key:
@@ -132,9 +131,11 @@ def getMacroAndMicroSteps(model,
             raise ValueError(
                 "[utils_multiscale_plotting] I don't know how to process {:}.".
                 format(key))
+    
     macro_steps = np.array(macro_steps)
     micro_steps = np.array(micro_steps)
     result = np.array(result)
+    
     if not result_iterative_found:
         raise ValueError("[utils_multiscale_plotting] Result from iterative forecasting, or result from macro_steps>prediction_horizon not found.")
     if not result_equations_found:
@@ -153,9 +154,11 @@ def makeBarPlot(
     macro_steps,
     result,
     result_iterative,
+    result_equation,
     dt,
     set_name,
 ):
+
     error2Label = error2LabelDictAverage()
 
     if (field not in error2Label):
@@ -169,17 +172,18 @@ def makeBarPlot(
     macro_steps_plot = macro_steps_plot[idx_sort]
     result_plot = result_plot[idx_sort]
 
-    macro_steps_plot_float = np.array(
-        [float(temp) for temp in macro_steps_plot])
+    macro_steps_plot_float = np.array([float(temp) for temp in macro_steps_plot])
     rho_plot = macro_steps_plot_float / float(micro_step)
 
     # plt.plot(rho_plot, result_plot)
 
     ######## BAR PLOT
-    result_plot = np.concatenate((result_plot, result_iterative[np.newaxis]),
-                                 axis=0)
+    if isinstance(result_equation, list):
+        result_equation = np.array(result_equation)
+    result_plot = np.concatenate((result_equation[np.newaxis], result_plot, result_iterative[np.newaxis]), axis=0)
     rho_plot = ["{:.2f}".format(temp) for temp in rho_plot]
     rho_plot.append(str("Latent"))
+    rho_plot.insert(0, str("0"))
 
     # Mean over time
     result_plot = np.mean(result_plot, axis=(2))
@@ -193,12 +197,10 @@ def makeBarPlot(
     x_pos = np.arange(len(labels))
     y_mean = result_plot_mean
     error = result_plot_max - result_plot_min
-    yerr = np.array([
-        result_plot_mean - result_plot_min, result_plot_max - result_plot_mean
-    ])
+    yerr = np.array([result_plot_mean - result_plot_min, result_plot_max - result_plot_mean])
 
     # Build the plot
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(20, 6))
     barlist = ax.bar(
         x_pos,
         y_mean,
@@ -210,7 +212,7 @@ def makeBarPlot(
     )
 
     for i_color in range(len(barlist[:-1])):
-        barlist[i_color].set_color(color_labels[i_color])
+        barlist[i_color].set_color(color_labels[int(i_color%len(color_labels))])
     barlist[-1].set_color("tab:red")
 
     ax.set_xticks(x_pos)
@@ -225,13 +227,10 @@ def makeBarPlot(
     # micro_step_time = micro_step * dt / lyapunov_time
     title_str = "$T_{\mu}=" + "{:.2f}".format(micro_step * dt)
     # +"="+"{:.2f}".format(micro_step_time) + "\, \Lambda_1"
-    title_str += ", \, T_{f}=" + "{:.2f}".format(
-        model.prediction_horizon * dt) + "$"
+    title_str += ", \, T_{f}=" + "{:.2f}".format(model.prediction_horizon * dt) + "$"
     # print(title_str)
     plt.title(r"{:}".format(title_str), pad=10)
-    fig_path = utils.getFigureDir(
-        model) + "/Comp_multiscale_barplot_{:}_micro{:}_{:}.{:}".format(
-            set_name, int(micro_step), field, FIGTYPE)
+    fig_path = utils.getFigureDir(model) + "/Comp_multiscale_barplot_{:}_micro{:}_{:}.{:}".format(set_name, int(micro_step), field, FIGTYPE)
     plt.tight_layout()
     plt.savefig(fig_path, dpi=300)
     plt.close()
@@ -291,9 +290,9 @@ def makeErrorTimePlot(
         time_vector,
         result_iterative,
         label=r"{:}".format("Iterative Latent Forecasting"),
-        linestyle=linestyles[i_color],
-        marker=linemarkers[i_color],
-        markeredgewidth=linemarkerswidth[i_color],
+        linestyle=linestyles[int(i_color%len(linestyles))],
+        marker=linemarkers[int(i_color%len(linemarkers))],
+        markeredgewidth=linemarkerswidth[int(i_color%len(linemarkerswidth))],
         markersize=10,
         markevery=markevery,
         color="tab:red",
@@ -310,12 +309,12 @@ def makeErrorTimePlot(
         plt.plot(time_vector,
                  result_plot[i_color],
                  label=r"{:}".format(label),
-                 linestyle=linestyles[i_color],
-                 marker=linemarkers[i_color],
-                 markeredgewidth=linemarkerswidth[i_color],
+                 linestyle=linestyles[int(i_color%len(linestyles))],
+                 marker=linemarkers[int(i_color%len(linemarkers))],
+                 markeredgewidth=linemarkerswidth[int(i_color%len(linemarkerswidth))],
                  markersize=10,
                  markevery=markevery,
-                 color=color_labels[i_color],
+                 color=color_labels[int(i_color%len(color_labels))],
                  linewidth=2)
 
     plt.xlim([np.min(time_vector), np.max(time_vector)])
@@ -378,7 +377,7 @@ def makeTimeBarPlot(
     barlist = plt.bar(rho_plot, result_plot)
 
     for i_color in range(len(barlist[:-1])):
-        barlist[i_color].set_color(color_labels[i_color])
+        barlist[i_color].set_color(color_labels[int(i_color%len(color_labels))])
     barlist[-1].set_color("tab:red")
 
     plt.ylabel(r"${:}$".format("T_{iter}"))
@@ -405,7 +404,7 @@ def makeTimeBarPlot(
     barlist[-1].set_color("tab:red")
 
     for i_color in range(len(barlist[:-1])):
-        barlist[i_color].set_color(color_labels[i_color])
+        barlist[i_color].set_color(color_labels[int(i_color%len(color_labels))])
     barlist[-1].set_color("tab:red")
 
     plt.ylabel(r"{:}".format("Speed-up"))
@@ -432,7 +431,7 @@ def makeTimeBarPlot(
     barlist[-1].set_color("tab:red")
 
     for i_color in range(len(barlist[:-1])):
-        barlist[i_color].set_color(color_labels[i_color])
+        barlist[i_color].set_color(color_labels[int(i_color%len(color_labels))])
     barlist[-1].set_color("tab:red")
 
     plt.ylabel(r"{:}".format("$\log_{10}($Speed-up$)$"))
@@ -458,6 +457,7 @@ def plotMultiscaleResultsComparison(model, dicts_to_compare, set_name,
     FIGTYPE = "png"
 
     for field in fields_to_compare:
+
         macro_steps, micro_steps, result, result_iterative, result_equations = getMacroAndMicroSteps(
             model, dicts_to_compare, field, model.params["prediction_horizon"])
 
@@ -480,6 +480,7 @@ def plotMultiscaleResultsComparison(model, dicts_to_compare, set_name,
                     macro_steps,
                     result,
                     result_iterative,
+                    result_equations,
                     dt,
                     set_name,
                 )
@@ -501,78 +502,36 @@ def plotMultiscaleResultsComparison(model, dicts_to_compare, set_name,
                     macro_steps,
                     result,
                     result_iterative,
+                    result_equations,
                     dt,
                     set_name,
                 )
 
-            if field in [
-                    "CORR",
-                    "RMSE",
-                    "MSE",
-                    "NAD",
-                    "mnad_act",
-                    "mnad_in",
-            ]:
+            # if field in [
+            #         "CORR",
+            #         "RMSE",
+            #         "MSE",
+            #         "NAD",
+            #         "mnad_act",
+            #         "mnad_in",
+            # ]:
 
-                # for with_legend in [True, False]:
-                for with_legend in [True]:
-                    makeErrorTimePlot(
-                        model,
-                        field,
-                        micro_steps,
-                        micro_step,
-                        macro_steps,
-                        result,
-                        result_iterative,
-                        dt,
-                        set_name,
-                        with_legend,
-                    )
+            #     # for with_legend in [True, False]:
+            #     for with_legend in [True]:
+            #         makeErrorTimePlot(
+            #             model,
+            #             field,
+            #             micro_steps,
+            #             micro_step,
+            #             macro_steps,
+            #             result,
+            #             result_iterative,
+            #             dt,
+            #             set_name,
+            #             with_legend,
+            #         )
 
             if field in ["time_total_per_iter"]:
                 makeTimeBarPlot(model, field, micro_steps, micro_step,
                                 macro_steps, result, result_iterative, dt,
                                 set_name, result_equations)
-
-            if field in ["num_accurate_pred_050_avg"]:
-                pass
-
-                # # print("micro_step\n{:}".format(micro_step))
-                # indexes = micro_steps == micro_step
-                # macro_steps_plot = macro_steps[indexes]
-                # result_plot = result[indexes]
-
-                # idx_sort = np.argsort(macro_steps_plot)
-                # macro_steps_plot = macro_steps_plot[idx_sort]
-                # result_plot = result_plot[idx_sort]
-
-                # rho_plot = [
-                #     "{:.2f}".format((temp / float(micro_step)))
-                #     for temp in macro_steps_plot
-                # ]
-                # rho_plot.append(str("Latent"))
-                # result_plot = np.concatenate(
-                #     (result_plot, result_iterative[np.newaxis]), axis=0)
-                # result_plot = result_plot * dt_scaled
-                # # print(rho_plot)
-                # # print(result_plot)
-                # barlist = plt.bar(rho_plot, result_plot)
-                # barlist[-1].set_color("tab:red")
-
-                # for i_color in range(len(barlist[:-1])):
-                #     barlist[i_color].set_color(color_labels[i_color])
-                # barlist[-1].set_color("tab:red")
-
-                # plt.ylabel(r"{:}".format(vpt_label))
-                # plt.xlabel(r"$ \rho=T_m / T_{\mu}$")
-                # title_str = "{:.2f}".format(micro_step * dt)
-                # # micro_step_time = micro_step * dt / lyapunov_time
-                # title_str = "$T_{\mu}=" + title_str
-                # title_str += ", \, T_{f}=" + "{:.2f}".format(
-                #     model.prediction_horizon * dt) + "$"
-                # plt.title(r"{:}".format(title_str), pad=10)
-                # fig_path = utils.getFigureDir(model) + "/Comp_multiscale_{:}_micro{:}_{:}.{:}".format(
-                #     set_name, int(micro_step), field, FIGTYPE)
-                # plt.tight_layout()
-                # plt.savefig(fig_path, dpi=300)
-                # plt.close()

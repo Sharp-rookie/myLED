@@ -26,11 +26,13 @@ class HDF5Dataset(data.Dataset):
         data_cache_size=3,
         data_info_dict=None,
         rank=0,
+        mode='all'
     ):
         super().__init__()
         self.data_info = []
         self.data_cache = {}
         self.data_cache_size = data_cache_size
+        self.mode = mode
 
         if data_info_dict is not None:
 
@@ -75,10 +77,9 @@ class HDF5Dataset(data.Dataset):
             print("[utils_data] Loader restricted to {:} timesteps.".format(self.truncate_timesteps))
 
     def __getitem__(self, index):
+        
         # get data
         x = self.get_data("data", index)
-        # print(np.shape(x))
-        # print(np.shape(self.scaler.data_min))
 
         if self.scaler is not None:
             x = self.scaler.scaleData(x, single_sequence=True)
@@ -86,8 +87,6 @@ class HDF5Dataset(data.Dataset):
         if not ((self.truncate_timesteps is None) or(self.truncate_timesteps == 0)):
             x = x[:self.truncate_timesteps]
 
-        # print(index)
-        # x = index
         return x
 
     def __len__(self):
@@ -317,7 +316,8 @@ class HDF5DatasetStructured(data.Dataset):
         return x
 
 
-def getHDF5dataset(data_path, data_info_dict):
+def getHDF5dataset(data_path, data_info_dict, mode='all'):
+    
     if data_info_dict["structured"]:
         dataset = HDF5DatasetStructured(
             data_path,
@@ -330,6 +330,7 @@ def getHDF5dataset(data_path, data_info_dict):
             load_data=False,
             data_cache_size=3,
             data_info_dict=data_info_dict,
+            mode=mode
         )
     return dataset
 
@@ -340,20 +341,17 @@ def getDataLoader(
     batch_size=1,
     shuffle=False,
     gpu=0,
+    mode='all'
 ):
 
-    dataset = getHDF5dataset(data_path, data_info_dict)
+    dataset = getHDF5dataset(data_path, data_info_dict, mode)
     
-    if gpu:
-        generator = torch.Generator(device='cuda')
-    else:
-        generator = torch.Generator(device='cpu')
     data_loader = torch.utils.data.DataLoader(dataset,
                                               shuffle=shuffle,
                                               batch_size=batch_size,
                                               pin_memory=False,
                                               num_workers=0,
-                                              generator=generator,
+                                              generator=torch.Generator(device='cuda' if gpu else 'cpu'),
                                               drop_last=True)
 
     return data_loader, dataset
@@ -364,6 +362,7 @@ def getDataBatch(model, batch_of_sequences, start, stop, dataset=None):
         data = dataset.getSequencesPart(batch_of_sequences, start, stop)
     else:
         data = batch_of_sequences[:, start:stop]
+
     return data
 
 
