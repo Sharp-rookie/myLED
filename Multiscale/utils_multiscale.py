@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 import Utils
 import Systems
@@ -192,12 +194,51 @@ class multiscaleTestingClass:
 
             write_logs_on = []
 
+            # Debug plot gif of [true, rho=1, latent]
+            # plot_data = {}
+            # start =4000
+            # end = 5000
+            # for testing_mode in self.getMultiscaleTestingModes():
+            #     data_path = Utils.getResultsDir(self.model) + "/results_{:}_{:}".format(testing_mode, set_name)
+            #     results = Utils.loadData(data_path, self.model.save_format)
+            #     if testing_mode == 'multiscale_forecasting_micro_10_macro_11':
+            #         plot_data['true'] = results['targets_all'][:,start:end,1].squeeze()
+            #         plot_data['11'] = results['predictions_all'][:,start:end,1].squeeze()
+            #     if testing_mode == 'multiscale_forecasting_micro_10_macro_8000':
+            #         plot_data['8000'] = results['predictions_all'][:,start:end,1].squeeze()
+            # fig = plt.figure(figsize=(40,10))
+            # ims = []
+            # for i in range(plot_data['true'].shape[-1]-1):
+            #     im1 = plt.plot(plot_data['true'][:, i], '-r')[0]
+            #     im2 = plt.plot(plot_data['11'][:, i], '-.b')[0]
+            #     im3 = plt.plot(plot_data['8000'][:, i], '--y')[0]
+            #     ims.append([im1, im2, im3])
+            # im1 = plt.plot(plot_data['true'][:, plot_data['true'].shape[-1]-1], '-r', label='True')[0]
+            # im2 = plt.plot(plot_data['11'][:, plot_data['true'].shape[-1]-1], '-.b', label='rho=1')[0]
+            # im3 = plt.plot(plot_data['8000'][:, plot_data['true'].shape[-1]-1], '--y', label='Latent')[0]
+            # ims.append([im1, im2, im3])
+            # plt.legend()
+            # ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
+            # ani.save(Utils.getFigureDir(self.model)+f'/comp{start}-{end}-inhibitor'+".gif", writer='pillow')
+            # return
+
             for testing_mode in self.getMultiscaleTestingModes():
 
                 # Loading the results
                 data_path = Utils.getResultsDir(self.model) + "/results_{:}_{:}".format(testing_mode, set_name)
                 results = Utils.loadData(data_path, self.model.save_format)
                 results_dict = {}
+
+                # Save target and predict curve gif
+                if self.model.params['plot_gif']:
+                    fig = plt.figure(figsize=(16,9))
+                    ims = []
+                    for i in range(results['predictions_all'].shape[-1]):
+                        im = plt.plot(np.array([results['predictions_all'][:,:600,0,i].squeeze(), results['targets_all'][:,:600,0,i].squeeze()]).T)
+                        ims.append(im)
+                    ani = animation.ArtistAnimation(fig, ims, interval=200, repeat_delay=1000)
+                    ani.save(Utils.getFigureDir(self.model)+'/'+testing_mode+".gif", writer='pillow')
+
                 
                 for field in fields_to_compare:
                     results_dict[field] = results[field]

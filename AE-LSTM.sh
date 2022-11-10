@@ -22,8 +22,6 @@ random_seed_in_name=1
 random_seed_in_AE_name=$random_seed
 
 # Training
-train_RNN_only=0
-load_trained_AE=0
 retrain=0
 overfitting_patience=10
 batch_size=32
@@ -34,9 +32,6 @@ noise_level=0.0
 optimizer_str=adabelief
 iterative_loss_validation=0
 iterative_loss_schedule_and_gradient=none
-reconstruction_loss=1
-output_forecasting_loss=1
-latent_forecasting_loss=1
 
 # Log
 plotting=1
@@ -69,6 +64,7 @@ AE_batch_norm=0
 AE_conv_transpose=0
 AE_pool_type="avg"
 AE_conv_architecture=conv_latent_1
+reconstruction_loss=1
 
 # Vae
 VAE_name=VAE
@@ -76,6 +72,8 @@ beta_vae=0
 beta_vae_weight_max=1.0
 
 # RNN
+train_RNN_only=0
+load_trained_AE=0
 RNN_name=LSTM
 RNN_cell_type="lstm"
 RNN_layers_num=1
@@ -87,6 +85,8 @@ n_warmup_train=60
 n_warmup=60
 c1_latent_smoothness_loss=0
 c1_latent_smoothness_loss_factor=0.1
+output_forecasting_loss=1
+latent_forecasting_loss=1
 
 CUDA_VISIBLE_DEVICES=$CUDA_DEVICES python crnn.py \
 --mode $mode \
@@ -152,6 +152,7 @@ CUDA_VISIBLE_DEVICES=$CUDA_DEVICES python crnn.py \
 --truncate_data_batches $truncate_data_batches \
 --plot_testing_ics_examples $plot_testing_ics_examples \
 --plotting $plotting \
+--test_on_val 1 \
 --test_on_test 1 \
 --n_warmup_train $n_warmup_train \
 --n_warmup $n_warmup \
@@ -167,84 +168,16 @@ CUDA_VISIBLE_DEVICES=$CUDA_DEVICES python crnn.py \
 
 mode="multiscale"
 
-# System
-system_name=FHN
-CUDA_DEVICES=0
-cudnn_benchmark=1
-random_seed=114
-random_seed_in_name=1
-random_seed_in_AE_name=$random_seed
-
-# Training
-train_RNN_only=0
-load_trained_AE=0
-retrain=0
-overfitting_patience=10
-batch_size=32
-learning_rate=0.001
-weight_decay=0.0
-dropout_keep_prob=0.99
-noise_level=0.0
-optimizer_str=adabelief
-iterative_loss_validation=0
-iterative_loss_schedule_and_gradient=none
-reconstruction_loss=1
-output_forecasting_loss=1
-latent_forecasting_loss=1
-
 # Testing
 multiscale_testing=1
 plot_multiscale_results_comparison=1
 
 # Log
+plot_gif=0
 plotting=1
 make_videos=0
 write_to_log=0
 plot_testing_ics_examples=0
-
-# Input
-Dx=101
-channels=1
-output_dim=2
-truncate_data_batches=128
-
-# Model
-activation_str_general=celu
-activation_str_output=tanhplus
-scaler=MinMaxZeroOne
-latent_space_scaler=Standard
-latent_state_dim=4
-sequence_length=40 # number of time step in data_input
-prediction_length=40 # less than sequence_length then invalid
-prediction_horizon=8000
-iterative_propagation_during_training_is_latent=1
-
-# AE
-AE_name=AE
-AE_layers_size=100
-AE_layers_num=3
-AE_convolutional=0
-AE_batch_norm=0
-AE_conv_transpose=0
-AE_pool_type="avg"
-AE_conv_architecture=conv_latent_1
-
-# Vae
-VAE_name=VAE
-beta_vae=0
-beta_vae_weight_max=1.0
-
-# RNN
-RNN_name=LSTM
-RNN_cell_type="lstm"
-RNN_layers_num=1
-RNN_layers_size=32
-RNN_activation_str="tanh"
-RNN_activation_str_output="tanhplus"
-n_warmup_train=60
-n_warmup=60
-c1_latent_smoothness_loss=0
-c1_latent_smoothness_loss_factor=0.1
 
 CUDA_VISIBLE_DEVICES=$CUDA_DEVICES python crnn.py \
 --mode $mode \
@@ -319,6 +252,7 @@ CUDA_VISIBLE_DEVICES=$CUDA_DEVICES python crnn.py \
 --AE_layers_num $AE_layers_num \
 --model_name $model_name \
 --multiscale_testing 1 \
+--plot_gif $plot_gif \
 --plot_multiscale_results_comparison 1 \
 --multiscale_micro_steps_list 10 \
 --multiscale_macro_steps_list 0 \

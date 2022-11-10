@@ -1,1 +1,0 @@
-model_name:AE-LSTM:memory:4870.89453125:total_training_time:121.91346883773804:min_val_total_loss:0.0001885862158830152

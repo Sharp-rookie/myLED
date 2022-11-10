@@ -117,14 +117,13 @@ class crnn_model(nn.Module):
                     # Parsing the layers of the RNN
                     # The input to the RNN is an embedding (effective dynamics) vector, or latent vector
 
-                    if not self.parent.RNN_convolutional:
-                        # Determining cell type
-                        if self.parent.RNN_cell_type == "lstm":
-                            self.RNN_cell = nn.LSTMCell
-                        elif self.parent.RNN_cell_type == "gru":
-                            self.RNN_cell = nn.GRUCell
-                        else:
-                            assert False, "{:} not implemented".format(self.parent.RNN_cell_type)
+                    # Determining cell type
+                    if self.parent.RNN_cell_type == "lstm":
+                        self.RNN_cell = nn.LSTMCell
+                    elif self.parent.RNN_cell_type == "gru":
+                        self.RNN_cell = nn.GRUCell
+                    else:
+                        assert False, "{:} not implemented".format(self.parent.RNN_cell_type)
 
                     input_size = self.parent.RNN_state_dim
                     for ln in range(len(self.parent.layers_rnn)):
@@ -133,6 +132,7 @@ class crnn_model(nn.Module):
                             self.parent.zoneout_keep_prob
                             )
                         )
+                        input_size = self.parent.layers_rnn[ln]
                 else:
                     assert False, "Convolutional RNN not implemented"
                     input_size = self.parent.RNN_state_dim
@@ -775,7 +775,6 @@ class crnn_model(nn.Module):
 
 
     def defineLatentStateParams(self):
-        import ipdb;ipdb.set_trace()
         if self.parent.params["latent_space_scaler"] == "MinMaxZeroOne":
             assert self.parent.RNN_activation_str_output == "tanhplus", "Latent space scaler is {:}, while activation at the output of the RNN is {:}.".format(self.parent.params["latent_space_scaler"], self.parent.RNN_activation_str_output)
         elif self.parent.params["latent_space_scaler"] == "Standard":

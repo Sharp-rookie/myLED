@@ -1,1 +1,0 @@
-model_name:CNN-LSTM:memory:4881.63671875:total_training_time:204.8084557056427:min_val_total_loss:0.00046406527105880485
