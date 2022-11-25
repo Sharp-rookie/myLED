@@ -60,7 +60,7 @@ def predictIndexes(mclass, data_loader, dt, set_name, testing_mode):
             sequence,
             testing_mode,
             dt,
-            prediction_horizon=prediction_horizon)
+            prediction_horizon=prediction_horizon,)
 
         prediction = model.data_info_dict["scaler"].descaleData(prediction, single_sequence=True, check_bounds=False, verbose=False)
         target = model.data_info_dict["scaler"].descaleData(target, single_sequence=True, check_bounds=False, verbose=False)
@@ -248,7 +248,7 @@ def predictSequence(
                     init_state,
                     single_sequence=True,
                     check_bounds=False,
-                    verbose=False,
+                    verbose=False
                 )
 
                 time_dynamics_start = time.time()
@@ -314,7 +314,6 @@ def predictSequence(
                     input_t = latent_states_pred[:, -1:, :].clone()
 
                 input_t = latent_states_pred[:, -1:, :]
-
             else:
                 raise ValueError("Not supposed to happen.")
                 # Next to feed, the last predicted state (from the dynamics)

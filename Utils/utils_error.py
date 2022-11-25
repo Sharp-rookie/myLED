@@ -72,9 +72,7 @@ def computeErrors(target, prediction, data_info, single_sample=False):
         error_dict["ABS"] = abserror
 
     if "NAD" in errors_to_compute:
-        nad_error = np.mean(np.abs(target - prediction) /
-                            (np.max(target) - np.min(target)),
-                            axis=spatial_dims)
+        nad_error = np.mean(np.abs(target - prediction) / (np.max(target) - np.min(target)), axis=spatial_dims)
         error_dict["NAD"] = nad_error
 
     if "PSNR" in errors_to_compute:

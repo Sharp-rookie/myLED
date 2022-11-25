@@ -1,0 +1,1 @@
+model_name:AE-LSTM-only_inhibitor:memory:4870.69140625:total_training_time:117.75075101852417:min_val_total_loss:0.0003254618724767601

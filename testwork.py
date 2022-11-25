@@ -1,3 +1,4 @@
+import time
 from tqdm import tqdm
 import warnings
 import numpy as np
@@ -6,9 +7,7 @@ import Utils
 import Systems
 
 
-def testModesOnSet(model, set_="train", print_=False, rank_str="", gpu=False, testing_modes=[]):
-
-    print("\n\n[Data Set]: {:}".format(set_))
+def testModesOnSet(model, set_="train", print_=False, rank_str="", gpu=False, testing_modes=[], mode='all'):
     
     dt = model.data_info_dict["dt"]
     if set_ == "test":
@@ -26,22 +25,22 @@ def testModesOnSet(model, set_="train", print_=False, rank_str="", gpu=False, te
         batch_size=1,
         shuffle=False,
         gpu=gpu,
+        mode=mode
     )
 
-    testingRoutine(model, data_loader_test, dt, set_, data_set, testing_modes)
+    testingRoutine(model, data_loader_test, dt, set_, data_set, testing_modes, mode)
 
-
-def testingRoutine(model, data_loader, dt, set_, data_set, testing_modes,):
+def testingRoutine(model, data_loader, dt, set_, data_set, testing_modes, mode):
     
     for testing_mode in testing_modes:
-        testOnMode(model, data_loader, dt, set_, testing_mode, data_set)
+        testOnMode(model, data_loader, dt, set_, testing_mode, data_set, mode)
 
 
-def testOnMode(model, data_loader, dt, set_, testing_mode, data_set):
+def testOnMode(model, data_loader, dt, set_, testing_mode, data_set, mode):
     
     assert (testing_mode in model.getTestingModes())
     assert (set_ in ["train", "test", "val"])
-    print("[Test Mode]: {:}".format(testing_mode))
+    print("\n\n[Test Mode]: {:}".format(testing_mode))
 
     # Test AE
     if testing_mode in ["autoencoder_testing"]:
@@ -155,13 +154,20 @@ def testIterativeOnHDF5(model, data_loader, dt, set_name, testing_mode):
     ic_num = 1
     ic_indexes = []
 
-    for sequence in tqdm(data_loader):
+    bar_format = '{desc}{n_fmt:>2s}/{total_fmt:<3s}|{bar}|{postfix}'
+    pbar = tqdm(range(num_test_ICS), desc='IC', bar_format=bar_format)
+    pbar_trart = time.time()
+
+    for sequence in data_loader:
+        
+        pbar.set_description(f'\33[36m🌌 IC')
 
         if ic_num > num_test_ICS: 
             break
 
         # if model.params["display_output"]:
         #     print("IC {:}/{:}, {:2.3f}%".format(ic_num, num_test_ICS, ic_num / num_test_ICS * 100))
+
         sequence = sequence[0]
 
         # STARTING TO PREDICT THE SEQUENCE IN model.predict_on=model.sequence_length
@@ -185,11 +191,11 @@ def testIterativeOnHDF5(model, data_loader, dt, set_name, testing_mode):
 
         prediction = model.data_info_dict["scaler"].descaleData(prediction, single_sequence=True, check_bounds=False)
         target = model.data_info_dict["scaler"].descaleData(target, single_sequence=True, check_bounds=False)
-
+        
         prediction_augment = model.data_info_dict["scaler"].descaleData(prediction_augment, single_sequence=True, check_bounds=False)
         target_augment = model.data_info_dict["scaler"].descaleData(target_augment, single_sequence=True, check_bounds=False)
 
-        errors = Utils.computeErrors(target, prediction,model.data_info_dict)
+        errors = Utils.computeErrors(target, prediction, model.data_info_dict)
         
         # Updating the error
         for error in errors:
@@ -206,6 +212,9 @@ def testIterativeOnHDF5(model, data_loader, dt, set_name, testing_mode):
         time_total_per_iter_all.append(time_total_per_iter)
         ic_indexes.append(ic_num)
         ic_num += 1
+
+        pbar.set_postfix_str(f'time: {int(time.time()-pbar_trart)}s')
+        pbar.update()
 
     time_total_per_iter_all = np.array(time_total_per_iter_all)
     time_total_per_iter = np.mean(time_total_per_iter_all)
@@ -239,6 +248,7 @@ def testIterativeOnHDF5(model, data_loader, dt, set_name, testing_mode):
         error_dict,
         error_dict_avg,
     )
+    
     results = Systems.addResultsSystem(model, results, testing_mode)
     results = Systems.computeStateDistributionStatisticsSystem(model, results, targets_all, predictions_all)
     

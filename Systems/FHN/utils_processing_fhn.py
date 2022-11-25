@@ -20,9 +20,7 @@ def addResultsSystemFHN(model, results, testing_mode):
     targets_all_act = targets_all[:, :, 0]
     predictions_all_act = predictions_all[:, :, 0]
 
-    mnad_act = np.mean(np.abs(targets_all_act - predictions_all_act) /
-                       (np.max(targets_all_act) - np.min(targets_all_act)),
-                       axis=2)
+    mnad_act = np.mean(np.abs(targets_all_act - predictions_all_act) / (np.max(targets_all_act) - np.min(targets_all_act)), axis=2)
 
     mnad_act_avg = np.mean(mnad_act)
     print("(MNAD) Mean normalised absolute difference on the activator density: {:}".format(mnad_act_avg))

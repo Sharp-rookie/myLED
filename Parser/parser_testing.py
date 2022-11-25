@@ -7,6 +7,12 @@ def getParserTesting(parser):
                         type=int,
                         required=False,
                         default=None)
+    
+    parser.add_argument("--plot_gif",
+                        help="plot_gif",
+                        type=int,
+                        required=False,
+                        default=0)
 
     parser.add_argument("--iterative_state_forecasting",
                         help="to test the model in iterative forecasting, propagating the output state of the model.",

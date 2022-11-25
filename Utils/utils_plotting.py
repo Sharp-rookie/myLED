@@ -44,6 +44,10 @@ color_labels = [
 
 def getFigureDir(model, unformatted=False):
     fig_dir = model.saving_path + model.fig_dir + model.model_name
+    if 'multiscale' not in model.mode:
+        fig_dir += '/' + 'train'
+    else:
+        fig_dir += '/' + 'multiscale_test'
     return fig_dir
 
 
@@ -155,24 +159,20 @@ def plotAllLosses(model,
     time_train = np.array(time_train)
     time_val = np.array(time_val)
 
-    if np.all(np.array(losses_train) > 0.0) and np.all(
-            np.array(losses_val) > 0.0):
+    if np.all(np.array(losses_train) > 0.0) and np.all(np.array(losses_val) > 0.0):
         losses_train = np.log10(losses_train)
         losses_val = np.log10(losses_val)
         min_val_error_log = np.log10(min_val_error)
         if len(time_train) > 1:
             for time_str in ["", "_time"]:
-                fig_path = getFigureDir(
-                    model
-                ) + "/losses_all_log" + time_str + name_str + "." + FIGTYPE
+                fig_path = getFigureDir(model) + "/losses_all_log" + time_str + name_str + "." + FIGTYPE
                 fig, ax = plt.subplots(figsize=(20, 10))
                 title = "MIN LOSS-VAL={:.4f}".format(min_val_error)
                 plt.title(title)
                 max_i = np.min([np.shape(losses_train)[1], len(loss_labels)])
                 for i in range(max_i):
                     if time_str != "_time":
-                        x_axis_train = np.arange(
-                            np.shape(losses_train[:, i])[0])
+                        x_axis_train = np.arange(np.shape(losses_train[:, i])[0])
                         x_axis_val = np.arange(np.shape(losses_val[:, i])[0])
                         min_val_axis = min_val_epoch
                         ax.set_xlabel(r"Epoch")
@@ -182,10 +182,10 @@ def plotAllLosses(model,
                         x_axis_val = time_val + i * dt
                         min_val_axis = min_val_time
                         ax.set_xlabel(r"Time")
-                    plt.plot(x_axis_train,
-                             losses_train[:, i],
-                             color=color_labels_idx[i],
-                             label=loss_labels[i] + " Train")
+                    # plt.plot(x_axis_train,
+                    #          losses_train[:, i],
+                    #          color=color_labels_idx[i],
+                    #          label=loss_labels[i] + " Train")
                     plt.plot(x_axis_val,
                              losses_val[:, i],
                              color=color_labels_idx[i],
@@ -206,17 +206,14 @@ def plotAllLosses(model,
     else:
         if len(time_train) > 1:
             for time_str in ["", "_time"]:
-                fig_path = getFigureDir(
-                    model
-                ) + "/losses_all" + time_str + name_str + "." + FIGTYPE
+                fig_path = getFigureDir(model) + "/losses_all" + time_str + name_str + "." + FIGTYPE
                 fig, ax = plt.subplots(figsize=(20, 10))
                 title = "MIN LOSS-VAL={:.4f}".format(min_val_error)
                 plt.title(title)
                 max_i = np.min([np.shape(losses_train)[1], len(loss_labels)])
                 for i in range(max_i):
                     if time_str != "_time":
-                        x_axis_train = np.arange(
-                            np.shape(losses_train[:, i])[0])
+                        x_axis_train = np.arange(np.shape(losses_train[:, i])[0])
                         x_axis_val = np.arange(np.shape(losses_val[:, i])[0])
                         min_val_axis = min_val_epoch
                         ax.set_xlabel(r"Epoch")

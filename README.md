@@ -4,14 +4,26 @@
 
 
 
-Train AE:
+Train and test AE-LSTM model:
 
 ```shell
-./4_AE.sh
+./AE-LSTM.sh
 ```
 
-Train RNN
+Train and test AE-LSTM model with only inhibitor input:
 
 ```shell
-./5_AE_RNN.sh
+./AE-LSTM-inhibitor.sh
+```
+
+Train and test CNN-LSTM model:
+
+```shell
+./CNN-LSTM.sh
+```
+
+Train and test CNN-LSTM model with only inhibitor input:
+
+```shell
+./CNN_LSTM-inhibitor.sh
 ```
