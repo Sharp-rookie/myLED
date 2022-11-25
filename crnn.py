@@ -25,6 +25,7 @@ class crnn():
         ##################################################################
         # SYSTEM SET
         ##################################################################
+        self.mode = params['mode']
         self.start_time = time.time()
         self.params = params.copy()
         self.system_name = params["system_name"] # System
@@ -32,11 +33,13 @@ class crnn():
 
         # Check device and Set tensor datatype
         self.gpu = torch.cuda.is_available()
+        self.gpu_id = params['gpu_id']
         if self.gpu:
             self.torch_dtype = torch.cuda.DoubleTensor
             torch.backends.cudnn.benchmark = True # conv speed-up
             self.device_count = torch.cuda.device_count()
             torch.cuda.set_device(self.gpu_id)
+            torch.set_default_tensor_type('torch.cuda.DoubleTensor')
         else:
             self.torch_dtype = torch.DoubleTensor            
 
@@ -72,10 +75,6 @@ class crnn():
         self.RNN_activation_str = params['RNN_activation_str'] # tanh, ...
         self.RNN_activation_str_output = params['RNN_activation_str_output'] # tanh, ...
         self.RNN_cell_type = params['RNN_cell_type'] # mlp, lstm, gru
-        self.input_dim = params['input_dim']
-        self.channels = params['channels']
-        self.Dz, self.Dy, self.Dx = Utils.getChannels(self.channels, params)
-        self.dropout_keep_prob = params["dropout_keep_prob"] # Dropout probabilities for AE regularizing
         self.zoneout_keep_prob = params["zoneout_keep_prob"] # Zoneout probability for RNN regularizing
         self.sequence_length = params['sequence_length']
         self.prediction_horizon = params["prediction_horizon"] # The prediction horizon
@@ -116,15 +115,29 @@ class crnn():
         self.num_test_ICS = params["num_test_ICS"]
 
         ##################################################################
-        # AUTOENCODER SET
+        # AE SET
         ##################################################################
+
+        if 'only_inhibitor' in params['mode'] and params['input_dim']!= 1:
+            assert False, "input_dim must be 1 in only_inhibitor mode!"
+        elif 'only_activator' in params['mode'] and params['input_dim']!= 1:
+            assert False, "input_dim must be 1 in only_activator mode!"
+        
+        self.input_dim = params['input_dim']
+        self.output_dim = params['output_dim']
+        self.channels = params['channels']
+        self.Dz, self.Dy, self.Dx = Utils.getChannels(self.channels, params)
+        self.dropout_keep_prob = params["dropout_keep_prob"] # Dropout probabilities for AE regularizing
+
         # Convolutional AE Set
-        self.AE_convolutional = False 
+        self.AE_convolutional = params["AE_convolutional"] 
         self.AE_batch_norm = params["AE_batch_norm"]
         self.AE_conv_transpose = params["AE_conv_transpose"]
         self.AE_pool_type = params["AE_pool_type"]
 
-        # Beta-Vae Set
+        ##################################################################
+        # BETA-VAE SET
+        ##################################################################
         self.beta_vae = params["beta_vae"]
         self.beta_vae_weight_max = params["beta_vae_weight_max"]
 
@@ -237,8 +250,8 @@ class crnn():
     def train(self):
         
         # Data
-        data_loader_train, dataset_train = Utils.getDataLoader(self.data_path_train, self.data_info_dict, self.batch_size, shuffle=True, gpu=self.gpu)
-        data_loader_val, dataset_val = Utils.getDataLoader(self.data_path_val, self.data_info_dict, self.batch_size, shuffle=False, gpu=self.gpu)
+        data_loader_train, dataset_train = Utils.getDataLoader(self.data_path_train, self.data_info_dict, self.batch_size, shuffle=True, gpu=self.gpu, mode=self.mode)
+        data_loader_val, dataset_val = Utils.getDataLoader(self.data_path_val, self.data_info_dict, self.batch_size, shuffle=False, gpu=self.gpu, mode=self.mode)
 
         # Before starting training, scale the latent space
         if self.model.has_latent_scaler:
@@ -279,7 +292,7 @@ class crnn():
 
         # tqdm
         bar_format = '{desc}{n_fmt:>2s}/{total_fmt:<3s}|{bar}|{postfix}'
-        pbar = tqdm(range(self.max_rounds), desc='Round', bar_format=bar_format)
+        pbar = tqdm(range(self.max_epochs), desc='Epoch', bar_format=bar_format)
 
         # Termination criterion:
         # If the training procedure completed the maximum number of epochs
@@ -342,7 +355,7 @@ class crnn():
             RNN_loss_round_val_vec = []
             for epochs_iter in range(self.epochs_iter, self.max_epochs + 1):
 
-                pbar.set_description(f'\33[36m🌌 Epoch {epochs_iter}/{self.max_epochs}')
+                pbar.set_description(f'\33[36m🌌 Round {self.rounds_iter}/{self.max_rounds}')
 
                 epochs_in_round = epochs_iter - self.epochs_iter
                 self.epochs_iter_global = epochs_iter
@@ -379,14 +392,15 @@ class crnn():
                         self.previous_round_converged = True
                         break
                 
-                # self.printLosses("TRAIN", losses_train)
-                # self.printLosses("VAL  ", losses_val)
-                pbar.set_postfix_str(f'Val  total:{losses_val[0]:.5f}, E2E:{losses_val[1]:.5f}, RNN:{losses_val[2]:.5f}, AE:{losses_val[3]:.5f}, \
-                    VAE:{losses_val[4]:.5f}, smooth:{losses_val[5]:.5f}')
+                self.printLosses("TRAIN", losses_train)
+                self.printLosses("VAL  ", losses_val)
+                pbar.set_postfix_str(f'[Val loss]  avg:{losses_val[0]:.5f} | E2E:{losses_val[1]:.5f} | RNN:{losses_val[2]:.5f} | AE:{losses_val[3]:.5f} | VAE:{losses_val[4]:.5f} | smooth:{losses_val[5]:.5f}')
                 pbar.update()
 
             self.rounds_iter += 1
             self.epochs_iter = epochs_iter
+
+            pbar.reset()
 
         # Save model
         if self.epochs_iter == self.max_epochs:
@@ -549,6 +563,7 @@ class crnn():
                 loss_fwd = self.getLoss(output_batch, target_batch)
             else:
                 loss_fwd = self.torch_dtype([0.0])[0]
+            
             if not detach_output:
                 if self.has_rnn:
                     assert output_batch.size() == target_batch.size(), "ERROR: Output of network ({:}) does not match with target ({:}).".format(output_batch.size(), target_batch.size())
@@ -655,8 +670,10 @@ class crnn():
             if self.params["test_on_test"]: test_on.append("test")
             if self.params["test_on_val"]: test_on.append("val")
             if self.params["test_on_train"]: test_on.append("train")
+
             for set_ in test_on:
-                testwork.testModesOnSet(self, set_=set_, testing_modes=testing_modes)
+                print("\n\n[Data Set]: {:}".format(set_))
+                testwork.testModesOnSet(self, set_=set_, testing_modes=testing_modes, gpu=self.gpu, mode=self.mode)
     
 
     def plot(self):
@@ -816,7 +833,6 @@ class crnn():
         input_t = Utils.transform2Tensor(self, input_t)
         last_hidden_state = Utils.transform2Tensor(self, last_hidden_state)
 
-        time_start = time.time()
         if "teacher_forcing" in testing_mode:
             prediction, last_hidden_state, latent_states, latent_states_pred, RNN_outputs, input_decoded, time_latent_prop, _, _ = self.model.forward(
                 input_t,
@@ -1140,7 +1156,7 @@ class crnn():
         to_print = "[{:s}] Loss: ".format(label)
         for i in range(len(idx)):
             to_print += "{:}={:.6} |".format(loss_name[self.losses_labels[idx[i]]], losses[idx[i]])
-        print(to_print)
+        # print(to_print)
     
 
     def saveModel(self):
@@ -1200,21 +1216,22 @@ if __name__ == '__main__':
     parser = argparser.defineParser().parse_args().__dict__
 
     # Load shell \params for debug
-    # with open('5_args.txt', 'w') as f:
+    # with open('args.txt', 'w') as f:
     #     json.dump(parser, f, indent=2)
-    # exit(0) 
-    with open('5_args.txt', 'r') as f:
-        parser = json.load(f)
+    # exit(0)
+    # with open('args.txt', 'r') as f:
+    #     parser = json.load(f)
 
     M = crnn(params=parser)
     print(M.model)
 
-    if parser['mode'] == 'all':
+    if parser['mode'] in ['all', 'only_inhibitor', 'only_activator']:
         M.train()
-        M.test()
-        M.plot()
+        # M.test()
+        # M.plot()
+        pass
 
-    elif parser['mode'] == 'multiscale':
+    elif 'multiscale' in parser['mode']:
         multiscale_testing = utils_multiscale.multiscaleTestingClass(M, parser)
         multiscale_testing.test()
         multiscale_testing.plot()

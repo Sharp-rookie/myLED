@@ -42,6 +42,10 @@ def getModelDir(model):
     return model_dir
 def getFigureDir(model, unformatted=False):
     fig_dir = model.saving_path + model.fig_dir + model.model_name
+    if 'multiscale' not in model.mode:
+        fig_dir += '/' + 'train'
+    else:
+        fig_dir += '/' + 'multiscale_test'
     return fig_dir
 def getResultsDir(model, unformatted=False):
     results_dir = model.saving_path + model.results_dir + model.model_name

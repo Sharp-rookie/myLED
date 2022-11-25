@@ -1,0 +1,1 @@
+model_name:CNN-LSTM-only_inhibitor:memory:4879.18359375:total_training_time:203.61444902420044:min_val_total_loss:0.0010554561043039708
