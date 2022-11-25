@@ -1,8 +1,7 @@
-*model
-*.pdf
-*.pickle
-*.h5
 *.png
-*.pth
-*.txt
 *.gif
+*.ckpt
+*.yaml
+*.0
+*.npy
+*.mp4
