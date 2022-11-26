@@ -37,7 +37,8 @@ def seed(cfg):
 
 
 def main():
-    config_filepath = str(sys.argv[1])
+    # config_filepath = str(sys.argv[1])
+    config_filepath = str("debug_config.yaml")
     cfg = load_config(filepath=config_filepath)
     # pprint.pprint(cfg)
     cfg = munchify(cfg)
@@ -65,6 +66,64 @@ def main():
                              data_filepath=cfg.data_filepath,
                              dataset=cfg.dataset,
                              lr_schedule=cfg.lr_schedule)
+
+    # define callback for selecting checkpoints during training
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=log_dir+"/lightning_logs/checkpoints/",
+        filename="{epoch}_{val_loss}",
+        verbose=True,
+        monitor='val_loss',
+        mode='min',
+        save_top_k=-1
+    )
+
+    # define trainer
+    trainer = Trainer(gpus=cfg.num_gpus,
+                      max_epochs=cfg.epochs,
+                      deterministic=True,
+                      strategy='ddp_find_unused_parameters_false',
+                      amp_backend='native',
+                      default_root_dir=log_dir,
+                      val_check_interval=1.0,
+                      callbacks=checkpoint_callback
+    )
+
+    trainer.fit(model)
+
+    print("Best model path:", checkpoint_callback.best_model_path)
+
+def fhn_main():
+    config_filepath = str("FHN/config.yaml")
+    cfg = load_config(filepath=config_filepath)
+    # pprint.pprint(cfg)
+    cfg = munchify(cfg)
+    seed(cfg)
+    seed_everything(cfg.seed)
+    set_cpu_num(cfg.cpu_num)
+
+    log_dir = '_'.join([cfg.log_dir,
+                        cfg.dataset,
+                        cfg.model_name,
+                        str(cfg.seed)])
+    
+    from FHN.fhn_model import FHN_VisDynamicsModel
+    model = FHN_VisDynamicsModel(
+        lr=cfg.lr,
+        seed=cfg.seed,
+        if_cuda=cfg.if_cuda,
+        if_test=False,
+        gamma=cfg.gamma,
+        log_dir=log_dir,
+        train_batch=cfg.train_batch,
+        val_batch=cfg.val_batch,
+        test_batch=cfg.test_batch,
+        num_workers=cfg.num_workers,
+        pin_memory=cfg.pin_memory,
+        model_name=cfg.model_name,
+        data_filepath=cfg.data_filepath,
+        dataset=cfg.dataset,
+        lr_schedule=cfg.lr_schedule
+    )
 
     # define callback for selecting checkpoints during training
     checkpoint_callback = ModelCheckpoint(
@@ -148,7 +207,9 @@ def main_latentpred():
     trainer.fit(model)
 
 if __name__ == '__main__':
-    if sys.argv[1] == 'latentpred':
-        main_latentpred()
-    else:
-        main()
+    main()
+
+    # if sys.argv[1] == 'latentpred':
+    #     main_latentpred()
+    # else:
+    #     main()
