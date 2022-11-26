@@ -345,7 +345,7 @@ def getDataLoader(
 ):
 
     dataset = getHDF5dataset(data_path, data_info_dict, mode)
-    
+
     data_loader = torch.utils.data.DataLoader(dataset,
                                               shuffle=shuffle,
                                               batch_size=batch_size,

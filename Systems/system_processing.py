@@ -48,7 +48,6 @@ def getSystemDataInfo(model):
             data_file)
 
     if model.system_name in ["Dummy"]:
-
         data_info_dict.update({
             'scaler':
             utils.scaler(

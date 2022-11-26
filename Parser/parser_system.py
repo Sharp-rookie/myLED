@@ -39,7 +39,7 @@ def getParserSystem(parser):
                         help="data path",
                         type=str,
                         required=False,
-                        default='Data/')
+                        default='Data/Data')
     
     parser.add_argument("--saving_path",
                         help="saving path",

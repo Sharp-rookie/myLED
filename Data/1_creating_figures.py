@@ -77,6 +77,7 @@ ax2.set_xlim([np.min(x), np.max(x)])
 plt.tight_layout()
 # plt.show()
 
+import os;os.makedirs("./Figures/", exist_ok=True)
 plt.savefig("./Figures/Plot_initial_conditions.pdf", bbox_inches="tight")
 plt.close()
 # plt.show()

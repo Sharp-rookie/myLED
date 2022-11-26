@@ -423,6 +423,7 @@ class crnn():
         epoch_losses_vec = []
 
         for batch_of_sequences in data_loader:
+
             losses, iterative_forecasting_prob, beta_vae_weight = self.trainOnBatch(batch_of_sequences, is_train=is_train, dataset=dataset)
             epoch_losses_vec.append(losses)
 

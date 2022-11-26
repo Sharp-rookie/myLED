@@ -85,9 +85,7 @@ data = {
     "a0":a0,
 }
 
+import os;os.makedirs("./Simulation_Data", exist_ok=True)
 with open("./Simulation_Data/lattice_boltzmann_fhn.pickle", "wb") as file:
     # Pickle the "data" dictionary using the highest protocol available.
     pickle.dump(data, file, pickle.HIGHEST_PROTOCOL)
-
-
-
