@@ -1,7 +1,10 @@
 *.png
+*.h5
+*.pickle
 *.gif
 *.ckpt
 *.yaml
 *.0
 *.npy
 *.mp4
+*.pyc
