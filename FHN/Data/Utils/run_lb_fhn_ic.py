@@ -1,13 +1,7 @@
-#!/usr/bin/env python
-# # -*- coding: utf-8 -*-
-
-"""Created by: Vlachas Pantelis, CSE-lab, ETH Zurich
-"""
-#!/usr/bin/env python
 import numpy as np
 import sys
 import scipy.io
-from Utils.lattice_boltzmann_fitzhugh_nagumo import *
+from Utils.lattice_boltzmann_fitzhugh_nagumo import LBM
 
 def run_lb_fhn_ic(rho_act_0, rho_in_0, tf):
     ###########################################
@@ -20,8 +14,6 @@ def run_lb_fhn_ic(rho_act_0, rho_in_0, tf):
     L = 20
     x = np.linspace(0, L, N+1)
     dx = x[1]-x[0]
-    # print(x)
-    # print(np.shape(x))
 
     Dx = 1 # Dact (activator)
     Dy = 4 # Din  (inhibitor)
@@ -33,10 +25,6 @@ def run_lb_fhn_ic(rho_act_0, rho_in_0, tf):
 
     omegas = [2/(1+3*Dx*dt/(dx*dx)), 2/(1+3*Dy*dt/(dx*dx))]
     n1 = 1/3
-
-    # tf = 1000
-    # tf = 10021
-
 
     # Bifurcation parameter
     epsilon = 0.006
@@ -58,19 +46,6 @@ def run_lb_fhn_ic(rho_act_0, rho_in_0, tf):
     # Storing energy terms
     energ_act = np.zeros((N_T, N+1))
     energ_in  = np.zeros((N_T, N+1))
-
-    # Initial density loaded from file
-    # mat = scipy.io.loadmat('./mail2_Spiliotis_Kostas/y0initRelax40.mat')
-    # # Initial density
-    # rho0 = np.array(mat["y0"])
-    # rho_act_0 = rho0[:N+1,0]
-    # rho_in_0  = rho0[N+1:,0]
-
-    # # Random initial conditions for inhibitor/activator
-    # rho_in_0    = np.random.rand(N+1)
-    # rho_act_0   = np.random.rand(N+1)
-
-
 
     # Activator
     f1_act  = 1/3*rho_act_0

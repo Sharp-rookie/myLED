@@ -14,7 +14,6 @@ from Utils.run_lb_fhn_ic import *
 
 
 file_names = ["y00", "y01", "y02", "y03", "y04", "y05"]
-# file_names = ["y00"]
 
 rho_act_all = []
 rho_in_all = []
@@ -33,10 +32,6 @@ for file_name in file_names:
 
     file_name_x = "./InitialConditions/y0x.txt"
     x = loadtxt(file_name_x, delimiter="\n")
-    # print(x)
-    # print(np.shape(x))
-    # print(np.shape(rho_act_0))
-    # print(np.shape(rho_in_0))
     tf = 2001
 
     rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(rho_act_0, rho_in_0, tf)

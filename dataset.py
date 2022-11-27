@@ -44,6 +44,7 @@ class NeuralPhysDataset(Dataset):
 
     # 0, 1 -> 2, 3
     def __getitem__(self, idx):
+
         par_list = self.all_filelist[idx]
         data = []
         for i in range(2):

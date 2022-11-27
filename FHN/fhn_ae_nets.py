@@ -47,7 +47,7 @@ class Cnov_AE(nn.Module):
     def __init__(self, in_channels, input_1d_width):
         super(Cnov_AE,self).__init__()
 
-        # Input_padding_layer, (batchsize,2,101)-->(batchsize,2,128)
+        # Input_padding_layer, (batchsize,2,202)-->(batchsize,2,256)
         if not isPowerOfTwo(input_1d_width):
             # Add padding in the first layer to make power of two
             input_1d_width_padded = findNextPowerOfTwo(input_1d_width)
@@ -64,7 +64,7 @@ class Cnov_AE(nn.Module):
             padding_input = tuple([0, 0])
         self.input_pad = nn.ConstantPad1d(padding_input, 0.0)
 
-        # Conv_encoder_layer, (batchsize,2,128)-->(batchsize,64,1)
+        # Conv_encoder_layer, (batchsize,2,256)-->(batchsize,64,1)
         self.conv_stack1 = nn.Sequential(
             conv1d_bn_relu(in_channels,32,4,stride=2),
             conv1d_bn_relu(32,32,3)
@@ -81,24 +81,26 @@ class Cnov_AE(nn.Module):
             conv1d_bn_relu(64,64,4,stride=2),
             conv1d_bn_relu(64,64,3),
         )
-
         self.conv_stack5 = nn.Sequential(
             conv1d_bn_relu(64,64,4,stride=2),
             conv1d_bn_relu(64,64,3),
         )
-
         self.conv_stack6 = nn.Sequential(
             conv1d_bn_relu(64,64,4,stride=2),
             conv1d_bn_relu(64,64,3),
         )
-
         self.conv_stack7 = nn.Sequential(
             conv1d_bn_relu(64,64,4,stride=2),
             conv1d_bn_relu(64,64,3),
         )
+        self.conv_stack8 = nn.Sequential(
+            conv1d_bn_relu(64,64,4,stride=2),
+            conv1d_bn_relu(64,64,3),
+        )
         
-        # Conv_time-lagged_decoder_layer,(batchsize,64,1)-->(batchsize,2,128)
-        self.deconv_7 = deconv_tanh(64,64,4,stride=2)
+        # Conv_time-lagged_decoder_layer,(batchsize,64,1)-->(batchsize,2,256)
+        self.deconv_8 = deconv_tanh(64,64,4,stride=2)
+        self.deconv_7 = deconv_tanh(67,64,4,stride=2)
         self.deconv_6 = deconv_tanh(67,64,4,stride=2)
         self.deconv_5 = deconv_tanh(67,64,4,stride=2)
         self.deconv_4 = deconv_tanh(67,64,4,stride=2)
@@ -106,13 +108,18 @@ class Cnov_AE(nn.Module):
         self.deconv_2 = deconv_tanh(35,16,4,stride=2)
         self.deconv_1 = deconv_tanh(19,in_channels,4,stride=2)
         
-        # Conv_time-lagged_predictor_layer,(batchsize,64,1)-->(batchsize,2,128)
-        self.predict_7 = nn.Conv1d(64,3,3,stride=1,padding=1)
+        # Conv_time-lagged_predictor_layer,(batchsize,64,1)-->(batchsize,2,256)
+        self.predict_8 = nn.Conv1d(64,3,3,stride=1,padding=1)
+        self.predict_7 = nn.Conv1d(67,3,3,stride=1,padding=1)
         self.predict_6 = nn.Conv1d(67,3,3,stride=1,padding=1)
         self.predict_5 = nn.Conv1d(67,3,3,stride=1,padding=1)
         self.predict_4 = nn.Conv1d(67,3,3,stride=1,padding=1)
         self.predict_3 = nn.Conv1d(67,3,3,stride=1,padding=1)
         self.predict_2 = nn.Conv1d(35,3,3,stride=1,padding=1)
+        self.up_sample_8 = nn.Sequential(
+            nn.ConvTranspose1d(3,3,4,stride=2,padding=1,bias=False),
+            nn.Tanh()
+        )
         self.up_sample_7 = nn.Sequential(
             nn.ConvTranspose1d(3,3,4,stride=2,padding=1,bias=False),
             nn.Tanh()
@@ -138,11 +145,11 @@ class Cnov_AE(nn.Module):
             nn.Tanh()
         )
 
-        # Output_unpadding_layer, (batchsize,2,128)-->(batchsize,2,101)
+        # Output_unpadding_layer, (batchsize,2,256)-->(batchsize,2,202)
         self.output_unpad = Unpad(padding_input)
 
     def encoder(self, x):
-        
+
         x = self.input_pad(x)
         conv1_out = self.conv_stack1(x)
         conv2_out = self.conv_stack2(conv1_out)
@@ -151,12 +158,17 @@ class Cnov_AE(nn.Module):
         conv5_out = self.conv_stack5(conv4_out)
         conv6_out = self.conv_stack6(conv5_out)
         conv7_out = self.conv_stack7(conv6_out)
-        return conv7_out
+        conv8_out = self.conv_stack8(conv7_out)
+        return conv8_out
 
     def decoder(self, x):
 
-        deconv7_out = self.deconv_7(x)
-        predict_7_out = self.up_sample_7(self.predict_7(x))
+        deconv8_out = self.deconv_8(x)
+        predict_8_out = self.up_sample_8(self.predict_8(x))
+
+        concat_7 = torch.cat([deconv8_out,predict_8_out],dim=1)
+        deconv7_out = self.deconv_7(concat_7)
+        predict_7_out = self.up_sample_7(self.predict_7(concat_7))
 
         concat_6 = torch.cat([deconv7_out,predict_7_out],dim=1)
         deconv6_out = self.deconv_6(concat_6)
@@ -185,7 +197,7 @@ class Cnov_AE(nn.Module):
         
         return predict_out
 
-    def forward(self,x, reconstructed_latent):
+    def forward(self,x):
         
         latent = self.encoder(x)
         out = self.decoder(latent)
@@ -193,8 +205,8 @@ class Cnov_AE(nn.Module):
 
 
 if __name__ == '__main__':
-    ae = Cnov_AE(2, 101)
-    input = torch.ones((128, 2, 101))
+    ae = Cnov_AE(2, 202)
+    input = torch.ones((128, 2, 202))
     latent = ae.encoder(input)
     output = ae.decoder(latent)
-    print(output.shape)
+    print(latent.shape, output.shape)

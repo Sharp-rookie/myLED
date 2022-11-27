@@ -9,17 +9,14 @@ Run these scripts in the respective order, i.e. for the FHN equation:
 
 
 ```shell
-# generator train and val dataset
+# generator train, val and test dataset
 python3 0_data_gen.py
 python3 2_create_training_data.py
 
 # plot train dataset
 # python3 1_creating_figures.py
-
-# generator test dataset
-python3 3_data_gen_test.py
-python3 4_create_test_data.py
 ```
 Note: 
-* sample time length == subsampling * dt (dt=5ms) ------ [ in 0_data_gen.py and 3_data_gen_test.py ]
-* time series length == N_TRAIN --------------------------- [ in 2_create_training_data.py ]
+* sample time length == subsampling * dt (dt=5ms) ------ [ in 0_data_gen.py ]
+* total time series length == total_length --------------------------- [ in 2_create_training_data.py ]
+* each sample length == sequence_length --------------------------- [ in 2_create_training_data.py ]

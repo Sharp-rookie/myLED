@@ -6,7 +6,7 @@ from torch import nn
 import pytorch_lightning as pl
 
 from fhn_ae_nets import Cnov_AE
-from fhn_dataset import FHNDataset
+from fhn_dataset import FHNDataset, scaler
 
 
 def mkdir(folder):
@@ -15,7 +15,7 @@ def mkdir(folder):
     os.makedirs(folder)
 
 
-class VisDynamicsModel(pl.LightningModule):
+class FHN_VisDynamicsModel(pl.LightningModule):
 
     def __init__(self,
                  lr: float=1e-4,
@@ -24,7 +24,7 @@ class VisDynamicsModel(pl.LightningModule):
                  if_test: bool=False,
                  gamma: float=0.5,
                  log_dir: str='logs',
-                 train_batch: int=512,
+                 train_batch: int=256,
                  val_batch: int=256,
                  test_batch: int=256,
                  num_workers: int=8,
@@ -48,7 +48,7 @@ class VisDynamicsModel(pl.LightningModule):
     def __build_model(self):
         
         # model
-        self.model = Cnov_AE(in_channels=2)
+        self.model = Cnov_AE(in_channels=2, input_1d_width=202)
         
         # loss
         self.loss_func = nn.MSELoss()
@@ -60,36 +60,35 @@ class VisDynamicsModel(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         
-        data, target, filepath = batch
-        output, latent = self.train_forward(data)
+        data, target = batch
+        output, _ = self.train_forward(data)
         train_loss = self.loss_func(output, target)
         self.log('train_loss', train_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return train_loss
 
     def validation_step(self, batch, batch_idx):
         
-        data, target, filepath = batch
-        output, latent = self.train_forward(data)
+        data, target = batch
+        output, _ = self.train_forward(data)
         val_loss = self.loss_func(output, target)
         self.log('val_loss', val_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return val_loss
 
     def test_step(self, batch, batch_idx):
         
-        data, target, filepath = batch
+        data, target = batch
         output, latent = self.model(data, data)
         test_loss = self.loss_func(output, target)
         self.log('test_loss', test_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        
+
         # save the latent vectors
-        self.all_filepaths.extend(filepath)
         for idx in range(data.shape[0]):
             latent_tmp = latent[idx].view(1, -1)[0]
             latent_tmp = latent_tmp.cpu().detach().numpy()
             self.all_latents.append(latent_tmp)
 
     def test_save(self):
-        np.save(os.path.join(self.var_log_dir, 'ids.npy'), self.all_filepaths)
+        
         np.save(os.path.join(self.var_log_dir, 'latent.npy'), self.all_latents)
 
     def configure_optimizers(self):
@@ -106,27 +105,37 @@ class VisDynamicsModel(pl.LightningModule):
 
     def setup(self, stage=None):
 
+        data_info_dict = {
+                'truncate_data_batches': 2048, 
+                'scaler': scaler(
+                        scaler_type='MinMaxZeroOne',
+                        data_min=np.loadtxt("Data/Data/data_min.txt"),
+                        data_max=np.loadtxt("Data/Data/data_max.txt"),
+                        channels=1,
+                        common_scaling_per_input_dim=0,
+                        common_scaling_per_channels=1,  # Common scaling for all channels
+                    ), 
+                }
+
         if stage == 'fit':
-            self.train_dataset = NeuralPhysDataset(data_filepath=self.hparams.data_filepath,
-                                                 flag='train',
-                                                 seed=self.hparams.seed,
-                                                 object_name=self.hparams.dataset)
-            self.val_dataset = NeuralPhysDataset(data_filepath=self.hparams.data_filepath,
-                                                 flag='val',
-                                                 seed=self.hparams.seed,
-                                                 object_name=self.hparams.dataset)
+            data_info_dict['truncate_data_batches'] = 8192
+            self.train_dataset = FHNDataset('Data/Data/train',
+                                        data_cache_size=3,
+                                        data_info_dict=data_info_dict)
+
+            data_info_dict['truncate_data_batches'] = 4096
+            self.val_dataset = FHNDataset('Data/Data/val',
+                                        data_cache_size=3,
+                                        data_info_dict=data_info_dict)
 
         if stage == 'test':
-            self.test_dataset = NeuralPhysDataset(data_filepath=self.hparams.data_filepath,
-                                                  flag='test',
-                                                  seed=self.hparams.seed,
-                                                  object_name=self.hparams.dataset)
+            data_info_dict['truncate_data_batches'] = 2048
+            self.test_dataset = FHNDataset('Data/Data/test',
+                                        data_cache_size=3,
+                                        data_info_dict=data_info_dict)
             
             # initialize lists for saving variables and latents during testing
-            self.all_filepaths = []
             self.all_latents = []
-            self.all_refine_latents = []
-            self.all_reconstructed_latents = []
 
     def train_dataloader(self):
         train_loader = torch.utils.data.DataLoader(dataset=self.train_dataset,

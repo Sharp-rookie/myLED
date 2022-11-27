@@ -247,17 +247,20 @@ class FHNDataset(Dataset):
         if not ((self.truncate_timesteps is None) or (self.truncate_timesteps == 0)):
             print("Loader restricted to {:} timesteps.".format(self.truncate_timesteps))
 
+    # 0, 1 -> 2, 3
     def __getitem__(self, index):
 
-        x = self.get_data("data", index)
-
+        trace = self.get_data("data", index)
         if self.scaler is not None:
-            x = self.scaler.scaleData(x, single_sequence=True)
-
+            trace = self.scaler.scaleData(trace, single_sequence=True)
         if not ((self.truncate_timesteps is None) or (self.truncate_timesteps == 0)):
-            x = x[:self.truncate_timesteps]
+            trace = trace[:self.truncate_timesteps]
+        
+        trace = torch.from_numpy(trace).float()
+        data = torch.cat([trace[0], trace[1]], dim=-1)
+        target = torch.cat([trace[2], trace[3]], dim=-1)
 
-        return x
+        return data, target
 
     def __len__(self):
         return len(self.get_data_infos('data'))
@@ -364,16 +367,7 @@ class FHNDataset(Dataset):
 if __name__=='__main__':
 
     data_info_dict = {
-        'structured': False, 
-        'contour_plots': True, 
-        'density_plots': False, 
-        'statistics_cummulative': True, 
-        'statistics_per_state': False, 
-        'statistics_per_channel': False, 
-        'compute_errors_in_time': True, 
-        'colormap': 'gray', 
-        'errors_to_compute': ['MSE', 'RMSE', 'NAD', 'CORR'], 
-        'truncate_data_batches': 960, 
+        'truncate_data_batches': 2048, 
         'scaler': scaler(
                 scaler_type='MinMaxZeroOne',
                 data_min=np.loadtxt("Data/Data/data_min.txt"),
@@ -381,8 +375,7 @@ if __name__=='__main__':
                 channels=1,
                 common_scaling_per_input_dim=0,
                 common_scaling_per_channels=1,  # Common scaling for all channels
-            ), 
-        'dt': 1.0
+            )
         }
 
     dataset = FHNDataset(
@@ -391,18 +384,18 @@ if __name__=='__main__':
             data_info_dict=data_info_dict
         )
 
-    item = dataset.__getitem__(0)
-    print(len(dataset), item.shape)
+    data, target = dataset.__getitem__(0)
+    print(len(dataset), data.shape, target.shape)
    
-    plot = True
+    plot = False
     if plot:
         import matplotlib.pyplot as plt
         import os;os.system('export MPLBACKEND=Agg')
-        dimension=6 # (0, 101)
-        for i in [1, 5, 10]:
+        dimension=55 # (0, 101)
+        for i in [1, 100, 200]:
             item = dataset.__getitem__(i)
             plt.figure()
             plt.plot(range(len(item[:, 0, dimension].squeeze())), item[:, 0, dimension].squeeze(), label='activator')
             plt.plot(range(len(item[:, 0, dimension].squeeze())), item[:, 1, dimension].squeeze(), label='inhibitor')
             plt.legend()
-            plt.savefig(f'dimension{dimension}_sample{i}.jpg')
+            plt.savefig(f'dimension{dimension}_sample{i}.jpg', dpi=300)

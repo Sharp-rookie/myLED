@@ -389,6 +389,7 @@ def gather_latent_from_trained_refine_model():
 
 
 if __name__ == '__main__':
+    
     if str(sys.argv[4]) == 'eval-train':
         gather_latent_from_trained_high_dim_model()
     elif str(sys.argv[4]) == 'eval-refine-train':
