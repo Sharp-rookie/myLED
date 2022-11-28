@@ -1,0 +1,1 @@
+model_name:AE-LSTM-epoch600:memory:5029.23046875:total_training_time:1310.4388194084167:min_val_total_loss:7.540309492056248e-05

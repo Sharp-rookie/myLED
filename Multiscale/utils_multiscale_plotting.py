@@ -218,7 +218,7 @@ def makeBarPlot(
         barlist[i_color].set_color(color_labels[int(i_color%len(color_labels))])
     barlist[-1].set_color("tab:red")
 
-    ax.set_ylim (0, 0.2)
+    # ax.set_ylim (0, 0.2)
 
     ax.set_xticks(x_pos)
     ax.set_xticklabels(labels)
