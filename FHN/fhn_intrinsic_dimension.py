@@ -40,8 +40,8 @@ def eval_id_latent(vars_filepath, if_refine, if_all_methods):
 
 if __name__ == '__main__':
     
-    for config_filepath in os.listdir("config/"):
-        cfg = load_config(filepath=os.path.join("config/", config_filepath))
+    for config_id in range(8):
+        cfg = load_config(filepath=f"config/config{config_id+1}.yaml")
         cfg = munchify(cfg)
     
         log_dir = '_'.join([cfg.log_dir, cfg.dataset, cfg.model_name, str(cfg.seed)])

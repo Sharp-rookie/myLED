@@ -70,7 +70,7 @@ def fhn_main(config_filepath):
         verbose=True,
         monitor='val_loss',
         mode='min',
-        save_top_k=-1
+        save_top_k=1
     )
 
     # define trainer
@@ -91,6 +91,5 @@ def fhn_main(config_filepath):
 
 if __name__ == '__main__':
 
-    random_seed = 6
-    config_filepath = f"config/config{random_seed}.yaml"
-    fhn_main(config_filepath)
+    for config_id in range(8):
+        fhn_main(f"config/config{config_id+1}.yaml")

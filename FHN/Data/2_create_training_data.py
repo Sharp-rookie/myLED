@@ -4,7 +4,8 @@ import os
 import h5py
 
 # Load and concat data
-with open("./Simulation_Data/lattice_boltzmann_fhn.pickle", "rb") as file:
+tau = 0.3
+with open(f"./Simulation_Data/lattice_boltzmann_fhn_tau{tau}.pickle", "rb") as file:
     # Pickle the "data" dictionary using the highest protocol available.
     simdata = pickle.load(file)
     rho_act_all = np.array(simdata["rho_act_all"])
@@ -19,7 +20,7 @@ print('inhibitor shape', np.shape(rho_in_all))
 print('concat shape', np.shape(sequences_raw))
 
 # Save statistic information
-data_dir_scaler = "./Data"
+data_dir_scaler = f"./Data_tau{tau}"
 os.makedirs(data_dir_scaler, exist_ok=True)
 data_max = np.max(sequences_raw, axis=(0,1,3))
 data_min = np.min(sequences_raw, axis=(0,1,3))
@@ -70,7 +71,7 @@ sequences = np.array(sequences)
 print("Train Dataset", np.shape(sequences))
 
 # save train dataset
-data_dir = "./Data/train"
+data_dir = f"./Data_tau{tau}/train"
 os.makedirs(data_dir, exist_ok=True)
 hf = h5py.File(data_dir + '/data.h5', 'w')
 # Only a single sequence_example per dataset group
@@ -124,7 +125,7 @@ sequences = np.array(sequences)
 print("Val Dataset", np.shape(sequences))
 
 # save val dataset
-data_dir = "./Data/val"
+data_dir = f"./Data_tau{tau}/val"
 os.makedirs(data_dir, exist_ok=True)
 hf = h5py.File(data_dir + '/data.h5', 'w')
 # Only a single sequence_example per dataset group
@@ -167,7 +168,7 @@ sequences = np.array(sequences)
 print("Test Dataset", np.shape(sequences))
 
 # save test dataset
-data_dir = "./Data/test"
+data_dir = f"./Data_tau{tau}/test"
 os.makedirs(data_dir, exist_ok=True)
 hf = h5py.File(data_dir + '/data.h5', 'w')
 # Only a single sequence_example per dataset group

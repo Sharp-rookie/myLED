@@ -109,8 +109,8 @@ class FHN_VisDynamicsModel(pl.LightningModule):
                 'truncate_data_batches': 2048, 
                 'scaler': scaler(
                         scaler_type='MinMaxZeroOne',
-                        data_min=np.loadtxt("Data/Data/data_min.txt"),
-                        data_max=np.loadtxt("Data/Data/data_max.txt"),
+                        data_min=np.loadtxt(self.hparams.data_filepath+"/data_min.txt"),
+                        data_max=np.loadtxt(self.hparams.data_filepath+"/data_max.txt"),
                         channels=1,
                         common_scaling_per_input_dim=0,
                         common_scaling_per_channels=1,  # Common scaling for all channels
@@ -119,18 +119,18 @@ class FHN_VisDynamicsModel(pl.LightningModule):
 
         if stage == 'fit':
             data_info_dict['truncate_data_batches'] = 8192
-            self.train_dataset = FHNDataset('Data/Data/train',
+            self.train_dataset = FHNDataset(self.hparams.data_filepath+'/train',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)
 
             data_info_dict['truncate_data_batches'] = 4096
-            self.val_dataset = FHNDataset('Data/Data/val',
+            self.val_dataset = FHNDataset(self.hparams.data_filepath+'/val',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)
 
         if stage == 'test':
             data_info_dict['truncate_data_batches'] = 2048
-            self.test_dataset = FHNDataset('Data/Data/test',
+            self.test_dataset = FHNDataset(self.hparams.data_filepath+'/test',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)
             

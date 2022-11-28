@@ -37,7 +37,8 @@ for file_name in file_names:
     rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(rho_act_0, rho_in_0, tf)
 
     # Subsampling
-    subsampling=1
+    subsampling=60
+    tau=subsampling*dt
     rho_act = rho_act[::subsampling]
     rho_in = rho_in[::subsampling]
     t_vec = t_vec[::subsampling]
@@ -81,6 +82,6 @@ data = {
 }
 
 import os;os.makedirs("./Simulation_Data", exist_ok=True)
-with open("./Simulation_Data/lattice_boltzmann_fhn.pickle", "wb") as file:
+with open(f"./Simulation_Data/lattice_boltzmann_fhn_tau{tau}.pickle", "wb") as file:
     # Pickle the "data" dictionary using the highest protocol available.
     pickle.dump(data, file, pickle.HIGHEST_PROTOCOL)

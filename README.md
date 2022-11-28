@@ -13,6 +13,7 @@ python3 2_create_training_data.py
 ```shell
 cd FHN/
 python fhn_main.py
+export MPLBACKEND=Agg
 python fhn_eval.py
 ```
 
@@ -21,5 +22,5 @@ python fhn_eval.py
 ```shell
 cd FHN
 python fhn_eval_intrinsic_dimension.py
-python dimension.py
+PYTHONIOENCODING=utf-8 python dimension.py
 ```

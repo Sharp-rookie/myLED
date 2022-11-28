@@ -86,48 +86,50 @@ def fhn_gather_latent_from_trained_high_dim_model(config_filepath, checkpoint_fi
                 'truncate_data_batches': 2048, 
                 'scaler': scaler(
                         scaler_type='MinMaxZeroOne',
-                        data_min=np.loadtxt("Data/Data/data_min.txt"),
-                        data_max=np.loadtxt("Data/Data/data_max.txt"),
+                        data_min=np.loadtxt(cfg.data_filepath+"/data_min.txt"),
+                        data_max=np.loadtxt(cfg.data_filepath+"/data_max.txt"),
                         channels=1,
                         common_scaling_per_input_dim=0,
                         common_scaling_per_channels=1,  # Common scaling for all channels
                     ), 
                 }
-    data_info_dict['truncate_data_batches'] = 8192
-    train_dataset = FHNDataset('Data/Data/train',
-                                data_cache_size=3,
-                                data_info_dict=data_info_dict)
+    # data_info_dict['truncate_data_batches'] = 8192
+    # train_dataset = FHNDataset('Data/Data/train',
+    #                             data_cache_size=3,
+    #                             data_info_dict=data_info_dict)
     data_info_dict['truncate_data_batches'] = 4096
-    val_dataset = FHNDataset('Data/Data/val',
+    val_dataset = FHNDataset(cfg.data_filepath+'/val',
                               data_cache_size=3,
                               data_info_dict=data_info_dict)
     # prepare train and val loader
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                               batch_size=cfg.train_batch,
-                                               shuffle=False,
-                                               **kwargs)
+    # train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+    #                                            batch_size=cfg.train_batch,
+    #                                            shuffle=False,
+    #                                            **kwargs)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
                                              batch_size=cfg.val_batch,
                                              shuffle=False,
                                              **kwargs)
 
-    # run train forward pass to save the latent vector for training the refine network later
-    all_latents = []
-    var_log_dir = os.path.join(log_dir, 'variables')
-    for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
-        output, latent = model.model(data.cuda())
-        # save the latent vectors
-        for idx in range(data.shape[0]):
-            latent_tmp = latent[idx].view(1, -1)[0]
-            latent_tmp = latent_tmp.cpu().detach().numpy()
-            all_latents.append(latent_tmp)
+    # # run train forward pass to save the latent vector for training the refine network later
+    # all_latents = []
+    # var_log_dir = os.path.join(log_dir, 'variables')
+    # for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
+    #     output, latent = model.model(data.cuda())
+    #     # save the latent vectors
+    #     for idx in range(data.shape[0]):
+    #         latent_tmp = latent[idx].view(1, -1)[0]
+    #         latent_tmp = latent_tmp.cpu().detach().numpy()
+    #         all_latents.append(latent_tmp)
 
-    mkdir(var_log_dir+'_train')
-    np.save(os.path.join(var_log_dir+'_train', 'latent.npy'), all_latents)
+    # mkdir(var_log_dir+'_train')
+    # np.save(os.path.join(var_log_dir+'_train', 'latent.npy'), all_latents)
 
     # run val forward pass to save the latent vector for validating the refine network later
     all_latents = []
     var_log_dir = os.path.join(log_dir, 'variables')
+    plot_act_true = []
+    plot_act_pred = []
     for batch_idx, (data, target) in enumerate(tqdm(val_loader)):
         output, latent = model.model(data.cuda())
         # save the latent vectors
@@ -135,14 +137,33 @@ def fhn_gather_latent_from_trained_high_dim_model(config_filepath, checkpoint_fi
             latent_tmp = latent[idx].view(1, -1)[0]
             latent_tmp = latent_tmp.cpu().detach().numpy()
             all_latents.append(latent_tmp)
+        
+        for i in range(target.shape[0]):
+            if i%2 == 0:
+                plot_act_true.append(target[i, 0, :101].unsqueeze(0))
+                plot_act_true.append(target[i, 0, 101:].unsqueeze(0))
+                plot_act_pred.append(output[i, 0, :101].unsqueeze(0))
+                plot_act_pred.append(output[i, 0, 101:].unsqueeze(0))
+    
+    import matplotlib.pyplot as plt
+    os.system('export MPLBACKEND=Agg')
+    plot_act_true = torch.cat(plot_act_true, dim=0)[::10]
+    plot_act_pred = torch.cat(plot_act_pred, dim=0)[::10]
+    dimension = 55
+    length = plot_act_true.shape[0]
+    plt.figure()
+    plt.plot(range(length), plot_act_true[:length, dimension].cpu(), label='True')
+    plt.plot(range(length), plot_act_pred[:length, dimension].cpu(), label='Predict')
+    plt.legend()
+    plt.savefig(f"act_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5][config_id-1]}_dimension{dimension}_seed{cfg.seed}.jpg", dpi=300)
 
     mkdir(var_log_dir+'_val')
+    print(f'latent.npy save at: {var_log_dir}_val/latent.npy')
     np.save(os.path.join(var_log_dir+'_val', 'latent.npy'), all_latents)
 
 
 if __name__ == '__main__':
 
-    random_seed = 1
-    config_filepath = f"config/config{random_seed}.yaml"
-    checkpoint_filepath = f"logs/logs_fhn_fhn-ae_{random_seed}/lightning_logs/checkpoints"
-    fhn_gather_latent_from_trained_high_dim_model(config_filepath, checkpoint_filepath)
+    for config_id in range(8):
+        checkpoint_filepath = f"logs/logs_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5][config_id]}_fhn_fhn-ae_1/lightning_logs/checkpoints"
+        fhn_gather_latent_from_trained_high_dim_model(f"config/config{config_id+1}.yaml", checkpoint_filepath)
