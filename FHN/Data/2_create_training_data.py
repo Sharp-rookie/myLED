@@ -4,7 +4,7 @@ import os
 import h5py
 
 # Load and concat data
-tau = 0.3
+tau = 0.005
 with open(f"./Simulation_Data/lattice_boltzmann_fhn_tau{tau}.pickle", "rb") as file:
     # Pickle the "data" dictionary using the highest protocol available.
     simdata = pickle.load(file)

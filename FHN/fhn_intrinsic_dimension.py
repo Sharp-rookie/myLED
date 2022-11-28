@@ -40,7 +40,7 @@ def eval_id_latent(vars_filepath, if_refine, if_all_methods):
 
 if __name__ == '__main__':
     
-    for config_id in range(8):
+    for config_id in range(9):
         cfg = load_config(filepath=f"config/config{config_id+1}.yaml")
         cfg = munchify(cfg)
     

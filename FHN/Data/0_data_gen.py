@@ -37,7 +37,7 @@ for file_name in file_names:
     rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(rho_act_0, rho_in_0, tf)
 
     # Subsampling
-    subsampling=60
+    subsampling=1
     tau=subsampling*dt
     rho_act = rho_act[::subsampling]
     rho_in = rho_in[::subsampling]

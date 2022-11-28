@@ -41,7 +41,7 @@ def seed(cfg):
         torch.cuda.manual_seed(cfg.seed)
 
 
-def fhn_gather_latent_from_trained_high_dim_model(config_filepath, checkpoint_filepath):
+def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, checkpoint_filepath):
     
     checkpoint_filepath = glob.glob(os.path.join(checkpoint_filepath, '*.ckpt'))[0]
     cfg = load_config(filepath=config_filepath)
@@ -97,7 +97,7 @@ def fhn_gather_latent_from_trained_high_dim_model(config_filepath, checkpoint_fi
     # train_dataset = FHNDataset('Data/Data/train',
     #                             data_cache_size=3,
     #                             data_info_dict=data_info_dict)
-    data_info_dict['truncate_data_batches'] = 4096
+    data_info_dict['truncate_data_batches'] = 2048
     val_dataset = FHNDataset(cfg.data_filepath+'/val',
                               data_cache_size=3,
                               data_info_dict=data_info_dict)
@@ -155,7 +155,7 @@ def fhn_gather_latent_from_trained_high_dim_model(config_filepath, checkpoint_fi
     plt.plot(range(length), plot_act_true[:length, dimension].cpu(), label='True')
     plt.plot(range(length), plot_act_pred[:length, dimension].cpu(), label='Predict')
     plt.legend()
-    plt.savefig(f"act_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5][config_id-1]}_dimension{dimension}_seed{cfg.seed}.jpg", dpi=300)
+    plt.savefig(f"act_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5,1.0][config_id-1]}_dimension{dimension}_seed{cfg.seed}.jpg", dpi=300)
 
     mkdir(var_log_dir+'_val')
     print(f'latent.npy save at: {var_log_dir}_val/latent.npy')
@@ -164,6 +164,6 @@ def fhn_gather_latent_from_trained_high_dim_model(config_filepath, checkpoint_fi
 
 if __name__ == '__main__':
 
-    for config_id in range(8):
-        checkpoint_filepath = f"logs/logs_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5][config_id]}_fhn_fhn-ae_1/lightning_logs/checkpoints"
-        fhn_gather_latent_from_trained_high_dim_model(f"config/config{config_id+1}.yaml", checkpoint_filepath)
+    for config_id in [8]:
+        checkpoint_filepath = f"logs/logs_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5,1.0][config_id]}_fhn_fhn-ae_1/lightning_logs/checkpoints"
+        fhn_gather_latent_from_trained_high_dim_model(config_id+1, f"config/config{config_id+1}.yaml", checkpoint_filepath)

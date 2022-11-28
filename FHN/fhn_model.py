@@ -118,18 +118,18 @@ class FHN_VisDynamicsModel(pl.LightningModule):
                 }
 
         if stage == 'fit':
-            data_info_dict['truncate_data_batches'] = 8192
+            data_info_dict['truncate_data_batches'] = 4096
             self.train_dataset = FHNDataset(self.hparams.data_filepath+'/train',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)
 
-            data_info_dict['truncate_data_batches'] = 4096
+            data_info_dict['truncate_data_batches'] = 2048
             self.val_dataset = FHNDataset(self.hparams.data_filepath+'/val',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)
 
         if stage == 'test':
-            data_info_dict['truncate_data_batches'] = 2048
+            data_info_dict['truncate_data_batches'] = 1024
             self.test_dataset = FHNDataset(self.hparams.data_filepath+'/test',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)
