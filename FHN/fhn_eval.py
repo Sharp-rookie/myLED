@@ -43,7 +43,6 @@ def seed(cfg):
 
 def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, checkpoint_filepath):
     
-    checkpoint_filepath = glob.glob(os.path.join(checkpoint_filepath, '*.ckpt'))[0]
     cfg = load_config(filepath=config_filepath)
     # pprint.pprint(cfg)
     cfg = munchify(cfg)
@@ -74,6 +73,7 @@ def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, ch
         lr_schedule=cfg.lr_schedule
     )
 
+    checkpoint_filepath = glob.glob(os.path.join(checkpoint_filepath+f"_fhn_fhn-ae_{cfg.seed}/lightning_logs/checkpoints", '*.ckpt'))[0]
     ckpt = torch.load(checkpoint_filepath)
     model.load_state_dict(ckpt['state_dict'])
     model = model.to('cuda')
@@ -83,7 +83,7 @@ def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, ch
     # prepare train and val dataset
     kwargs = {'num_workers': cfg.num_workers, 'pin_memory': True} if cfg.if_cuda else {}
     data_info_dict = {
-                'truncate_data_batches': 2048, 
+                'truncate_data_batches': 4096, 
                 'scaler': scaler(
                         scaler_type='MinMaxZeroOne',
                         data_min=np.loadtxt(cfg.data_filepath+"/data_min.txt"),
@@ -97,7 +97,7 @@ def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, ch
     # train_dataset = FHNDataset('Data/Data/train',
     #                             data_cache_size=3,
     #                             data_info_dict=data_info_dict)
-    data_info_dict['truncate_data_batches'] = 2048
+    data_info_dict['truncate_data_batches'] = 4096
     val_dataset = FHNDataset(cfg.data_filepath+'/val',
                               data_cache_size=3,
                               data_info_dict=data_info_dict)
@@ -128,6 +128,7 @@ def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, ch
     # run val forward pass to save the latent vector for validating the refine network later
     all_latents = []
     var_log_dir = os.path.join(log_dir, 'variables')
+    mkdir(var_log_dir+'_val')
     plot_act_true = []
     plot_act_pred = []
     for batch_idx, (data, target) in enumerate(tqdm(val_loader)):
@@ -139,16 +140,13 @@ def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, ch
             all_latents.append(latent_tmp)
         
         for i in range(target.shape[0]):
-            if i%2 == 0:
-                plot_act_true.append(target[i, 0, :101].unsqueeze(0))
-                plot_act_true.append(target[i, 0, 101:].unsqueeze(0))
-                plot_act_pred.append(output[i, 0, :101].unsqueeze(0))
-                plot_act_pred.append(output[i, 0, 101:].unsqueeze(0))
+            plot_act_true.append(target[i, 0].unsqueeze(0))
+            plot_act_pred.append(output[i, 0].unsqueeze(0))
     
     import matplotlib.pyplot as plt
     os.system('export MPLBACKEND=Agg')
-    plot_act_true = torch.cat(plot_act_true, dim=0)[::10]
-    plot_act_pred = torch.cat(plot_act_pred, dim=0)[::10]
+    plot_act_true = torch.cat(plot_act_true, dim=0)[::1]
+    plot_act_pred = torch.cat(plot_act_pred, dim=0)[::1]
     dimension = 55
     length = plot_act_true.shape[0]
     plt.figure()
@@ -157,13 +155,12 @@ def fhn_gather_latent_from_trained_high_dim_model(config_id, config_filepath, ch
     plt.legend()
     plt.savefig(f"act_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5,1.0][config_id-1]}_dimension{dimension}_seed{cfg.seed}.jpg", dpi=300)
 
-    mkdir(var_log_dir+'_val')
     print(f'latent.npy save at: {var_log_dir}_val/latent.npy')
     np.save(os.path.join(var_log_dir+'_val', 'latent.npy'), all_latents)
 
 
 if __name__ == '__main__':
 
-    for config_id in [8]:
-        checkpoint_filepath = f"logs/logs_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5,1.0][config_id]}_fhn_fhn-ae_1/lightning_logs/checkpoints"
+    for config_id in range(8):
+        checkpoint_filepath = f"logs/logs_tau{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5,1.0][config_id]}"
         fhn_gather_latent_from_trained_high_dim_model(config_id+1, f"config/config{config_id+1}.yaml", checkpoint_filepath)

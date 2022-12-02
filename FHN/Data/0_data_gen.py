@@ -1,10 +1,4 @@
-#!/usr/bin/env python
-# # -*- coding: utf-8 -*-
-
-"""Created by: Vlachas Pantelis, CSE-lab, ETH Zurich
-"""
-#!/usr/bin/env python
-import numpy as np
+# -*- coding: utf-8 -*-
 import pickle
 from numpy import loadtxt
 from Utils.run_lb_fhn_ic import *
@@ -23,7 +17,7 @@ mom_in_all = []
 energ_act_all = []
 energ_in_all = []
 
-for file_name in file_names:
+for f_id, file_name in enumerate(file_names):
     file_name_act = "./InitialConditions/" + file_name + "u.txt"
     rho_act_0 = loadtxt(file_name_act, delimiter="\n")
 
@@ -34,11 +28,11 @@ for file_name in file_names:
     x = loadtxt(file_name_x, delimiter="\n")
     tf = 2001
 
-    rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(rho_act_0, rho_in_0, tf)
+    rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf)
 
     # Subsampling
-    subsampling=1
-    tau=subsampling*dt
+    subsampling = 1
+    tau = subsampling*dt
     rho_act = rho_act[::subsampling]
     rho_in = rho_in[::subsampling]
     t_vec = t_vec[::subsampling]

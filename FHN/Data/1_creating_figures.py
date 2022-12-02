@@ -1,10 +1,4 @@
-#!/usr/bin/env python
-# # -*- coding: utf-8 -*-
-
-"""Created by: Vlachas Pantelis, CSE-lab, ETH Zurich
-"""
-#!/usr/bin/env python
-
+# -*- coding: utf-8 -*-
 import pickle
 import numpy as np
 

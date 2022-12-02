@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import pickle
 import numpy as np
 import os
@@ -36,7 +37,7 @@ np.savetxt(data_dir_scaler + "/dt.txt", [dt_coarse]) # Save the timestep
 # total time steps for train
 total_length = 3000
 # single-sample time steps for train
-sequence_length = 4
+sequence_length = 2
 
 # select 3 initial-condition(ICs) traces for train
 ICS_TRAIN = [0, 1, 2]
@@ -90,7 +91,7 @@ hf.close()
 # total time steps for val
 total_length = 3000
 # single-sample time steps for val
-sequence_length = 4
+sequence_length = 2
 
 # select 2 initial-condition traces for val
 ICS_VAL = [3, 4]
@@ -144,7 +145,7 @@ hf.close()
 # total time steps for test
 total_length = 3000
 # single-sample time steps for test
-sequence_length = 4
+sequence_length = 2
 
 # select 2 initial-condition traces for test
 ICS_TEST = [5]

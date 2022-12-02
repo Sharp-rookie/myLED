@@ -1,9 +1,7 @@
 import numpy as np
-import sys
-import scipy.io
-from Utils.lattice_boltzmann_fitzhugh_nagumo import LBM
+from .lattice_boltzmann_fitzhugh_nagumo import LBM
 
-def run_lb_fhn_ic(rho_act_0, rho_in_0, tf):
+def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf):
     ###########################################
     ## Simulation of the Lattice Boltzman Method
     ## for the FitzHugh-Nagumo
@@ -66,7 +64,7 @@ def run_lb_fhn_ic(rho_act_0, rho_in_0, tf):
     energ_in_t = 0.5 * (f1_in + f_1_in)
 
     while np.abs(t-tf)>1e-6:
-        print("Time {:.3f}/{:.2f}. {:.2f}%".format(t, tf, t/tf*100.0))
+        print("\r Generating Data[{:d}/{:d}]: {:.3f}/{:.2f}. {:.2f}%".format(id, num, t, tf, t/tf*100.0), end=' ')
 
         # Propagate the Lattice Boltzmann in time
         f1_act, f_1_act, f0_act, f1_in, f_1_in, f0_in = LBM( \

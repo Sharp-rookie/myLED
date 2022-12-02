@@ -1,5 +1,22 @@
 # Discovering State Variables Hidden for FHN Equation
 
+
+
+## MultiProcessing Script
+
+Start 20 subprocesses for [generate data -- train -- eval -- calculate ID] in different tau of 10 random seeds
+
+```shell
+cd FHN/
+python pipeline_multiprocessing.py
+```
+
+
+
+---
+
+
+
 ## Data Preparation
 
 ```shell

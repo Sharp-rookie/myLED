@@ -247,7 +247,7 @@ class FHNDataset(Dataset):
         if not ((self.truncate_timesteps is None) or (self.truncate_timesteps == 0)):
             print("Loader restricted to {:} timesteps.".format(self.truncate_timesteps))
 
-    # 0, 1 -> 2, 3
+    # 0 --> 1
     def __getitem__(self, index):
 
         trace = self.get_data("data", index)
@@ -257,8 +257,8 @@ class FHNDataset(Dataset):
             trace = trace[:self.truncate_timesteps]
         
         trace = torch.from_numpy(trace).float()
-        data = torch.cat([trace[0], trace[1]], dim=-1)
-        target = torch.cat([trace[2], trace[3]], dim=-1)
+        data = trace[0]
+        target = trace[1]
 
         return data, target
 
@@ -370,8 +370,8 @@ if __name__=='__main__':
         'truncate_data_batches': 2048, 
         'scaler': scaler(
                 scaler_type='MinMaxZeroOne',
-                data_min=np.loadtxt("Data/Data/data_min.txt"),
-                data_max=np.loadtxt("Data/Data/data_max.txt"),
+                data_min=np.loadtxt("Data/Data_tau0.005/data_min.txt"),
+                data_max=np.loadtxt("Data/Data_tau0.005/data_max.txt"),
                 channels=1,
                 common_scaling_per_input_dim=0,
                 common_scaling_per_channels=1,  # Common scaling for all channels
@@ -379,7 +379,7 @@ if __name__=='__main__':
         }
 
     dataset = FHNDataset(
-            'Data/Data/train',
+            'Data/Data_tau0.005/train',
             data_cache_size=3,
             data_info_dict=data_info_dict
         )

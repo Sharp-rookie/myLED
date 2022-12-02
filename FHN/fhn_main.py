@@ -91,5 +91,6 @@ def fhn_main(config_filepath):
 
 if __name__ == '__main__':
 
-    for config_id in [8]:
-        fhn_main(f"config/config{config_id+1}.yaml")
+    # for config_id in range(9):
+    config_id = 0
+    fhn_main(f"config/config{config_id+1}.yaml")

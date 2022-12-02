@@ -36,19 +36,13 @@ class FHN_VisDynamicsModel(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.kwargs = {'num_workers': self.hparams.num_workers, 'pin_memory': self.hparams.pin_memory} if self.hparams.if_cuda else {}
-        # create visualization saving folder if testing
-        self.pred_log_dir = os.path.join(self.hparams.log_dir, 'predictions')
-        self.var_log_dir = os.path.join(self.hparams.log_dir, 'variables')
-        if not self.hparams.if_test:
-            mkdir(self.pred_log_dir)
-            mkdir(self.var_log_dir)
 
         self.__build_model()
 
     def __build_model(self):
         
         # model
-        self.model = Cnov_AE(in_channels=2, input_1d_width=202)
+        self.model = Cnov_AE(in_channels=2, input_1d_width=101)
         
         # loss
         self.loss_func = nn.MSELoss()
@@ -118,12 +112,12 @@ class FHN_VisDynamicsModel(pl.LightningModule):
                 }
 
         if stage == 'fit':
-            data_info_dict['truncate_data_batches'] = 4096
+            data_info_dict['truncate_data_batches'] = 8192
             self.train_dataset = FHNDataset(self.hparams.data_filepath+'/train',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)
 
-            data_info_dict['truncate_data_batches'] = 2048
+            data_info_dict['truncate_data_batches'] = 4096
             self.val_dataset = FHNDataset(self.hparams.data_filepath+'/val',
                                         data_cache_size=3,
                                         data_info_dict=data_info_dict)

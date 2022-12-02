@@ -29,7 +29,7 @@ def calculate_intrinsic_dimension_statistics():
         dim_mean = np.mean(dims_all)
         dim_std = np.std(dims_all)
         print(f'tau[{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5,1.0][config_id]}] Mean (±std):', '%.2f (±%.2f)' % (dim_mean, dim_std))
-        # print(f'tau[{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5][config_id]}] Confidence interval:', '(%.1f, %.1f)' % (dim_mean-1.96*dim_std, dim_mean+1.96*dim_std))
+        # print(f'tau[{[0.005,0.01,0.025,0.05,0.075,0.1,0.3,0.5,1.0][config_id]}] Confidence interval:', '(%.1f, %.1f)' % (dim_mean-1.96*dim_std, dim_mean+1.96*dim_std))
 
 
 if __name__ == '__main__':
