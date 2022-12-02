@@ -1,29 +1,43 @@
-# myLED
-
-> Reference：[cselab/LED (github.com)](https://github.com/cselab/LED)
+# Discovering State Variables Hidden for FHN Equation
 
 
 
-Train and test AE-LSTM model:
+## MultiProcessing Script
+
+Start 20 subprocesses for [generate data -- train -- eval -- calculate ID] in different tau of 10 random seeds
 
 ```shell
-./AE-LSTM.sh
+cd FHN/
+python pipeline_multiprocessing.py
 ```
 
-Train and test AE-LSTM model with only inhibitor input:
+
+
+---
+
+
+
+## Data Preparation
 
 ```shell
-./AE-LSTM-inhibitor.sh
+cd FHN/Data
+python3 0_data_gen.py
+python3 2_create_training_data.py
 ```
 
-Train and test CNN-LSTM model:
+## Training and Testing
 
 ```shell
-./CNN-LSTM.sh
+cd FHN/
+python fhn_main.py
+export MPLBACKEND=Agg
+python fhn_eval.py
 ```
 
-Train and test CNN-LSTM model with only inhibitor input:
+## Intrinsic Dimension Estimation
 
 ```shell
-./CNN_LSTM-inhibitor.sh
+cd FHN
+python fhn_eval_intrinsic_dimension.py
+PYTHONIOENCODING=utf-8 python dimension.py
 ```
