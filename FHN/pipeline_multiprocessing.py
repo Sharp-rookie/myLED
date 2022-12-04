@@ -4,7 +4,9 @@ import time
 import glob
 import h5py
 import torch
+import shutil
 import pickle
+import traceback
 import numpy as np
 from tqdm import tqdm
 from numpy import loadtxt
@@ -259,6 +261,10 @@ def fhn_main(random_seed):
         lr_schedule=cfg.lr_schedule
     )
 
+    # clear old checkpoint files
+    if os.path.exists(log_dir+"/lightning_logs/checkpoints/"):
+        shutil.rmtree(log_dir+"/lightning_logs/checkpoints/")
+
     # define callback for selecting checkpoints during training
     checkpoint_callback = ModelCheckpoint(
         dirpath=log_dir+"/lightning_logs/checkpoints/",
@@ -292,6 +298,7 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
     cfg.log_dir += str(tau)
     cfg.data_filepath += str(tau)
     cfg.seed = random_seed
+    device = torch.device('cuda' if cfg.if_cuda else 'cpu')
 
     seed(cfg)
     seed_everything(cfg.seed)
@@ -323,7 +330,7 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
     checkpoint_filepath = glob.glob(os.path.join(checkpoint_filepath+f"_fhn_fhn-ae_{cfg.seed}/lightning_logs/checkpoints", '*.ckpt'))[0]
     ckpt = torch.load(checkpoint_filepath)
     model.load_state_dict(ckpt['state_dict'])
-    model = model.to('cuda')
+    model = model.to(device)
     model.eval()
     model.freeze()
 
@@ -357,7 +364,7 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
     plot_act_true = []
     plot_act_pred = []
     for batch_idx, (data, target) in enumerate(tqdm(val_loader)):
-        output, latent = model.model(data.cuda())
+        output, latent = model.model(data.to(device))
         # save the latent vectors
         for idx in range(data.shape[0]):
             latent_tmp = latent[idx].view(1, -1)[0]
@@ -409,50 +416,74 @@ def cal_id_latent(tau, random_seeds):
     with open("logs/ID.txt", 'a+b') as fp:
         print(f'tau[{tau}] Mean(std): ' + f'{dim_mean:.4f} (+-{dim_std:.4f})\n')
         fp.write(f'{tau}--{dim_mean:.4f}\n'.encode('utf-8'))
+        fp.flush()
 
 def pipeline(tau, queue: JoinableQueue):
 
+    random_seed = None
     try:
         generate_data(tau)
 
         random_seeds = range(1,10)
         for random_seed in random_seeds:
-            fhn_main(random_seed)
-            fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/logs_tau{tau}")
-            queue.put_nowait(f'Part--{tau}--{random_seed}')
+            if not os.path.exists(f'logs/logs_tau{tau}_fhn_fhn-ae_{random_seed}/act_tau{tau}_dimension55_seed{random_seed}.jpg'):
+                fhn_main(random_seed)
+                fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/logs_tau{tau}")
+            queue.put_nowait([f'Part--{tau}--{random_seed}'])
     
         cal_id_latent(tau, random_seeds)
-
-        queue.put_nowait('Done')
     except:
-        queue.put_nowait(f'Error--{tau}--{random_seed}')
+        if random_seed is None:
+            queue.put_nowait([f'Data Generate Error--{tau}', traceback.format_exc()])
+        else:
+            queue.put_nowait([f'Error--{tau}--{random_seed}', traceback.format_exc()])
 
 
 if __name__ == '__main__':
 
-    # tau_list = np.arange(0.205, 0.255, 0.005)
-    tau_list = np.arange(1.0, 5.0, 0.5)
+    tau_list = np.arange(0.005, 1.0, 0.05)
+
+    # start
     queue = JoinableQueue()
+    subprocesses = []
     for tau in tau_list:
         tau = round(tau, 3)
-        Process(target=pipeline, args=(tau, queue, ), daemon=True).start()
+        subprocesses.append(Process(target=pipeline, args=(tau, queue, ), daemon=True))
+        subprocesses[-1].start()
         print(f'Start process[tau={tau}]')
         time.sleep(0.1)
     
+    # join
     finish_num = 0
-    log_fp = open('log.txt', 'w')
+    log_fp = open(f'log_tau{tau_list[0]}to{tau_list[-1]}.txt', 'w')
     while finish_num < len(tau_list):
+
+        # listen
         if not queue.empty():
             pkt = queue.get_nowait()
-            if 'Done' in pkt:
+            if 'Part' in pkt[0]:
+                tau = float(pkt[0].split("--")[1])
+                random_seed = float(pkt[0].split("--")[2])
+                log_fp.write(f'Processing[tau={tau}] finish seed {int(random_seed)}\n')
+                log_fp.flush()
+            elif 'Data' in pkt[0]:
+                tau = float(pkt[0].split("--")[1])
+                log_fp.write(f'Processing[tau={tau}] error in data-generating\n')
+                log_fp.write(str(pkt[1]))
+                log_fp.flush()
+            elif 'Error' in pkt[0]:
+                tau = float(pkt[0].split("--")[1])
+                random_seed = float(pkt[0].split("--")[2])
+                log_fp.write(f'Processing[tau={tau}] error in seed {int(random_seed)}\n')
+                log_fp.write(str(pkt[1]))
+                log_fp.flush()
+        # check
+        kill_list = []
+        for subprocess in subprocesses:
+            if subprocess.exitcode != None:
                 finish_num += 1
-                log_fp.write(f"Processing[tau={tau}] Done")
-            elif 'Part' in pkt:
-                tau = float(pkt.split("--")[1])
-                random_seed = float(pkt.split("--")[2])
-                log_fp.write(f'Processing[tau={tau}] finish seed-epoch {random_seed}')
-            elif 'Error' in pkt:
-                tau = float(pkt.split("--")[1])
-                random_seed = float(pkt.split("--")[2])
-                log_fp.write(f'Processing[tau={tau}] error in seed-epoch {random_seed}')
+                log_fp.write(f"Processing done with exitcode[{subprocess.exitcode}]\n")
+                log_fp.flush()
+                kill_list.append(subprocess)
+        [subprocesses.remove(subprocess) for subprocess in kill_list]
     log_fp.close()

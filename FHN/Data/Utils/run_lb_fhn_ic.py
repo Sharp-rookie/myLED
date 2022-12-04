@@ -30,7 +30,7 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf):
     t = 0
     it = 0
 
-    N_T = int(np.ceil(tf/dt))
+    N_T = int(np.ceil(tf/dt))+1
 
     # Storing the density
     rho_act = np.zeros((N_T, N+1))
