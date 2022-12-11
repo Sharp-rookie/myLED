@@ -5,7 +5,7 @@ import numpy as np
 from torch import nn
 import pytorch_lightning as pl
 
-from fhn_ae_nets import Cnov_AE
+from fhn_ae_nets import Cnov_AE, MLP_AE
 from fhn_dataset import FHNDataset, scaler
 
 
@@ -43,6 +43,7 @@ class FHN_VisDynamicsModel(pl.LightningModule):
         
         # model
         self.model = Cnov_AE(in_channels=2, input_1d_width=101)
+        # self.model = MLP_AE(in_channels=2, input_1d_width=101)
         
         # loss
         self.loss_func = nn.MSELoss()
@@ -101,10 +102,18 @@ class FHN_VisDynamicsModel(pl.LightningModule):
 
         data_info_dict = {
                 # 'truncate_data_batches': 2048, 
-                'scaler': scaler(
+                'input_scaler': scaler(
                         scaler_type='MinMaxZeroOne',
                         data_min=np.loadtxt(self.hparams.data_filepath+"/data_min.txt"),
                         data_max=np.loadtxt(self.hparams.data_filepath+"/data_max.txt"),
+                        channels=1,
+                        common_scaling_per_input_dim=0,
+                        common_scaling_per_channels=1,  # Common scaling for all channels
+                    ), 
+                'target_scaler': scaler(
+                        scaler_type='MinMaxZeroOne', # diff
+                        data_min=np.loadtxt(self.hparams.data_filepath+"/diff_min.txt"),
+                        data_max=np.loadtxt(self.hparams.data_filepath+"/diff_max.txt"),
                         channels=1,
                         common_scaling_per_input_dim=0,
                         common_scaling_per_channels=1,  # Common scaling for all channels

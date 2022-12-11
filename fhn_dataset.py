@@ -9,8 +9,10 @@ class scaler(object):
     def __init__(
         self,
         scaler_type,
-        data_min,
-        data_max,
+        data_min=0,
+        data_max=0,
+        data_std=None,
+        data_mean=None,
         common_scaling_per_input_dim=False,
         common_scaling_per_channels=False,
         channels=0,
@@ -25,12 +27,13 @@ class scaler(object):
         #         (T, input_dim, Cx, Cy, Cz)
         self.scaler_type = scaler_type
 
-        if self.scaler_type not in ["MinMaxZeroOne", "MinMaxMinusOneOne"]:
-            raise ValueError("Scaler {:} not implemented.".format(
-                self.scaler_type))
+        if self.scaler_type not in ["MinMaxZeroOne", "MinMaxMinusOneOne", "Standard"]:
+            raise ValueError("Scaler {:} not implemented.".format(self.scaler_type))
 
         self.data_min = np.array(data_min)
         self.data_max = np.array(data_max)
+        self.data_mean = data_mean[0] if data_mean is not None else data_mean
+        self.data_std = data_std[0] if data_std is not None else data_std
         self.data_range = self.data_max - self.data_min
         self.common_scaling_per_input_dim = common_scaling_per_input_dim
         self.common_scaling_per_channels = common_scaling_per_channels
@@ -51,45 +54,25 @@ class scaler(object):
         self.data_shape_length = len(self.data_shape)
 
         if self.scaler_type == "MinMaxZeroOne":
-            data_min = self.repeatScalerParam(self.data_min, self.data_shape)
-            data_max = self.repeatScalerParam(self.data_max, self.data_shape)
-
-            assert (np.all(np.shape(batch_of_sequences) == np.shape(data_min)))
-            assert (np.all(np.shape(batch_of_sequences) == np.shape(data_max)))
-            batch_of_sequences_scaled = np.array(
-                (batch_of_sequences - data_min) / (data_max - data_min))
+            
+            batch_of_sequences_scaled = np.array((batch_of_sequences - self.data_min[0]) / (self.data_max[0] - self.data_min[0]))
 
             if check_bounds:
-                assert (np.all(batch_of_sequences_scaled >= 0.0))
-                assert (np.all(batch_of_sequences_scaled <= 1.0))
+                assert (np.all(batch_of_sequences_scaled >= 0.0)), f'{batch_of_sequences_scaled[batch_of_sequences_scaled < 0.0]}'
+                assert (np.all(batch_of_sequences_scaled <= 1.0)), f'{batch_of_sequences_scaled[batch_of_sequences_scaled > 1.0]}'
 
         elif self.scaler_type == "MinMaxMinusOneOne":
-            data_min = self.repeatScalerParam(self.data_min, self.data_shape)
-            data_max = self.repeatScalerParam(self.data_max, self.data_shape)
-
-            assert (np.all(np.shape(batch_of_sequences) == np.shape(data_min)))
-            assert (np.all(np.shape(batch_of_sequences) == np.shape(data_max)))
-
-            batch_of_sequences_scaled = np.array(
-                (2.0 * batch_of_sequences - data_max - data_min) /
-                (data_max - data_min))
+            
+            batch_of_sequences_scaled = np.array((2.0 * batch_of_sequences - self.data_max[0] - self.data_min[0]) / (self.data_max[0] - self.data_min[0]))
 
             if check_bounds:
-                assert (np.all(batch_of_sequences_scaled >= -1.0))
-                assert (np.all(batch_of_sequences_scaled <= 1.0))
+                assert (np.all(batch_of_sequences_scaled >= -1.0)), f'{batch_of_sequences_scaled[batch_of_sequences_scaled < -1.0]}'
+                assert (np.all(batch_of_sequences_scaled <= 1.0)), f'{batch_of_sequences_scaled[batch_of_sequences_scaled > 1.0]}'
 
         elif self.scaler_type == "Standard":
-            data_mean = self.repeatScalerParam(
-                self.data_mean, self.data_shape)
-            data_std = self.repeatScalerParam(
-                self.data_std, self.data_shape)
-
-            assert (np.all(
-                np.shape(batch_of_sequences) == np.shape(data_mean)))
-            assert (np.all(np.shape(batch_of_sequences) == np.shape(data_std)))
-
-            batch_of_sequences_scaled = np.array(
-                (batch_of_sequences - data_mean) / data_std)
+            
+            assert (self.data_mean is not None and self.data_std is not None)
+            batch_of_sequences_scaled = np.array((batch_of_sequences - self.data_mean) / self.data_std)
 
         else:
             raise ValueError("Scaler not implemented.")
@@ -222,7 +205,8 @@ class FHNDataset(Dataset):
 
         if data_info_dict is not None:
             # Scaler
-            self.scaler = data_info_dict["scaler"] if "scaler" in data_info_dict.keys() else None
+            self.input_scaler = data_info_dict["input_scaler"] if "input_scaler" in data_info_dict.keys() else None
+            self.target_scaler = data_info_dict["target_scaler"] if "target_scaler" in data_info_dict.keys() else None
             # Truncating the timesteps of the dataset
             self.truncate_timesteps = data_info_dict["truncate_timesteps"] \
                 if "truncate_timesteps" in data_info_dict else None
@@ -232,7 +216,8 @@ class FHNDataset(Dataset):
         else:
             self.truncate_data_batches = None
             self.truncate_timesteps = None
-            self.scaler = None
+            self.input_scaler = None
+            self.target_scaler = None
 
         # Search for all h5 files
         p = Path(file_path)
@@ -252,19 +237,21 @@ class FHNDataset(Dataset):
 
         trace = self.get_data("data", index)
 
-        if self.scaler is not None:
-            trace = self.scaler.scaleData(trace, single_sequence=True)
+        # diff
+        input = trace[0]
+        target = trace[1] - trace[0] if trace.shape[0]==2 else trace[0]
+
+        if self.input_scaler is not None:
+            input = self.input_scaler.scaleData(input, single_sequence=True)
+        if self.target_scaler is not None:
+            target = self.target_scaler.scaleData(target, single_sequence=True)
         if not ((self.truncate_timesteps is None) or (self.truncate_timesteps == 0)):
             trace = trace[:self.truncate_timesteps]
-        
-        trace = torch.from_numpy(trace).float()
-        data = trace[0]
-        if trace.shape[0] == 2:
-            target = trace[1]
-        elif trace.shape[0] == 1:
-            target = trace[0]
 
-        return data, target
+        input = torch.from_numpy(input).float()
+        target = torch.from_numpy(target).float()
+
+        return input, target
 
     def __len__(self):
         return len(self.get_data_infos('data'))
@@ -372,14 +359,22 @@ if __name__=='__main__':
 
     data_info_dict = {
         # 'truncate_data_batches': 2048, 
-        'scaler': scaler(
+        'input_scaler': scaler(
                 scaler_type='MinMaxZeroOne',
                 data_min=np.loadtxt("Data/Data/tau_0.5/data_min.txt"),
                 data_max=np.loadtxt("Data/Data/tau_0.5/data_max.txt"),
                 channels=1,
                 common_scaling_per_input_dim=0,
                 common_scaling_per_channels=1,  # Common scaling for all channels
-            )
+            ),
+        'target_scaler': scaler(
+                        scaler_type='MinMaxZeroOne', # diff
+                        data_min=np.loadtxt("Data/Data/tau_0.5/diff_min.txt"),
+                        data_max=np.loadtxt("Data/Data/tau_0.5/diff_max.txt"),
+                        channels=1,
+                        common_scaling_per_input_dim=0,
+                        common_scaling_per_channels=1,  # Common scaling for all channels
+            ), 
         }
     dataset = FHNDataset(
             'Data/Data/tau_0.5/val',
@@ -404,10 +399,24 @@ if __name__=='__main__':
             data_in.append(data[1, dimension])
             target_act.append(target[0, dimension])
             target_in.append(target[1, dimension])
-        plt.figure()
-        plt.scatter(np.array([i*0.5 for i in range(len(dataset))]), np.array(data_act), label='input activator')
-        plt.scatter(np.array([i*0.5 for i in range(len(dataset))]), np.array(data_in), label='input inhibitor')
-        plt.scatter(np.array([i*0.5 for i in range(len(dataset))]), np.array(target_act), label='target activator')
-        plt.scatter(np.array([i*0.5 for i in range(len(dataset))]), np.array(target_in), label='target inhibitor')
+        plt.figure(figsize=(16,10))
+        ax1 = plt.subplot(2,1,1)
+        ax1.set_title('input')
+        plt.plot(np.array([i*0.5 for i in range(len(dataset))]), np.array(data_act), label='activator')
+        plt.plot(np.array([i*0.5 for i in range(len(dataset))]), np.array(data_in), label='inhibitor')
         plt.legend()
-        plt.savefig(f'dimension{dimension}.jpg', dpi=300)
+        plt.xlabel('time / s')
+        ax2 = plt.subplot(2,1,2)
+        ax2.set_title('target')
+        plt.plot(np.array([i*0.5 for i in range(len(dataset))]), np.array(target_act), label='activator')
+        plt.plot(np.array([i*0.5 for i in range(len(dataset))]), np.array(target_in), label='inhibitor')
+        plt.legend()
+        plt.xlabel('time / s')
+
+        plt.subplots_adjust(left=0.05,
+            right=0.95,
+            top=0.95,
+            bottom=0.05,
+            hspace=0.35,
+        )
+        plt.savefig(f'data_d[{dimension}].jpg', dpi=300)

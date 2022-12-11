@@ -24,6 +24,52 @@ def plot_id():
     plt.savefig(f'ids.jpg', dpi=300)
 
 
+def plot_val_mse():
+
+    class MSE():
+        def __init__(self, tau):
+            self.tau = tau
+            self.act_mse = []
+            self.in_mse = []
+
+    fp = open('val_mse.txt', 'r')
+    items = []
+    for line in fp.readlines():
+        tau = float(line[:-1].split(',')[0])
+        seed = int(line[:-1].split(',')[1])
+        act_mse = float(line[:-1].split(',')[2])
+        in_mse = float(line[:-1].split(',')[3])
+
+        find = False
+        for M in items:
+            if M.tau == tau:
+                M.act_mse.append(act_mse)
+                M.in_mse.append(in_mse)
+                find = True
+                    
+        if not find:
+            M = MSE(tau)
+            M.act_mse.append(act_mse)
+            M.in_mse.append(in_mse)
+            items.append(M)
+    
+    tau_list = []
+    act_mse_list = []
+    in_mse_list = []
+    for M in items:
+        tau_list.append(M.tau)
+        act_mse_list.append(np.mean(M.act_mse))
+        in_mse_list.append(np.mean(M.in_mse))
+
+    plt.figure()
+    plt.xlabel('tau/s')
+    plt.ylabel('MSE')
+    plt.scatter(tau_list, act_mse_list, label='act')
+    plt.scatter(tau_list, in_mse_list, label='in')
+    plt.legend()
+    plt.savefig(f'val_mse.jpg', dpi=300)
+
+
 def plot_dataset(tau):
 
     if os.path.exists(f"Data/Simulation_Data/lattice_boltzmann_fhn_original.pickle"):
@@ -141,4 +187,7 @@ if __name__ == '__main__':
 
     # os.makedirs('Analyse/', exist_ok=True)
     # [plot_dataset(tau=tau) for tau in np.arange(0.1, 0.75, 0.05)]
+
     plot_id()
+
+    plot_val_mse()

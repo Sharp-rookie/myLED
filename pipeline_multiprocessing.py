@@ -29,7 +29,8 @@ def generate_original_data(tf=450):
     if not os.path.exists(f"Data/Simulation_Data/lattice_boltzmann_fhn_original.pickle"):
 
         # ------------------------------------ 0_data_gen ------------------------------------- 
-        file_name = "y00"
+        # file_name = "y00"
+        file_names = ["y00", "y01", "y02", "y03"]
 
         rho_act_all = []
         rho_in_all = []
@@ -43,7 +44,8 @@ def generate_original_data(tf=450):
         dt = 0.005
         noise_num = 30
 
-        for f_id, noise in enumerate(range(noise_num)):
+        # for f_id, noise in enumerate(range(noise_num)):
+        for f_id, file_name in enumerate(file_names):
             file_name_act = "Data/InitialConditions/" + file_name + "u.txt"
             rho_act_0 = np.loadtxt(file_name_act, delimiter="\n")
 
@@ -57,7 +59,7 @@ def generate_original_data(tf=450):
             file_name_x = "Data/InitialConditions/y0x.txt"
             x = np.loadtxt(file_name_x, delimiter="\n")
 
-            rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, noise_num, rho_act_0, rho_in_0, tf, dt)
+            rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf, dt)
 
             rho_act_all.append(rho_act)
             rho_in_all.append(rho_in)
@@ -142,6 +144,11 @@ def generate_tau_data(tau):
     os.makedirs(data_dir_scaler, exist_ok=True)
     data_max = np.max(sequences_raw, axis=(0,1,3))
     data_min = np.min(sequences_raw, axis=(0,1,3))
+    diff = np.diff(sequences_raw, axis=1)
+    np.savetxt(data_dir_scaler + "/diff_mean.txt", np.mean(diff, axis=(0,1,3)))
+    np.savetxt(data_dir_scaler + "/diff_std.txt", np.std(diff, axis=(0,1,3)))
+    np.savetxt(data_dir_scaler + "/diff_max.txt", np.max(diff, axis=(0,1,3)))
+    np.savetxt(data_dir_scaler + "/diff_min.txt", np.min(diff, axis=(0,1,3)))
     np.savetxt(data_dir_scaler + "/data_max.txt", data_max)
     np.savetxt(data_dir_scaler + "/data_min.txt", data_min)
     np.savetxt(data_dir_scaler + "/tau.txt", [tau]) # Save the timestep
@@ -165,7 +172,7 @@ def generate_tau_data(tau):
         return
 
     # select 3 initial-condition(ICs) traces for train
-    ICS_TRAIN = [i for i in range(29)]
+    ICS_TRAIN = [0, 1, 2]
     N_ICS_TRAIN=len(ICS_TRAIN)
     sequences_raw_train = sequences_raw[ICS_TRAIN, :-1 if tau!=0.0 else int(len(sequences_raw[0])/3)]
 
@@ -207,13 +214,13 @@ def generate_tau_data(tau):
         gg.create_dataset('data', data=data_group)
     hf.close()
 
-    ax1 = plt.subplot(2,1,1)
+    ax1 = plt.subplot(3,1,1)
     ax1.set_title('train')
     plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 0, grid], label='act')
     plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 1, grid], label='in')
     plt.title(f'tau={tau} | grid={grid}')
     plt.xlabel('time / s')
-    plt.ylabel('act / in density')
+    plt.ylabel('act / in density(scaled)')
     plt.legend()
 
     #######################
@@ -224,7 +231,7 @@ def generate_tau_data(tau):
         return
 
     # select 1 initial-condition traces for val
-    ICS_VAL = [29]
+    ICS_VAL = [3]
     N_ICS_VAL = len(ICS_VAL)
     sequences_raw_val = sequences_raw[ICS_VAL, :-1 if tau!=0.0 else int(len(sequences_raw[0])/3)]
 
@@ -266,14 +273,31 @@ def generate_tau_data(tau):
         gg.create_dataset('data', data=data_group)
     hf.close()
 
-    ax2 = plt.subplot(2,1,2)
+    ax2 = plt.subplot(3,1,2)
     ax2.set_title('val')
     plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 0, grid], label='act')
     plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 1, grid], label='in')
     plt.title(f'tau={tau} | grid={grid}')
     plt.xlabel('time / s')
-    plt.ylabel('act / in density')
+    plt.ylabel('act / in density(scaled)')
     plt.legend()
+
+    ax2 = plt.subplot(3,1,3)
+    ax2.set_title('val diff')
+    sequences = np.diff(sequences, axis=0)
+    plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 0, grid], label='act')
+    plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 1, grid], label='in')
+    plt.title(f'tau={tau} | grid={grid}')
+    plt.xlabel('time / s')
+    plt.ylabel('act / in density(scaled)')
+    plt.legend()
+
+    plt.subplots_adjust(left=0.05,
+                    bottom=0.05, 
+                    right=0.95, 
+                    top=0.95, 
+                    # wspace=0.2, 
+                    hspace=0.35)
     plt.savefig(f'Data/Data/tau_{tau}/data_tau{tau}.jpg', dpi=300)
 
 
@@ -388,10 +412,18 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
     kwargs = {'num_workers': cfg.num_workers, 'pin_memory': True} if cfg.if_cuda else {}
     data_info_dict = {
                 # 'truncate_data_batches': 4096, 
-                'scaler': scaler(
+                'input_scaler': scaler(
                         scaler_type='MinMaxZeroOne',
                         data_min=np.loadtxt(cfg.data_filepath+"/data_min.txt"),
                         data_max=np.loadtxt(cfg.data_filepath+"/data_max.txt"),
+                        channels=1,
+                        common_scaling_per_input_dim=0,
+                        common_scaling_per_channels=1,  # Common scaling for all channels
+                    ), 
+                'target_scaler': scaler(
+                        scaler_type='MinMaxZeroOne', # diff
+                        data_min=np.loadtxt(cfg.data_filepath+"/diff_min.txt"),
+                        data_max=np.loadtxt(cfg.data_filepath+"/diff_max.txt"),
                         channels=1,
                         common_scaling_per_input_dim=0,
                         common_scaling_per_channels=1,  # Common scaling for all channels
@@ -413,6 +445,8 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
     mkdir(var_log_dir)
     plot_act_true = []
     plot_act_pred = []
+    outputs = []
+    targets = []
     for batch_idx, (data, target) in enumerate(tqdm(val_loader)):
         output, latent = model.model(data.to(device))
         # save the latent vectors
@@ -424,6 +458,17 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
         for i in range(target.shape[0]):
             plot_act_true.append(target[i, 0].unsqueeze(0))
             plot_act_pred.append(output[i, 0].unsqueeze(0))
+        
+        outputs.append(output.cpu().tolist())
+        targets.append(target.cpu().tolist())
+
+    with open('val_mse.txt', 'a') as fp:
+        outputs = np.array(outputs)
+        targets = np.array(targets)
+        act_mse = np.average(np.sum((outputs[:,:,0] - targets[:,:,0])**2, axis=-1)/101, axis=(0,1))
+        in_mse = np.average(np.sum((outputs[:,:,1] - targets[:,:,1])**2, axis=-1)/101, axis=(0,1))
+        fp.write(f"{tau},{random_seed},{act_mse},{in_mse}\n")
+        fp.flush()
     
     import matplotlib.pyplot as plt
     os.system('export MPLBACKEND=Agg')
@@ -436,7 +481,7 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
     plt.plot([i*tau for i in range(length)], plot_act_pred[:length, grid].cpu(), label='Predict')
     plt.title(f'tau={tau} | grid={grid}')
     plt.xlabel('time / s')
-    plt.ylabel('act density')
+    plt.ylabel('act density(scaled)')
     plt.legend()
     plt.savefig(log_dir+f"/act_tau{tau}_grid{grid}_seed{cfg.seed}.jpg", dpi=300)
 
@@ -466,7 +511,7 @@ def cal_id_latent(tau, random_seeds):
         dim_mean = np.mean(dims_all)
         dim_std = np.std(dims_all)
     
-    with open("logs/ID.txt", 'a+b') as fp:
+    with open("ID.txt", 'a+b') as fp:
         print(f'tau[{tau}] Mean(std): ' + f'{dim_mean:.4f} (+-{dim_std:.4f})\n')
         fp.write(f'{tau}--{dim_mean:.4f}\n'.encode('utf-8'))
         fp.flush()
@@ -495,7 +540,7 @@ def pipeline(tau, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    generate_original_data(tf=450)
+    generate_original_data(tf=900)
     
     # # for single tau value
     # tau=0.0
@@ -508,8 +553,7 @@ if __name__ == '__main__':
     # exit(0)
 
     # start pipeline-subprocess of different tau
-    # tau_list = np.arange(0.0, 5.01, 0.5)
-    tau_list = np.arange(20.5, 25.01, 0.5)
+    tau_list = np.arange(0.5, 20.51, 0.5)
     queue = JoinableQueue()
     subprocesses = []
     for tau in tau_list:
