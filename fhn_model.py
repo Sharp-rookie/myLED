@@ -106,17 +106,11 @@ class FHN_VisDynamicsModel(pl.LightningModule):
                         scaler_type='MinMaxZeroOne',
                         data_min=np.loadtxt(self.hparams.data_filepath+"/data_min.txt"),
                         data_max=np.loadtxt(self.hparams.data_filepath+"/data_max.txt"),
-                        channels=1,
-                        common_scaling_per_input_dim=0,
-                        common_scaling_per_channels=1,  # Common scaling for all channels
-                    ), 
+                    ),
                 'target_scaler': scaler(
                         scaler_type='MinMaxZeroOne', # diff
                         data_min=np.loadtxt(self.hparams.data_filepath+"/diff_min.txt"),
                         data_max=np.loadtxt(self.hparams.data_filepath+"/diff_max.txt"),
-                        channels=1,
-                        common_scaling_per_input_dim=0,
-                        common_scaling_per_channels=1,  # Common scaling for all channels
                     ), 
                 }
 

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 
 def plot_id():
-    fp = open('logs/ID.txt', 'r')
+    fp = open('ID.txt', 'r')
     tau_list = []
     id_list = []
     for id_str in fp.readlines():
@@ -21,7 +21,7 @@ def plot_id():
     plt.xlabel('tau/s')
     plt.ylabel('ID')
     plt.plot(tau_list, id_list)
-    plt.savefig(f'ids.jpg', dpi=300)
+    plt.savefig(f'ID.jpg', dpi=300)
 
 
 def plot_val_mse():

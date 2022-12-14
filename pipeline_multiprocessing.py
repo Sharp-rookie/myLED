@@ -142,15 +142,15 @@ def generate_tau_data(tau):
     # Save statistic information
     data_dir_scaler = f"Data/Data/tau_{tau}"
     os.makedirs(data_dir_scaler, exist_ok=True)
-    data_max = np.max(sequences_raw, axis=(0,1,3))
-    data_min = np.min(sequences_raw, axis=(0,1,3))
     diff = np.diff(sequences_raw, axis=1)
     np.savetxt(data_dir_scaler + "/diff_mean.txt", np.mean(diff, axis=(0,1,3)))
     np.savetxt(data_dir_scaler + "/diff_std.txt", np.std(diff, axis=(0,1,3)))
     np.savetxt(data_dir_scaler + "/diff_max.txt", np.max(diff, axis=(0,1,3)))
     np.savetxt(data_dir_scaler + "/diff_min.txt", np.min(diff, axis=(0,1,3)))
-    np.savetxt(data_dir_scaler + "/data_max.txt", data_max)
-    np.savetxt(data_dir_scaler + "/data_min.txt", data_min)
+    np.savetxt(data_dir_scaler + "/data_mean.txt", np.mean(sequences_raw, axis=(0,1,3)))
+    np.savetxt(data_dir_scaler + "/data_std.txt", np.std(sequences_raw, axis=(0,1,3)))
+    np.savetxt(data_dir_scaler + "/data_max.txt", np.max(sequences_raw, axis=(0,1,3)))
+    np.savetxt(data_dir_scaler + "/data_min.txt", np.min(sequences_raw, axis=(0,1,3)))
     np.savetxt(data_dir_scaler + "/tau.txt", [tau]) # Save the timestep
 
     # single-sample time steps for train
@@ -416,18 +416,12 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
                         scaler_type='MinMaxZeroOne',
                         data_min=np.loadtxt(cfg.data_filepath+"/data_min.txt"),
                         data_max=np.loadtxt(cfg.data_filepath+"/data_max.txt"),
-                        channels=1,
-                        common_scaling_per_input_dim=0,
-                        common_scaling_per_channels=1,  # Common scaling for all channels
-                    ), 
+                    ),
                 'target_scaler': scaler(
                         scaler_type='MinMaxZeroOne', # diff
                         data_min=np.loadtxt(cfg.data_filepath+"/diff_min.txt"),
                         data_max=np.loadtxt(cfg.data_filepath+"/diff_max.txt"),
-                        channels=1,
-                        common_scaling_per_input_dim=0,
-                        common_scaling_per_channels=1,  # Common scaling for all channels
-                    ), 
+                    ),
                 }
     # data_info_dict['truncate_data_batches'] = 4096
     val_dataset = FHNDataset(cfg.data_filepath+'/val',
@@ -445,8 +439,8 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
     mkdir(var_log_dir)
     plot_act_true = []
     plot_act_pred = []
-    outputs = []
-    targets = []
+    outputs = np.array([])
+    targets = np.array([])
     for batch_idx, (data, target) in enumerate(tqdm(val_loader)):
         output, latent = model.model(data.to(device))
         # save the latent vectors
@@ -459,14 +453,12 @@ def fhn_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_f
             plot_act_true.append(target[i, 0].unsqueeze(0))
             plot_act_pred.append(output[i, 0].unsqueeze(0))
         
-        outputs.append(output.cpu().tolist())
-        targets.append(target.cpu().tolist())
+        outputs = output.cpu().numpy() if not len(outputs) else np.concatenate((outputs, output.cpu().numpy()), axis=0)
+        targets = target.cpu().numpy() if not len(targets) else np.concatenate((targets, target.cpu().numpy()), axis=0)
 
     with open('val_mse.txt', 'a') as fp:
-        outputs = np.array(outputs)
-        targets = np.array(targets)
-        act_mse = np.average(np.sum((outputs[:,:,0] - targets[:,:,0])**2, axis=-1)/101, axis=(0,1))
-        in_mse = np.average(np.sum((outputs[:,:,1] - targets[:,:,1])**2, axis=-1)/101, axis=(0,1))
+        act_mse = np.average(np.sum((outputs[:,0] - targets[:,0])**2, axis=-1)/101)
+        in_mse = np.average(np.sum((outputs[:,1] - targets[:,1])**2, axis=-1)/101)
         fp.write(f"{tau},{random_seed},{act_mse},{in_mse}\n")
         fp.flush()
     
@@ -518,6 +510,8 @@ def cal_id_latent(tau, random_seeds):
 
 def pipeline(tau, queue: JoinableQueue):
 
+    time.sleep(1)
+
     random_seed = None
     try:
         generate_tau_data(tau)
@@ -540,7 +534,7 @@ def pipeline(tau, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    generate_original_data(tf=900)
+    generate_original_data(tf=2000)
     
     # # for single tau value
     # tau=0.0
@@ -553,7 +547,7 @@ if __name__ == '__main__':
     # exit(0)
 
     # start pipeline-subprocess of different tau
-    tau_list = np.arange(0.5, 20.51, 0.5)
+    tau_list = np.arange(0.5, 30.01, 0.5)
     queue = JoinableQueue()
     subprocesses = []
     for tau in tau_list:
@@ -561,7 +555,6 @@ if __name__ == '__main__':
         subprocesses.append(Process(target=pipeline, args=(tau, queue, ), daemon=True))
         subprocesses[-1].start()
         print(f'Start process[tau={tau}]')
-        time.sleep(0.1)
     
     # join main-process
     finish_num = 0
