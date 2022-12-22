@@ -159,7 +159,7 @@ class PNASDataset(Dataset):
         trace = self.data[index]
 
         input = trace[0]
-        target = trace[1] # no diff
+        target = trace[0] if len(trace)==1 else trace[1]
         # target = trace[1] - trace[0] # diff
 
         if self.input_scaler is not None:
@@ -178,7 +178,7 @@ class PNASDataset(Dataset):
 
 if __name__=='__main__':
 
-    tau = 0.1
+    tau = 0.005
     input_scaler = scaler(
                         scaler_type='MinMaxZeroOne',
                         data_min=np.loadtxt(f"Data/data/tau_{tau}/data_min.txt"),
@@ -206,21 +206,33 @@ if __name__=='__main__':
         Z = []
         for i in range(len(dataset)):
             data, target = dataset.__getitem__(i)
-            X.append(data[0][0])
-            Y.append(data[0][1])
-            Z.append(data[0][2])
-        plt.figure(figsize=(16,4))
-        ax1 = plt.subplot(1,3,1)
-        ax1.set_title('X')
-        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(X))
+            X.append([data[0][0], target[0][0]])
+            Y.append([data[0][1], target[0][1]])
+            Z.append([data[0][2], target[0][2]])
+        plt.figure(figsize=(16,9))
+        ax1 = plt.subplot(2,3,1)
+        ax1.set_title('input X')
+        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(X)[:,0])
         plt.xlabel('time / s')
-        ax2 = plt.subplot(1,3,2)
-        ax2.set_title('Y')
-        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(Y))
+        ax2 = plt.subplot(2,3,2)
+        ax2.set_title('input Y')
+        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(Y)[:,0])
         plt.xlabel('time / s')
-        ax3 = plt.subplot(1,3,3)
-        ax3.set_title('Z')
-        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(Z))
+        ax3 = plt.subplot(2,3,3)
+        ax3.set_title('input Z')
+        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(Z)[:,0])
+        plt.xlabel('time / s')
+        ax4 = plt.subplot(2,3,4)
+        ax4.set_title('target X')
+        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(X)[:,1])
+        plt.xlabel('time / s')
+        ax5 = plt.subplot(2,3,5)
+        ax5.set_title('target Y')
+        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(Y)[:,1])
+        plt.xlabel('time / s')
+        ax6 = plt.subplot(2,3,6)
+        ax6.set_title('target Z')
+        plt.plot(np.array([i*tau for i in range(len(dataset))]), np.array(Z)[:,1])
         plt.xlabel('time / s')
 
         plt.subplots_adjust(left=0.1,
@@ -228,5 +240,6 @@ if __name__=='__main__':
             top=0.9,
             bottom=0.15,
             wspace=0.2,
+            hspace=0.35,
         )
         plt.savefig(f'dataset.jpg', dpi=300)

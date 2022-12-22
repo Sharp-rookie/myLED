@@ -22,15 +22,15 @@ from utils.intrinsic_dimension import eval_id_latent
 from utils.common import set_cpu_num, load_config, rm_mkdir
 
 
-def generate_original_data(data_num, total_t):
+def generate_original_data(trace_num, total_t):
 
-    seed_everything(data_num+729)
+    seed_everything(trace_num+729)
 
     os.makedirs('Data/origin', exist_ok=True)
 
     # -------------------- generate original data by gillespie algorithm --------------------
     subprocess = []
-    for seed in range(1, data_num+1):
+    for seed in range(1, trace_num+1):
         if not os.path.exists(f'Data/origin/{seed}/origin.npz'):
             subprocess.append(Process(target=generate_origin, args=(total_t, seed,), daemon=True))
             subprocess[-1].start()
@@ -42,7 +42,7 @@ def generate_original_data(data_num, total_t):
     
     # ----------- time discretization by time-forward NearestNeighbor interpolate -----------
     subprocess = []
-    for seed in range(1, data_num+1):
+    for seed in range(1, trace_num+1):
         if not os.path.exists(f'Data/origin/{seed}/data.npz'):
             subprocess.append(Process(target=time_discretization, args=(seed, total_t,), daemon=True))
             subprocess[-1].start()
@@ -52,19 +52,19 @@ def generate_original_data(data_num, total_t):
     while any([subp.exitcode == None for subp in subprocess]):
         pass
 
-    print(f'save origin data form seed 1 to {data_num} at Data/origin/')
+    print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
 
 
-def generate_tau_data(data_num, tau):
+def generate_tau_data(trace_num, tau, sample_num=None):
 
-    # if os.path.exists(f"Data/data/tau_{tau}/train/data.npz") and os.path.exists(f"Data/data/tau_{tau}/val/data.npz"):
-    #     return
+    if os.path.exists(f"Data/data/tau_{tau}/train/data.npz") and os.path.exists(f"Data/data/tau_{tau}/val/data.npz"):
+        return
 
     # -------------------------------- 1_load_original_data -------------------------------- 
 
     print('loading original data ...')
     data = []
-    for id in range(1, data_num+1):
+    for id in range(1, trace_num+1):
         tmp = np.load(f"Data/origin/{id}/data.npz")
         X = np.array(tmp['X'])[:, np.newaxis]
         Y = np.array(tmp['Y'])[:, np.newaxis]
@@ -78,7 +78,7 @@ def generate_tau_data(data_num, tau):
 
     # subsampling
     dt = tmp['dt']
-    subsampling = int(tau/dt)
+    subsampling = int(tau/dt) if tau!=0. else 1
     data = data[:, ::subsampling]
     print('data shape', data.shape, '# (trace_num, time_length, feature_num)')
 
@@ -97,7 +97,7 @@ def generate_tau_data(data_num, tau):
     np.savetxt(data_dir + "/tau.txt", [tau]) # Save the timestep
 
     # single-sample time steps for train
-    sequence_length = 2 if tau != 0.0 else 1
+    sequence_length = 2 if tau != 0. else 1
 
     #######################
     # Create train data
@@ -125,18 +125,32 @@ def generate_tau_data(data_num, tau):
     for bn in range(len(idxs_timestep)):
         idx_ic = idxs_ic[bn]
         idx_timestep = idxs_timestep[bn]
-        sequence = data_train[idx_ic, idx_timestep:idx_timestep+sequence_length]
-        sequences.append(sequence)
+        tmp = data_train[idx_ic, idx_timestep:idx_timestep+sequence_length]
+        sequences.append(tmp)
 
     sequences = np.array(sequences) 
     print("Train Dataset", np.shape(sequences))
+
+    # keep the length of sequences is equal to sample_num
+    if sample_num is not None:
+        repeat_num = int(np.floor(sample_num/len(sequences)))
+        idx = np.random.choice(range(len(sequences)), sample_num-len(sequences)*repeat_num, replace=False)
+        idx = np.sort(idx)
+        tmp1 = sequences[idx]
+        tmp2 = None
+        for i in range(repeat_num):
+            if i == 0:
+                tmp2 = np.concatenate((sequences, sequences), axis=0)
+            else:
+                tmp2 = np.concatenate((tmp2, sequences), axis=0)
+        sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
 
     # save train dataset
     np.savez(data_dir+'/train.npz', data=sequences)
 
     # plot
     plt.figure(figsize=(16,10))
-    plt.title('Train Data')
+    plt.title('Train Data' + f' | sample_num[{sample_num if sample_num is not None else len(sequences)}]')
     ax1 = plt.subplot(3,1,1)
     ax1.set_title('X')
     plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 0])
@@ -186,18 +200,32 @@ def generate_tau_data(data_num, tau):
     for bn in range(len(idxs_timestep)):
         idx_ic = idxs_ic[bn]
         idx_timestep = idxs_timestep[bn]
-        sequence = data_train[idx_ic, idx_timestep:idx_timestep+sequence_length]
-        sequences.append(sequence)
+        tmp = data_train[idx_ic, idx_timestep:idx_timestep+sequence_length]
+        sequences.append(tmp)
 
     sequences = np.array(sequences) 
     print("Val Dataset", np.shape(sequences))
+
+    # keep the length of sequences is equal to sample_num
+    if sample_num is not None:
+        repeat_num = int(np.floor(sample_num/len(sequences)))
+        idx = np.random.choice(range(len(sequences)), sample_num-len(sequences)*repeat_num, replace=False)
+        idx = np.sort(idx)
+        tmp1 = sequences[idx]
+        tmp2 = None
+        for i in range(repeat_num):
+            if i == 0:
+                tmp2 = np.concatenate((sequences, sequences), axis=0)
+            else:
+                tmp2 = np.concatenate((tmp2, sequences), axis=0)
+        sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
 
     # save train dataset
     np.savez(data_dir+'/val.npz', data=sequences)
 
     # plot
     plt.figure(figsize=(16,10))
-    plt.title('Train Data')
+    plt.title('Val Data' + f' | sample_num[{sample_num if sample_num is not None else len(sequences)}]')
     ax1 = plt.subplot(3,1,1)
     ax1.set_title('X')
     plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 0])
@@ -373,12 +401,13 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
 
     # record mse
     with open('val_mse.txt', 'a') as fp:
-        mse = np.average(np.sum((outputs[:,0] - targets[:,0])**2, axis=-1)/101)
-        fp.write(f"{tau},{random_seed},{mse},\n")
+        mse_x = np.average((outputs[:,0,0] - targets[:,0,0])**2)
+        mse_y = np.average((outputs[:,0,1] - targets[:,0,1])**2)
+        mse_z = np.average((outputs[:,0,2] - targets[:,0,2])**2)
+        fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z}\n")
         fp.flush()
     
     # plot (999,1,3)
-    import matplotlib.pyplot as plt
     X = []
     Y = []
     Z = []
@@ -430,7 +459,7 @@ def cal_id_latent(tau, random_seeds):
                             str(cfg.seed)])
         var_log_dir = log_dir + '/variables_val'
 
-        eval_id_latent(var_log_dir, if_refine=False, if_all_methods=False)
+        eval_id_latent(var_log_dir, method='Levina_Bickel')
 
         dims = np.load(os.path.join(var_log_dir, 'intrinsic_dimension.npy'))
         dims_all.append(dims)
@@ -442,20 +471,20 @@ def cal_id_latent(tau, random_seeds):
         fp.write(f'{tau}--{dim_mean:.4f}\n'.encode('utf-8'))
         fp.flush()
 
-def pipeline(data_num, tau, queue: JoinableQueue):
+def pipeline(trace_num, tau, queue: JoinableQueue):
 
     time.sleep(1)
 
     random_seed = None
     try:
-        generate_tau_data(data_num=data_num, tau=tau)
+        generate_tau_data(trace_num=trace_num, tau=tau, sample_num=100)
 
-        random_seeds = range(1, 6)
-        for random_seed in random_seeds:
-            if not os.path.exists(f'logs/logs_tau{tau}_pnas_pnas-ae_{random_seed}/act_tau{tau}_dimension55_seed{random_seed}.jpg'):
-                pnas_main(random_seed)
-                pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/logs_tau{tau}")
-            queue.put_nowait([f'Part--{tau}--{random_seed}'])
+        random_seeds = range(1, 21)
+        # for random_seed in random_seeds:
+        #     if not os.path.exists(f'logs/logs_tau{tau}_pnas_pnas-ae_{random_seed}/result.jpg'):
+        #         pnas_main(random_seed)
+        #     pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/logs_tau{tau}")
+        #     queue.put_nowait([f'Part--{tau}--{random_seed}'])
     
         cal_id_latent(tau, random_seeds)
     except:
@@ -468,16 +497,17 @@ def pipeline(data_num, tau, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    data_num = 3
-    generate_original_data(data_num=data_num, total_t=100)
+    trace_num = 3
+    generate_original_data(trace_num=trace_num, total_t=100)
 
     # start pipeline-subprocess of different tau
-    tau_list = np.arange(0.005, 1.01, 0.025)
+    # tau_list = np.arange(0., 0.01, 0.025)
+    tau_list = np.arange(0., 1.99, 0.025)
     queue = JoinableQueue()
     subprocesses = []
     for tau in tau_list:
         tau = round(tau, 3)
-        subprocesses.append(Process(target=pipeline, args=(data_num, tau, queue, ), daemon=True))
+        subprocesses.append(Process(target=pipeline, args=(trace_num, tau, queue, ), daemon=True))
         subprocesses[-1].start()
         print(f'Start process[tau={tau}]')
     

@@ -40,6 +40,8 @@ class System: # 封装的类，代表多个化学反应构成的系统
         self.num_elements = num_elements # 系统内的反应物的类别数
         self.reactions = [] # 反应集合
 
+        self.noise_t = 0 # 加噪声的计次器
+
     def add_reaction(self, rate=0., num_lefts=None, num_rights=None):
 
         assert len(num_lefts) == self.num_elements
@@ -68,6 +70,11 @@ class System: # 封装的类，代表多个化学反应构成的系统
         else: # 按照固定总时长仿真
             total_t = 10 if total_t is None else total_t
             while self.t[-1] < total_t:
+
+                if int(np.floor(self.t[-1]))/5>=self.noise_t: # 每5s给Y加一次噪声
+                    self.noise_t += 1
+                    self.n[-1][1] = 80
+
                 A = np.array([rec.propensity(self.n[-1])
                             for rec in self.reactions]) # 算每个反应的倾向函数
                 A0 = A.sum()
@@ -90,7 +97,7 @@ class System: # 封装的类，代表多个化学反应构成的系统
         
 
 
-def generate_origin(total_t, seed):
+def generate_origin(total_t=None, seed=729):
 
     time.sleep(1.0)
 
@@ -107,7 +114,7 @@ def generate_origin(total_t, seed):
     system.add_reaction(1, [0, 1, 0], [0, 0, 0])
     system.add_reaction(1, [0, 0, 0], [1, 0, 0])
 
-    system.evolute(total_t=total_t, seed=seed)
+    system.evolute(total_t=total_t, seed=seed, IC=[100,40,2500])
 
     t = system.t
     X = [i[0] for i in system.n]
@@ -132,7 +139,7 @@ def generate_origin(total_t, seed):
         left=0.05,
         right=0.95,
         top=0.9,
-        bottom=0.1,
+        bottom=0.15,
         wspace=0.2
     )
     plt.savefig(f'Data/origin/{seed}/origin.png', dpi=500)
@@ -147,11 +154,10 @@ if __name__ == '__main__':
     os.makedirs('Data/origin', exist_ok=True)
 
     subprocess = []
-    for seed in range(1, 11):
-        subprocess.append(Process(target=generate_origin, args=(seed,), daemon=True))
+    for seed in range(1, 2):
+        subprocess.append(Process(target=generate_origin, args=(100, seed,), daemon=True))
         subprocess[-1].start()
-        print(f'\rStart process[seed={seed:.3f}]' + ' '*30)
-        time.sleep(0.1)
+        print(f'\rStart process[seed={seed}]' + ' '*30)
 
     while 1:
         pass

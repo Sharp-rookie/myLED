@@ -1,4 +1,5 @@
 import os
+import skdim
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
@@ -18,9 +19,10 @@ def Levina_Bickel(X, dists, k):
     dim = np.mean(m)
     return dim
 
+
 class ID_Estimator:
     def __init__(self, method='Levina_Bickel'):
-        self.all_methods = ['Levina_Bickel', 'MiND_ML', 'MiND_KL', 'Hein', 'CD']
+        self.all_methods = ['Levina_Bickel', 'MiND_ML', 'MLE', 'MADA', 'PCA']
         self.set_method(method)
     
     def set_method(self, method='Levina_Bickel'):
@@ -28,56 +30,54 @@ class ID_Estimator:
             assert False, 'Unknown method!'
         else:
             self.method = method
-        
+            
     def fit(self, X, k_list=20, n_jobs=4):
-        if self.method in ['Hein', 'CD']:
-            assert False, f"{self.method} not implemented!"
+
+        if np.isscalar(k_list):
+            k_list = np.array([k_list])
         else:
-            if np.isscalar(k_list):
-                k_list = np.array([k_list])
+            k_list = np.array(k_list)
+
+        kmax = np.max(k_list) + 2
+        dists, inds = kNN(X, kmax, n_jobs)
+        dims = []
+        for k in k_list:
+            if self.method == 'Levina_Bickel':
+                dims.append(Levina_Bickel(X, dists, k))
+            elif self.method == 'MiND_ML':
+                dims.append(np.mean(skdim.id.MiND_ML().fit_pw(X, n_neighbors=k).dimension_pw_))
+            elif self.method == 'MLE':
+                dims.append(np.mean(skdim.id.MLE().fit(X, n_neighbors=k).dimension_pw_))
+            elif self.method == 'MADA':
+                dims.append(np.mean(skdim.id.MADA().fit(X, n_neighbors=k).dimension_pw_))
+            elif self.method == 'PCA':
+                dims.append(np.mean(skdim.id.lPCA().fit_pw(X, n_neighbors=k).dimension_pw_))
             else:
-                k_list = np.array(k_list)
-            kmax = np.max(k_list) + 2
-            dists, inds = kNN(X, kmax, n_jobs)
-            dims = []
-            for k in k_list:
-                if self.method == 'Levina_Bickel':
-                    dims.append(Levina_Bickel(X, dists, k))
-                elif self.method == 'MiND_ML':
-                    assert False, f"{self.method} not implemented!"
-                elif self.method == 'MiND_KL':
-                    assert False, f"{self.method} not implemented!"
-                else:
-                    pass
-            if len(dims) == 1:
-                return dims[0]
-            else:
-                return np.array(dims)
+                assert False, f"{self.method} not implemented!"
+        if len(dims) == 1:
+            return dims[0]
+        else:
+            return np.array(dims)
 
 
 def remove_duplicates(X):
     return np.unique(X, axis=0)
 
 
-def eval_id_latent(vars_filepath, if_refine, if_all_methods):
-    if if_refine:
-        latent = np.load(os.path.join(vars_filepath, 'refine_latent.npy'))
-    else:
-        latent = np.load(os.path.join(vars_filepath, 'latent.npy'))
+def eval_id_latent(vars_filepath, method='Levina_Bickel'):
+    
+    latent = np.load(os.path.join(vars_filepath, 'latent.npy'))
     latent = remove_duplicates(latent)
     print(f'Samples (unique): {latent.shape[0]}')
     
-    estimator = ID_Estimator()
+    estimator = ID_Estimator(method=method)
     # k_list = (latent.shape[0] * np.linspace(0.005, 0.025, 10)).astype('int')
     k_list = np.array(range(10, 30+1)).astype('int') # lrk: hyper-parameters to tune
     k_list = np.clip(k_list, a_min=3, a_max=latent.shape[0]-1-2) # lrk: avoid divide by zero error in LB algorithm
     print(f'List of numbers of nearest neighbors: {k_list}')
-    if if_all_methods:
-        dims = estimator.fit_all_methods(latent, k_list)
-        np.save(os.path.join(vars_filepath, 'intrinsic_dimension_all_methods.npy'), dims)
-    else:
-        dims = estimator.fit(latent, k_list)
-        np.save(os.path.join(vars_filepath, 'intrinsic_dimension.npy'), dims)
+    
+    dims = estimator.fit(latent, k_list)
+    np.save(os.path.join(vars_filepath, 'intrinsic_dimension.npy'), dims)
 
 
 if __name__ == '__main__':
@@ -100,7 +100,7 @@ if __name__ == '__main__':
                                 str(cfg.seed)])
             var_log_dir = log_dir + '/variables_val'
             if os.path.exists(var_log_dir):
-                eval_id_latent(var_log_dir, if_refine=False, if_all_methods=False)
+                eval_id_latent(var_log_dir)
                 dims = np.load(os.path.join(var_log_dir, 'intrinsic_dimension.npy'))
             dims_all.append(dims)
             dim_mean = np.mean(dims_all)
