@@ -36,7 +36,7 @@ class scaler(object):
             assert self.data_min.shape == batch_of_sequences.shape
             assert self.data_max.shape == batch_of_sequences.shape
             
-            batch_of_sequences_scaled = np.array((batch_of_sequences - self.data_min) / (self.data_max - self.data_min))
+            batch_of_sequences_scaled = np.array((batch_of_sequences - self.data_min) / (self.data_max - self.data_min + 1e-5))
 
             if check_bounds:
                 assert (np.all(batch_of_sequences_scaled >= 0.0)), f'{batch_of_sequences_scaled[batch_of_sequences_scaled < 0.0]}'
@@ -48,7 +48,7 @@ class scaler(object):
             assert self.data_min.shape == batch_of_sequences.shape
             assert self.data_max.shape == batch_of_sequences.shape
             
-            batch_of_sequences_scaled = np.array((2.0 * batch_of_sequences - self.data_max - self.data_min) / (self.data_max - self.data_min))
+            batch_of_sequences_scaled = np.array((2.0 * batch_of_sequences - self.data_max - self.data_min) / (self.data_max - self.data_min + 1e-5))
 
             if check_bounds:
                 assert (np.all(batch_of_sequences_scaled >= -1.0)), f'{batch_of_sequences_scaled[batch_of_sequences_scaled < -1.0]}'
@@ -60,7 +60,7 @@ class scaler(object):
             assert self.data_mean.shape == batch_of_sequences.shape
             assert self.data_std.shape == batch_of_sequences.shape
 
-            batch_of_sequences_scaled = np.array((batch_of_sequences - self.data_mean) / self.data_std)
+            batch_of_sequences_scaled = np.array((batch_of_sequences - self.data_mean) / (self.data_std + 1e-5))
 
         else:
             raise ValueError("Scaler not implemented.")

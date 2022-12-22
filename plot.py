@@ -79,6 +79,98 @@ def plot_val_mse():
     plt.savefig(f'val_mse.jpg', dpi=300)
 
 
+def plot_epoch_test_log():
+
+    os.makedirs('plot/', exist_ok=True)
+
+    max_epoch = 150
+    class MSE():
+        def __init__(self, tau):
+            self.tau = tau
+            self.mse_x = [[] for _ in range(max_epoch)]
+            self.mse_y = [[] for _ in range(max_epoch)]
+            self.mse_z = [[] for _ in range(max_epoch)]
+            self.LB_id = [[] for _ in range(max_epoch)]
+            self.MiND_id = [[] for _ in range(max_epoch)]
+            self.MADA_id = [[] for _ in range(max_epoch)]
+            self.PCA_id = [[] for _ in range(max_epoch)]
+
+    fp = open('test_log.txt', 'r')
+    items = []
+    for line in fp.readlines():
+        tau = float(line[:-1].split(',')[0])
+        seed = int(line[:-1].split(',')[1])
+        mse_x = float(line[:-1].split(',')[2])
+        mse_y = float(line[:-1].split(',')[3])
+        mse_z = float(line[:-1].split(',')[4])
+        epoch = int(line[:-1].split(',')[5])
+        LB_id = float(line[:-1].split(',')[6])
+        MiND_id = float(line[:-1].split(',')[7])
+        MADA_id = float(line[:-1].split(',')[8])
+        PCA_id = float(line[:-1].split(',')[9])
+
+        find = False
+        for M in items:
+            if M.tau == tau:
+                M.mse_x[epoch].append(mse_x)
+                M.mse_y[epoch].append(mse_y)
+                M.mse_z[epoch].append(mse_z)
+                M.LB_id[epoch].append(LB_id)
+                M.MiND_id[epoch].append(MiND_id)
+                M.MADA_id[epoch].append(MADA_id)
+                M.PCA_id[epoch].append(PCA_id)
+                find = True
+                    
+        if not find:
+            M = MSE(tau)
+            M.mse_x[epoch].append(mse_x)
+            M.mse_y[epoch].append(mse_y)
+            M.mse_z[epoch].append(mse_z)
+            M.LB_id[epoch].append(LB_id)
+            M.MiND_id[epoch].append(MiND_id)
+            M.MADA_id[epoch].append(MADA_id)
+            M.PCA_id[epoch].append(PCA_id)
+            items.append(M)
+    fp.close()
+
+    for M in items:
+        mse_x_list = []
+        mse_y_list = []
+        mse_z_list = []
+        LB_id_list = []
+        MiND_id_list = []
+        MADA_id_list = []
+        PCA_id_list = []
+        for epoch in range(max_epoch):
+            mse_x_list.append(np.mean(M.mse_x[epoch]))
+            mse_y_list.append(np.mean(M.mse_y[epoch]))
+            mse_z_list.append(np.mean(M.mse_z[epoch]))
+            LB_id_list.append(np.mean(M.LB_id[epoch]))
+            MiND_id_list.append(np.mean(M.MiND_id[epoch]))
+            MADA_id_list.append(np.mean(M.MADA_id[epoch]))
+            PCA_id_list.append(np.mean(M.PCA_id[epoch]))
+
+        plt.figure(figsize=(12,8))
+        plt.title(f'tau = {M.tau}')
+        ax1 = plt.subplot(2,1,1)
+        plt.xlabel('epoch')
+        plt.ylabel('ID')
+        plt.plot(range(max_epoch), LB_id_list, label='LB')
+        plt.plot(range(max_epoch), MiND_id_list, label='MiND_ML')
+        plt.plot(range(max_epoch), MADA_id_list, label='MADA')
+        # plt.plot(range(max_epoch), PCA_id_list, label='PCA')
+        plt.legend()
+        ax2 = plt.subplot(2,1,2)
+        plt.xlabel('epoch')
+        plt.ylabel('MSE')
+        plt.plot(range(max_epoch), mse_x_list, label='x')
+        plt.plot(range(max_epoch), mse_y_list, label='y')
+        plt.plot(range(max_epoch), mse_z_list, label='z')
+        # plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
+        plt.legend()
+        plt.savefig(f'plot/test_tau{M.tau:.3f}.jpg', dpi=300)
+
+
 def plot_dataset(tau):
 
     if os.path.exists(f"Data/Simulation_Data/lattice_boltzmann_fhn_original.pickle"):
@@ -197,6 +289,7 @@ if __name__ == '__main__':
     # os.makedirs('Analyse/', exist_ok=True)
     # [plot_dataset(tau=tau) for tau in np.arange(0.1, 0.75, 0.05)]
 
-    plot_id()
-
-    plot_val_mse()
+    # plot_id()
+    # plot_val_mse()
+    
+    plot_epoch_test_log()

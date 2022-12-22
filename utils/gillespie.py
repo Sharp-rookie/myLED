@@ -71,12 +71,11 @@ class System: # 封装的类，代表多个化学反应构成的系统
             total_t = 10 if total_t is None else total_t
             while self.t[-1] < total_t:
 
-                if int(np.floor(self.t[-1]))/5>=self.noise_t: # 每5s给Y加一次噪声
-                    self.noise_t += 1
-                    self.n[-1][1] = 80
+                # if int(np.floor(self.t[-1]))/5>=self.noise_t: # 每5s给Y加一次噪声
+                #     self.noise_t += 1
+                #     self.n[-1][1] = 80
 
-                A = np.array([rec.propensity(self.n[-1])
-                            for rec in self.reactions]) # 算每个反应的倾向函数
+                A = np.array([rec.propensity(self.n[-1]) for rec in self.reactions]) # 算每个反应的倾向函数
                 A0 = A.sum()
                 A /= A0 # 归一化得到概率分布
                 t0 = -np.log(np.random.random())/A0 # 按概率选择下一个反应发生的间隔
