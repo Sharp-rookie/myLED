@@ -21,6 +21,7 @@ def plot_id():
     plt.xlabel('tau/s')
     plt.ylabel('ID')
     plt.plot(tau_list, id_list)
+    plt.scatter(tau_list, id_list)
     plt.savefig(f'ID.jpg', dpi=300)
 
 
@@ -29,36 +30,52 @@ def plot_val_mse():
     class MSE():
         def __init__(self, tau):
             self.tau = tau
-            self.mse = []
+            self.mse_x = []
+            self.mse_y = []
+            self.mse_z = []
 
     fp = open('val_mse.txt', 'r')
     items = []
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
         seed = int(line[:-1].split(',')[1])
-        mse = float(line[:-1].split(',')[2])
+        mse_x = float(line[:-1].split(',')[2])
+        mse_y = float(line[:-1].split(',')[3])
+        mse_z = float(line[:-1].split(',')[4])
 
         find = False
         for M in items:
             if M.tau == tau:
-                M.mse.append(mse)
+                M.mse_x.append(mse_x)
+                M.mse_y.append(mse_y)
+                M.mse_z.append(mse_z)
                 find = True
                     
         if not find:
             M = MSE(tau)
-            M.mse.append(mse)
+            M.mse_x.append(mse_x)
+            M.mse_y.append(mse_y)
+            M.mse_z.append(mse_z)
             items.append(M)
-    
+
     tau_list = []
-    mse_list = []
+    mse_x_list = []
+    mse_y_list = []
+    mse_z_list = []
     for M in items:
         tau_list.append(M.tau)
-        mse_list.append(np.mean(M.mse))
+        mse_x_list.append(np.mean(M.mse_x))
+        mse_y_list.append(np.mean(M.mse_y))
+        mse_z_list.append(np.mean(M.mse_z))
 
     plt.figure()
     plt.xlabel('tau/s')
     plt.ylabel('MSE')
-    plt.scatter(tau_list, mse_list)
+    plt.scatter(tau_list, mse_x_list, label='x')
+    plt.scatter(tau_list, mse_y_list, label='y')
+    plt.scatter(tau_list, mse_z_list, label='z')
+    plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
+    plt.legend()
     plt.savefig(f'val_mse.jpg', dpi=300)
 
 
