@@ -57,7 +57,7 @@ def generate_original_data(trace_num, total_t):
 
 def generate_tau_data(trace_num, tau, sample_num=None):
 
-    if os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz"):
+    if os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
         return
 
     # -------------------------------- 1_load_original_data -------------------------------- 
@@ -102,9 +102,6 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     #######################
     # Create train data
     #######################
-
-    if os.path.exists(data_dir+"/train.npz") and os.path.exists(data_dir+"/val.npz"):
-        return
 
     # select 2 traces for train
     N_TRAIN = len([0, 1])
@@ -178,9 +175,6 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     # Create valid data
     #######################
 
-    if os.path.exists(data_dir+"/val.npz"):
-        return
-
     # select 1 traces for train
     N_TRAIN = len([2])
     data_train = data[[2]]
@@ -249,6 +243,81 @@ def generate_tau_data(trace_num, tau, sample_num=None):
                     )
     plt.savefig(data_dir+'/val.jpg', dpi=300)
 
+    #######################
+    # Create test data
+    #######################
+
+    if os.path.exists(data_dir+"/test.npz"):
+        return
+
+    # select 1 traces for train
+    N_TRAIN = len([3])
+    data_train = data[[3]]
+
+    # select sliding window index from 1 trace
+    idxs_timestep = []
+    idxs_ic = []
+    for ic in range(N_TRAIN):
+        seq_data = data_train[ic]
+        idxs = np.arange(0, np.shape(seq_data)[0]-sequence_length, 1)
+        for idx_ in idxs:
+            idxs_ic.append(ic)
+            idxs_timestep.append(idx_)
+
+    # generator train dataset
+    sequences = []
+    for bn in range(len(idxs_timestep)):
+        idx_ic = idxs_ic[bn]
+        idx_timestep = idxs_timestep[bn]
+        tmp = data_train[idx_ic, idx_timestep:idx_timestep+sequence_length]
+        sequences.append(tmp)
+
+    sequences = np.array(sequences) 
+    print("Test Dataset", np.shape(sequences))
+
+    # keep the length of sequences is equal to sample_num
+    if sample_num is not None:
+        repeat_num = int(np.floor(sample_num/len(sequences)))
+        idx = np.random.choice(range(len(sequences)), sample_num-len(sequences)*repeat_num, replace=False)
+        idx = np.sort(idx)
+        tmp1 = sequences[idx]
+        tmp2 = None
+        for i in range(repeat_num):
+            if i == 0:
+                tmp2 = np.concatenate((sequences, sequences), axis=0)
+            else:
+                tmp2 = np.concatenate((tmp2, sequences), axis=0)
+        sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
+
+    # save train dataset
+    np.savez(data_dir+'/test.npz', data=sequences)
+
+    # plot
+    plt.figure(figsize=(16,10))
+    plt.title('Val Data' + f' | sample_num[{sample_num if sample_num is not None else len(sequences)}]')
+    ax1 = plt.subplot(3,1,1)
+    ax1.set_title('X')
+    plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 0])
+    plt.xlabel('time / s')
+
+    ax2 = plt.subplot(3,1,2)
+    ax2.set_title('Y')
+    plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 1])
+    plt.xlabel('time / s')
+
+    ax3 = plt.subplot(3,1,3)
+    ax3.set_title('Z')
+    plt.plot([i*tau for i in range(len(sequences))], sequences[:, 0, 2])
+    plt.xlabel('time / s')
+
+    plt.subplots_adjust(left=0.05,
+                    bottom=0.05, 
+                    right=0.95, 
+                    top=0.95, 
+                    hspace=0.35, 
+                    )
+    plt.savefig(data_dir+'/test.jpg', dpi=300)
+
 
 def pnas_main(random_seed):
     cfg = load_config(filepath='config.yaml')
@@ -292,11 +361,11 @@ def pnas_main(random_seed):
     # define callback for selecting checkpoints during training
     checkpoint_callback = ModelCheckpoint(
         dirpath=log_dir+"/lightning_logs/checkpoints/",
-        filename="{epoch}_{val_loss}",
+        filename="{epoch}",
         verbose=True,
         monitor='val_loss',
         mode='min',
-        save_top_k=1
+        save_top_k=-1
     )
 
     # define trainer
@@ -315,7 +384,7 @@ def pnas_main(random_seed):
     print("Best model path:", checkpoint_callback.best_model_path)
 
 
-def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_filepath):
+def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_filepath=None):
     
     cfg = load_config(filepath='config.yaml')
     cfg = munchify(cfg)
@@ -352,14 +421,7 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         input_1d_width=cfg.input_1d_width,
     )
 
-    checkpoint_filepath = glob.glob(os.path.join(checkpoint_filepath+f"_pnas_pnas-ae_{cfg.seed}/lightning_logs/checkpoints", '*.ckpt'))[0]
-    ckpt = torch.load(checkpoint_filepath)
-    model.load_state_dict(ckpt['state_dict'])
-    model = model.to(device)
-    model.eval()
-    model.freeze()
-
-    # prepare train and val dataset
+    # prepare train and test dataset
     kwargs = {'num_workers': cfg.num_workers, 'pin_memory': True} if cfg.if_cuda else {}
     input_scaler = scaler(
                         scaler_type='MinMaxZeroOne',
@@ -371,105 +433,121 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
                         data_min=np.loadtxt(cfg.data_filepath+"/data_min.txt"),
                         data_max=np.loadtxt(cfg.data_filepath+"/data_max.txt"),
             )
-    val_dataset = PNASDataset(
-        file_path=cfg.data_filepath+'/val.npz', 
+    test_dataset = PNASDataset(
+        file_path=cfg.data_filepath+'/test.npz', 
         input_scaler=input_scaler,
         target_scaler=target_scaler,
         )
-    # prepare val loader
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=cfg.val_batch,
+    # prepare test loader
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
+                                             batch_size=cfg.test_batch,
                                              shuffle=False,
                                              **kwargs)
 
-    # run val forward pass to save the latent vector for validating the refine network later
-    all_latents = []
-    var_log_dir = log_dir + '/variables_val'
-    rm_mkdir(var_log_dir)
-    outputs = np.array([])
-    targets = np.array([])
-    for batch_idx, (data, target) in enumerate(tqdm(val_loader)):
-        output, latent = model.model(data.to(device))
-        # save the latent vectors
-        for idx in range(data.shape[0]):
-            latent_tmp = latent[idx].view(1, -1)[0]
-            latent_tmp = latent_tmp.cpu().detach().numpy()
-            all_latents.append(latent_tmp)
-        
-        outputs = output.cpu().numpy() if not len(outputs) else np.concatenate((outputs, output.cpu().numpy()), axis=0)
-        targets = target.cpu().numpy() if not len(targets) else np.concatenate((targets, target.cpu().numpy()), axis=0)
+    # run test forward pass to save the latent vector
 
-    # record mse
-    with open('val_mse.txt', 'a') as fp:
+    fp = open('test_log.txt', 'a')
+    for ep in range(cfg.epochs):
+
+        epoch = ep
+        if checkpoint_filepath is not None:
+            epoch = ep + 1
+            ckpt_path = checkpoint_filepath + f"_pnas_pnas-ae_{cfg.seed}/lightning_logs/checkpoints/" + f'epoch={epoch}.ckpt'
+            ckpt = torch.load(ckpt_path)
+            model.load_state_dict(ckpt['state_dict'])
+        model = model.to(device)
+        model.eval()
+        model.freeze()
+
+        var_log_dir = log_dir + f'/variables_test_epoch{epoch}'
+        rm_mkdir(var_log_dir)
+
+        all_latents = []
+        outputs = np.array([])
+        targets = np.array([])
+        for batch_idx, (data, target) in enumerate(tqdm(test_loader)):
+            output, latent = model.model(data.to(device))
+            # save the latent vectors
+            for idx in range(data.shape[0]):
+                latent_tmp = latent[idx].view(1, -1)[0]
+                latent_tmp = latent_tmp.cpu().detach().numpy()
+                all_latents.append(latent_tmp)
+            
+            outputs = output.cpu().numpy() if not len(outputs) else np.concatenate((outputs, output.cpu().numpy()), axis=0)
+            targets = target.cpu().numpy() if not len(targets) else np.concatenate((targets, target.cpu().numpy()), axis=0)
+
+        # mse
         mse_x = np.average((outputs[:,0,0] - targets[:,0,0])**2)
         mse_y = np.average((outputs[:,0,1] - targets[:,0,1])**2)
         mse_z = np.average((outputs[:,0,2] - targets[:,0,2])**2)
-        fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z}\n")
-        fp.flush()
     
-    # plot (999,1,3)
-    X = []
-    Y = []
-    Z = []
-    for i in range(len(outputs)):
-        X.append([outputs[i,0,0], targets[i,0,0]])
-        Y.append([outputs[i,0,1], targets[i,0,1]])
-        Z.append([outputs[i,0,2], targets[i,0,2]])
-    plt.figure(figsize=(16,4))
-    ax1 = plt.subplot(1,3,1)
-    ax1.set_title('X')
-    plt.plot(np.array([i*tau for i in range(len(X))]), np.array(X)[:,1], label='true')
-    plt.plot(np.array([i*tau for i in range(len(X))]), np.array(X)[:,0], label='predict')
-    plt.xlabel('time / s')
-    ax2 = plt.subplot(1,3,2)
-    ax2.set_title('Y')
-    plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Y)[:,1], label='true')
-    plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Y)[:,0], label='predict')
-    plt.xlabel('time / s')
-    ax3 = plt.subplot(1,3,3)
-    ax3.set_title('Z')
-    plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Z)[:,1], label='true')
-    plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Z)[:,0], label='predict')
-    plt.xlabel('time / s')
-    plt.subplots_adjust(left=0.1,
-        right=0.9,
-        top=0.9,
-        bottom=0.15,
-        wspace=0.2,
-    )
-    plt.savefig(log_dir+f"/result.jpg", dpi=300)
+        # plot (999,1,3)
+        X = []
+        Y = []
+        Z = []
+        for i in range(len(outputs)):
+            X.append([outputs[i,0,0], targets[i,0,0]])
+            Y.append([outputs[i,0,1], targets[i,0,1]])
+            Z.append([outputs[i,0,2], targets[i,0,2]])
+        plt.figure(figsize=(16,4))
+        ax1 = plt.subplot(1,3,1)
+        ax1.set_title('X')
+        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(X)[:,1], label='true')
+        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(X)[:,0], label='predict')
+        plt.xlabel('time / s')
+        ax2 = plt.subplot(1,3,2)
+        ax2.set_title('Y')
+        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Y)[:,1], label='true')
+        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Y)[:,0], label='predict')
+        plt.xlabel('time / s')
+        ax3 = plt.subplot(1,3,3)
+        ax3.set_title('Z')
+        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Z)[:,1], label='true')
+        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Z)[:,0], label='predict')
+        plt.xlabel('time / s')
+        plt.subplots_adjust(left=0.1,
+            right=0.9,
+            top=0.9,
+            bottom=0.15,
+            wspace=0.2,
+        )
+        plt.savefig(var_log_dir+"/result.jpg", dpi=300)
 
-    # save latent
-    print(f'latent.npy save at: {var_log_dir}/latent.npy')
-    np.save(var_log_dir+'/latent.npy', all_latents)
+        # save latent
+        np.save(var_log_dir+'/latent.npy', all_latents)
+
+        # calculae ID
+        LB_id = cal_id_latent(tau, random_seed, epoch, 'Levina_Bickel')
+        MiND_id = cal_id_latent(tau, random_seed, epoch, 'MiND_ML')
+        MADA_id = cal_id_latent(tau, random_seed, epoch, 'MADA')
+        PCA_id = cal_id_latent(tau, random_seed, epoch, 'PCA')
+
+        # record
+        fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        fp.flush()
+
+        if checkpoint_filepath is None:
+            break
+        
+    fp.close()
 
 
-def cal_id_latent(tau, random_seeds):
+def cal_id_latent(tau, random_seed, epoch, method='Levina_Bickel'):
 
     cfg = load_config(filepath='config.yaml')
     cfg = munchify(cfg)
 
-    dims_all = []
-
-    for random_seed in random_seeds:
-        cfg.seed = random_seed
-        log_dir = '_'.join([cfg.log_dir+str(tau),
-                            cfg.dataset,
-                            cfg.model_name,
-                            str(cfg.seed)])
-        var_log_dir = log_dir + '/variables_val'
-
-        eval_id_latent(var_log_dir, method='Levina_Bickel')
-
-        dims = np.load(os.path.join(var_log_dir, 'intrinsic_dimension.npy'))
-        dims_all.append(dims)
-        dim_mean = np.mean(dims_all)
-        dim_std = np.std(dims_all)
+    log_dir = '_'.join([cfg.log_dir+str(tau),
+                        cfg.dataset,
+                        cfg.model_name,
+                        str(random_seed)])
     
-    with open("ID.txt", 'a+b') as fp:
-        print(f'tau[{tau}] Mean(std): ' + f'{dim_mean:.4f} (+-{dim_std:.4f})\n')
-        fp.write(f'{tau}--{dim_mean:.4f}\n'.encode('utf-8'))
-        fp.flush()
+    var_log_dir = log_dir + f'/variables_test_epoch{epoch}'
+    eval_id_latent(var_log_dir, method=method)
+    dims = np.load(os.path.join(var_log_dir, 'intrinsic_dimension.npy'))
+
+    return np.mean(dims)
+
 
 def pipeline(trace_num, tau, queue: JoinableQueue):
 
@@ -479,14 +557,20 @@ def pipeline(trace_num, tau, queue: JoinableQueue):
     try:
         generate_tau_data(trace_num=trace_num, tau=tau, sample_num=100)
 
-        random_seeds = range(1, 21)
+        random_seeds = range(1, 4)
         for random_seed in random_seeds:
-            if not os.path.exists(f'logs/logs_tau{tau}_pnas_pnas-ae_{random_seed}/result.jpg'):
+            # untrained net for ID
+            pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, None)
+            
+            # train
+            if not os.path.exists(f'logs/logs_tau{tau}_pnas_pnas-ae_{random_seed}/lightning_logs/checkpoints/epoch=0.ckpt'):
                 pnas_main(random_seed)
+            
+            # trained net for ID
             pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/logs_tau{tau}")
+            
             queue.put_nowait([f'Part--{tau}--{random_seed}'])
     
-        cal_id_latent(tau, random_seeds)
     except:
         if random_seed is None:
             queue.put_nowait([f'Data Generate Error--{tau}', traceback.format_exc()])
@@ -497,12 +581,12 @@ def pipeline(trace_num, tau, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    trace_num = 3
+    trace_num = 4
     generate_original_data(trace_num=trace_num, total_t=100)
 
     # start pipeline-subprocess of different tau
-    # tau_list = np.arange(0., 0.01, 0.025)
-    tau_list = np.arange(0., 1.99, 0.025)
+    tau_list = np.arange(0., 2.51, 0.1)
+    # tau_list = np.arange(0., 1.99, 0.025)
     queue = JoinableQueue()
     subprocesses = []
     for tau in tau_list:
