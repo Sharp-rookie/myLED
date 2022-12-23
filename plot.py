@@ -1,7 +1,7 @@
 import os
-import h5py
 import pickle
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 
 
@@ -171,6 +171,30 @@ def plot_epoch_test_log():
         plt.savefig(f'plot/test_tau{M.tau:.3f}.jpg', dpi=300)
 
 
+def plot_y_corr():
+
+    data = np.load('Data/origin/1/data.npz')
+    X = np.array(data['X'])[:, np.newaxis]
+    Y = np.array(data['Y'])[:, np.newaxis]
+    Z = np.array(data['Z'])[:, np.newaxis]
+
+    data = pd.DataFrame(np.concatenate((X,Y,Z), axis=-1), columns=['X', 'Y', 'Z'])
+    
+    corrX, corrY, corrZ = [], [], []
+    lag_list = np.array(range(2000))
+    for lag in lag_list:
+        corrX.append(data['X'].autocorr(lag=lag))
+        corrY.append(data['Y'].autocorr(lag=lag))
+        corrZ.append(data['Z'].autocorr(lag=lag))
+    plt.figure()
+    plt.plot(lag_list*0.005, np.array(corrX), label='X')
+    plt.plot(lag_list*0.005, np.array(corrY), label='Y')
+    plt.plot(lag_list*0.005, np.array(corrZ), label='Z')
+    plt.xlabel('time/s')
+    plt.legend()
+    plt.title('Autocorrelation')
+    plt.savefig('corr.jpg', dpi=300)
+
 def plot_dataset(tau):
 
     if os.path.exists(f"Data/Simulation_Data/lattice_boltzmann_fhn_original.pickle"):
@@ -293,3 +317,4 @@ if __name__ == '__main__':
     # plot_val_mse()
     
     plot_epoch_test_log()
+    # plot_y_corr()
