@@ -319,7 +319,7 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     plt.savefig(data_dir+'/test.jpg', dpi=300)
 
 
-def pnas_main(random_seed):
+def pnas_main(random_seed, tau):
     cfg = load_config(filepath='config.yaml')
     cfg = munchify(cfg)
     cfg.log_dir += str(tau)
@@ -382,7 +382,6 @@ def pnas_main(random_seed):
     trainer.fit(model)
 
     print("Best model path:", checkpoint_callback.best_model_path)
-
 
 def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_filepath=None):
     
@@ -452,7 +451,7 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         epoch = ep
         if checkpoint_filepath is not None:
             epoch = ep + 1
-            ckpt_path = checkpoint_filepath + f"_pnas_pnas-ae_{cfg.seed}/lightning_logs/checkpoints/" + f'epoch={epoch}.ckpt'
+            ckpt_path = checkpoint_filepath + f"_pnas_pnas-ae_{cfg.seed}/lightning_logs/checkpoints/" + f'epoch={epoch-1}.ckpt'
             ckpt = torch.load(ckpt_path)
             model.load_state_dict(ckpt['state_dict'])
         model = model.to(device)
@@ -485,6 +484,7 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         X = []
         Y = []
         Z = []
+        plot_tau = tau if tau!=0.0 else 0.005
         for i in range(len(outputs)):
             X.append([outputs[i,0,0], targets[i,0,0]])
             Y.append([outputs[i,0,1], targets[i,0,1]])
@@ -492,18 +492,18 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         plt.figure(figsize=(16,4))
         ax1 = plt.subplot(1,3,1)
         ax1.set_title('X')
-        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(X)[:,1], label='true')
-        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(X)[:,0], label='predict')
+        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(X)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(X)[:,0], label='predict')
         plt.xlabel('time / s')
         ax2 = plt.subplot(1,3,2)
         ax2.set_title('Y')
-        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Y)[:,1], label='true')
-        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Y)[:,0], label='predict')
+        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Y)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Y)[:,0], label='predict')
         plt.xlabel('time / s')
         ax3 = plt.subplot(1,3,3)
         ax3.set_title('Z')
-        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Z)[:,1], label='true')
-        plt.plot(np.array([i*tau for i in range(len(X))]), np.array(Z)[:,0], label='predict')
+        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Z)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Z)[:,0], label='predict')
         plt.xlabel('time / s')
         plt.subplots_adjust(left=0.1,
             right=0.9,
@@ -518,12 +518,13 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
 
         # calculae ID
         LB_id = cal_id_latent(tau, random_seed, epoch, 'Levina_Bickel')
-        MiND_id = cal_id_latent(tau, random_seed, epoch, 'MiND_ML')
-        MADA_id = cal_id_latent(tau, random_seed, epoch, 'MADA')
-        PCA_id = cal_id_latent(tau, random_seed, epoch, 'PCA')
+        # MiND_id = cal_id_latent(tau, random_seed, epoch, 'MiND_ML')
+        # MADA_id = cal_id_latent(tau, random_seed, epoch, 'MADA')
+        # PCA_id = cal_id_latent(tau, random_seed, epoch, 'PCA')
 
         # record
-        fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        # fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z},{epoch},{LB_id},0,0,0\n")
         fp.flush()
 
         if checkpoint_filepath is None:
@@ -557,14 +558,14 @@ def pipeline(trace_num, tau, queue: JoinableQueue):
     try:
         generate_tau_data(trace_num=trace_num, tau=tau, sample_num=100)
 
-        random_seeds = range(1, 4)
+        random_seeds = range(1, 2)
         for random_seed in random_seeds:
             # untrained net for ID
             pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, None)
             
             # train
             if not os.path.exists(f'logs/logs_tau{tau}_pnas_pnas-ae_{random_seed}/lightning_logs/checkpoints/epoch=0.ckpt'):
-                pnas_main(random_seed)
+                pnas_main(random_seed, tau)
             
             # trained net for ID
             pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/logs_tau{tau}")
