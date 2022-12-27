@@ -47,7 +47,15 @@ def mlp_relu_drop(input_dim, output_dim):
         nn.ReLU(),
         nn.Dropout(p=0.01)
     )
-    return mlplayer
+    return mlplayer 
+
+def mlp_tanh_drop(input_dim, output_dim):
+    mlplayer = nn.Sequential(
+        nn.Linear(input_dim, output_dim, bias=True),
+        nn.Tanh(),
+        nn.Dropout(p=0.01)
+    )
+    return mlplayer 
 
 class Cnov_AE(nn.Module):
     
@@ -113,6 +121,21 @@ class Cnov_AE(nn.Module):
         predict_out = self.output_unpad(predict_out)
         
         return predict_out
+    
+    def print_nets_weight(self):
+        import itertools
+        print('---------- Encoder ----------')
+        for sequential in itertools.chain(self.conv_stack1, self.conv_stack2):
+            for name, param in sequential.named_parameters():
+                print(name, param.data[...,-1])
+        print('---------- Decoder ----------')
+        for sequential in itertools.chain(self.deconv_2, self.deconv_2):
+            for name, param in sequential.named_parameters():
+                print(name, param.data[...,-1])
+        print('---------- Predictor ----------')
+        for sequential in itertools.chain([self.predict_2], self.up_sample_2):
+            for name, param in sequential.named_parameters():
+                print(name, param.data[...,-1])
 
     def forward(self,x):
         
@@ -125,49 +148,22 @@ class MLP_AE(nn.Module):
     
     def __init__(self, in_channels, input_1d_width):
         super(MLP_AE,self).__init__()
-
-        # Input_padding_layer, (batchsize,2*101)-->(batchsize,256)
-        if not isPowerOfTwo(in_channels*input_1d_width):
-            # Add padding in the first layer to make power of two
-            input_1d_width_padded = findNextPowerOfTwo(in_channels*input_1d_width)
-            padding = input_1d_width_padded - in_channels*input_1d_width
-            if padding % 2 == 0:
-                pad_x_left = int(padding / 2)
-                pad_x_right = int(padding / 2)
-            else:
-                pad_x_left = int((padding - 1) / 2)
-                pad_x_right = int((padding - 1) / 2 + 1)
-            padding_input = tuple([pad_x_left, pad_x_right])
-        else:
-            input_1d_width_padded = in_channels*input_1d_width
-            padding_input = tuple([0, 0])
-        self.input_pad = nn.ConstantPad1d(padding_input, 0.0)
-
-        # MLP_encoder_layer, (batchsize,2,256)-->(batchsize,64,1)
-        self.num_layers = 1
-        self.hidden_size = 256
-        self.en_lstm = nn.LSTM(input_size=input_1d_width_padded, hidden_size=self.hidden_size, num_layers=self.num_layers, batch_first=True)
-        self.mlp_stack = mlp_relu_drop(256, 64)
         
-        # Conv_time-lagged_decoder_layer,(batchsize,64,1)-->(batchsize,256)
-        self.demlp1 = mlp_relu_drop(64, 256)
-        self.demlp2 = mlp_relu_drop(256, 256)
-        self.demlp3 = mlp_relu_drop(256, input_1d_width_padded)
+        self.in_channels = in_channels
 
-        # Output_unpadding_layer, (batchsize,256)-->(batchsize,2*101)
-        self.output_unpad = Unpad(padding_input)
+        # MLP_encoder_layer, (batchsize,1,3)-->(batchsize,64,1)
+        self.mlp_stack1 = mlp_relu_drop(input_1d_width, 64)
+        self.mlp_stack2 = mlp_relu_drop(64, 64)
+        
+        # Conv_time-lagged_decoder_layer,(batchsize,64,1)-->(batchsize,3)
+        self.demlp1 = mlp_tanh_drop(64, 64)
+        self.demlp2 = mlp_tanh_drop(64, input_1d_width)
 
     def encoder(self, x):
 
         x = nn.Flatten()(x)
-        x = self.input_pad(x).unsqueeze(-2)
-
-        h_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
-        c_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size)
-        lstm_out, (h_out, _) = self.en_lstm(x, (h_0, c_0))
-        lstm_out = lstm_out.view(-1, self.hidden_size)
-
-        mlp_out = self.mlp_stack(lstm_out)
+        x = self.mlp_stack1(x)
+        mlp_out = self.mlp_stack2(x)
         mlp_out = mlp_out.unsqueeze(-1)
 
         return mlp_out
@@ -177,9 +173,7 @@ class MLP_AE(nn.Module):
         x = x.squeeze()
         x = self.demlp1(x)
         x = self.demlp2(x)
-        x = self.demlp3(x)
-        predict_out = self.output_unpad(x)
-        predict_out = nn.Unflatten(-1, (2, 101))(predict_out)
+        predict_out = nn.Unflatten(-1, (self.in_channels, int(x.shape[-1]/self.in_channels)))(x)
         
         return predict_out
 
@@ -191,7 +185,7 @@ class MLP_AE(nn.Module):
 
 
 if __name__ == '__main__':
-    ae = Cnov_AE(1, 3)
+    ae = MLP_AE(1, 3)
     input = torch.ones((128, 1, 3))
     latent = ae.encoder(input)
     print(latent.shape, end='')

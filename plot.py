@@ -83,7 +83,7 @@ def plot_epoch_test_log():
 
     os.makedirs('plot/', exist_ok=True)
 
-    max_epoch = 150
+    max_epoch = 1000+1
     class MSE():
         def __init__(self, tau):
             self.tau = tau
@@ -150,7 +150,7 @@ def plot_epoch_test_log():
             MADA_id_list.append(np.mean(M.MADA_id[epoch]))
             PCA_id_list.append(np.mean(M.PCA_id[epoch]))
 
-        plt.figure(figsize=(12,8))
+        plt.figure(figsize=(8,8))
         plt.title(f'tau = {M.tau}')
         ax1 = plt.subplot(2,1,1)
         plt.xlabel('epoch')
@@ -158,7 +158,7 @@ def plot_epoch_test_log():
         plt.plot(range(max_epoch), LB_id_list, label='LB')
         plt.plot(range(max_epoch), MiND_id_list, label='MiND_ML')
         plt.plot(range(max_epoch), MADA_id_list, label='MADA')
-        # plt.plot(range(max_epoch), PCA_id_list, label='PCA')
+        plt.plot(range(max_epoch), PCA_id_list, label='PCA')
         plt.legend()
         ax2 = plt.subplot(2,1,2)
         plt.xlabel('epoch')

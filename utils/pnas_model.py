@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 
 from .pnas_ae_nets import Cnov_AE, MLP_AE
 from .pnas_dataset import PNASDataset, scaler
+from .net_weight_init import *
 
 
 class PNAS_VisDynamicsModel(pl.LightningModule):
@@ -34,6 +35,8 @@ class PNAS_VisDynamicsModel(pl.LightningModule):
         self.kwargs = {'num_workers': self.hparams.num_workers, 'pin_memory': self.hparams.pin_memory} if self.hparams.if_cuda else {}
 
         self.__build_model()
+        self.model.apply(weights_xavier_uniform_init)
+        # self.model.print_nets_weight()
 
     def __build_model(self):
         

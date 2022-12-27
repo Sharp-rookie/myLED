@@ -71,9 +71,9 @@ class System: # 封装的类，代表多个化学反应构成的系统
             total_t = 10 if total_t is None else total_t
             while self.t[-1] < total_t:
 
-                # if int(np.floor(self.t[-1]))/5>=self.noise_t: # 每5s给Y加一次噪声
+                # if int(np.floor(self.t[-1]))/1>=self.noise_t: # 每1s给Z加一次噪声
                 #     self.noise_t += 1
-                #     self.n[-1][1] = 80
+                #     self.n[-1][-1] = 5000
 
                 A = np.array([rec.propensity(self.n[-1]) for rec in self.reactions]) # 算每个反应的倾向函数
                 A0 = A.sum()
@@ -96,7 +96,7 @@ class System: # 封装的类，代表多个化学反应构成的系统
         
 
 
-def generate_origin(total_t=None, seed=729):
+def generate_origin(total_t=None, seed=729, IC=[100,40,2500]):
 
     time.sleep(1.0)
 
@@ -113,7 +113,7 @@ def generate_origin(total_t=None, seed=729):
     system.add_reaction(1, [0, 1, 0], [0, 0, 0])
     system.add_reaction(1, [0, 0, 0], [1, 0, 0])
 
-    system.evolute(total_t=total_t, seed=seed, IC=[100,40,2500])
+    system.evolute(total_t=total_t, seed=seed, IC=IC)
 
     t = system.t
     X = [i[0] for i in system.n]
@@ -150,15 +150,13 @@ def generate_origin(total_t=None, seed=729):
 
 if __name__ == '__main__':
 
-    os.makedirs('Data/origin', exist_ok=True)
-
     subprocess = []
-    for seed in range(1, 2):
-        subprocess.append(Process(target=generate_origin, args=(100, seed,), daemon=True))
+    for seed in range(1, 5):
+        subprocess.append(Process(target=generate_origin, args=(100, seed, [100,40,2500]), daemon=True))
         subprocess[-1].start()
         print(f'\rStart process[seed={seed}]' + ' '*30)
 
-    while 1:
+    while any([subp.exitcode == None for subp in subprocess]):
         pass
 
     # num_elements = 2
