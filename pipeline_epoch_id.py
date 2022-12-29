@@ -80,7 +80,7 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     dt = tmp['dt']
     subsampling = int(tau/dt) if tau!=0. else 1
     data = data[:, ::subsampling]
-    print('data shape', data.shape, '# (trace_num, time_length, feature_num)')
+    print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, feature_num)')
 
     # Save statistic information
     data_dir = f"Data/data/tau_{tau}"
@@ -103,9 +103,9 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     # Create train data
     #######################
 
-    # select 2 traces for train
-    N_TRAIN = len([0, 1])
-    data_train = data[[0, 1]]
+    # select 10 traces for train
+    N_TRAIN = len([0])
+    data_train = data[[0]]
 
     # select sliding window index from 2 trace
     idxs_timestep = []
@@ -126,21 +126,22 @@ def generate_tau_data(trace_num, tau, sample_num=None):
         sequences.append(tmp)
 
     sequences = np.array(sequences) 
-    print("Train Dataset", np.shape(sequences))
+    print(f'tau[{tau}]', "original train dataset", np.shape(sequences))
 
     # keep the length of sequences is equal to sample_num
     if sample_num is not None:
-        repeat_num = int(np.floor(sample_num/len(sequences)))
-        idx = np.random.choice(range(len(sequences)), sample_num-len(sequences)*repeat_num, replace=False)
+        repeat_num = int(np.floor(N_TRAIN*sample_num/len(sequences)))
+        idx = np.random.choice(range(len(sequences)), N_TRAIN*sample_num-len(sequences)*repeat_num, replace=False)
         idx = np.sort(idx)
         tmp1 = sequences[idx]
         tmp2 = None
         for i in range(repeat_num):
             if i == 0:
-                tmp2 = np.concatenate((sequences, sequences), axis=0)
+                tmp2 = sequences
             else:
                 tmp2 = np.concatenate((tmp2, sequences), axis=0)
         sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
+    print(f'tau[{tau}]', "processed train dataset", np.shape(sequences))
 
     # save train dataset
     np.savez(data_dir+'/train.npz', data=sequences)
@@ -175,14 +176,14 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     # Create valid data
     #######################
 
-    # select 1 traces for train
-    N_TRAIN = len([2])
-    data_train = data[[2]]
+    # select 1 traces for val
+    N_VAL = len([10])
+    data_train = data[[10]]
 
     # select sliding window index from 1 trace
     idxs_timestep = []
     idxs_ic = []
-    for ic in range(N_TRAIN):
+    for ic in range(N_VAL):
         seq_data = data_train[ic]
         idxs = np.arange(0, np.shape(seq_data)[0]-sequence_length, 1)
         for idx_ in idxs:
@@ -197,23 +198,24 @@ def generate_tau_data(trace_num, tau, sample_num=None):
         tmp = data_train[idx_ic, idx_timestep:idx_timestep+sequence_length]
         sequences.append(tmp)
 
-    sequences = np.array(sequences) 
-    print("Val Dataset", np.shape(sequences))
+    sequences = np.array(sequences)
+    print(f'tau[{tau}]', "orginal val dataset", np.shape(sequences))
 
     # keep the length of sequences is equal to sample_num
     if sample_num is not None:
-        repeat_num = int(np.floor(sample_num/len(sequences)))
-        idx = np.random.choice(range(len(sequences)), sample_num-len(sequences)*repeat_num, replace=False)
+        repeat_num = int(np.floor(N_VAL*sample_num/len(sequences)))
+        idx = np.random.choice(range(len(sequences)), N_VAL*sample_num-len(sequences)*repeat_num, replace=False)
         idx = np.sort(idx)
         tmp1 = sequences[idx]
         tmp2 = None
         for i in range(repeat_num):
             if i == 0:
-                tmp2 = np.concatenate((sequences, sequences), axis=0)
+                tmp2 = sequences
             else:
                 tmp2 = np.concatenate((tmp2, sequences), axis=0)
         sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
-
+    print(f'tau[{tau}]', "processed val dataset", np.shape(sequences))
+    
     # save train dataset
     np.savez(data_dir+'/val.npz', data=sequences)
 
@@ -251,13 +253,13 @@ def generate_tau_data(trace_num, tau, sample_num=None):
         return
 
     # select 1 traces for train
-    N_TRAIN = len([3])
+    N_TEST = len([3])
     data_train = data[[3]]
 
     # select sliding window index from 1 trace
     idxs_timestep = []
     idxs_ic = []
-    for ic in range(N_TRAIN):
+    for ic in range(N_TEST):
         seq_data = data_train[ic]
         idxs = np.arange(0, np.shape(seq_data)[0]-sequence_length, 1)
         for idx_ in idxs:
@@ -273,21 +275,22 @@ def generate_tau_data(trace_num, tau, sample_num=None):
         sequences.append(tmp)
 
     sequences = np.array(sequences) 
-    print("Test Dataset", np.shape(sequences))
+    print(f'tau[{tau}]', "original test dataset", np.shape(sequences))
 
     # keep the length of sequences is equal to sample_num
     if sample_num is not None:
-        repeat_num = int(np.floor(sample_num/len(sequences)))
-        idx = np.random.choice(range(len(sequences)), sample_num-len(sequences)*repeat_num, replace=False)
+        repeat_num = int(np.floor(N_TEST*sample_num/len(sequences)))
+        idx = np.random.choice(range(len(sequences)), N_TEST*sample_num-len(sequences)*repeat_num, replace=False)
         idx = np.sort(idx)
         tmp1 = sequences[idx]
         tmp2 = None
         for i in range(repeat_num):
             if i == 0:
-                tmp2 = np.concatenate((sequences, sequences), axis=0)
+                tmp2 = sequences
             else:
                 tmp2 = np.concatenate((tmp2, sequences), axis=0)
         sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
+    print(f'tau[{tau}]', "processed test dataset", np.shape(sequences))
 
     # save train dataset
     np.savez(data_dir+'/test.npz', data=sequences)
@@ -437,9 +440,18 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         input_scaler=input_scaler,
         target_scaler=target_scaler,
         )
-    # prepare test loader
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
                                              batch_size=cfg.test_batch,
+                                             shuffle=False,
+                                             **kwargs)
+    train_dataset = PNASDataset(
+        file_path=cfg.data_filepath+'/train.npz', 
+        input_scaler=input_scaler,
+        target_scaler=target_scaler,
+        )
+    # prepare test loader
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
+                                             batch_size=cfg.train_batch,
                                              shuffle=False,
                                              **kwargs)
 
@@ -461,9 +473,10 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         var_log_dir = log_dir + f'/variables_test_epoch{epoch}'
         rm_mkdir(var_log_dir)
 
+        # Test on test data
         all_latents = []
-        outputs = np.array([])
-        targets = np.array([])
+        test_outputs = np.array([])
+        test_targets = np.array([])
         for batch_idx, (data, target) in enumerate(tqdm(test_loader)):
             output, latent = model.model(data.to(device))
             # save the latent vectors
@@ -472,44 +485,75 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
                 latent_tmp = latent_tmp.cpu().detach().numpy()
                 all_latents.append(latent_tmp)
             
-            outputs = output.cpu().numpy() if not len(outputs) else np.concatenate((outputs, output.cpu().numpy()), axis=0)
-            targets = target.cpu().numpy() if not len(targets) else np.concatenate((targets, target.cpu().numpy()), axis=0)
+            test_outputs = output.cpu().numpy() if not len(test_outputs) else np.concatenate((test_outputs, output.cpu().numpy()), axis=0)
+            test_targets = target.cpu().numpy() if not len(test_targets) else np.concatenate((test_targets, target.cpu().numpy()), axis=0)
 
         # mse
-        mse_x = np.average((outputs[:,0,0] - targets[:,0,0])**2)
-        mse_y = np.average((outputs[:,0,1] - targets[:,0,1])**2)
-        mse_z = np.average((outputs[:,0,2] - targets[:,0,2])**2)
-    
-        # plot (999,1,3)
-        X = []
-        Y = []
-        Z = []
+        mse_x = np.average((test_outputs[:,0,0] - test_targets[:,0,0])**2)
+        mse_y = np.average((test_outputs[:,0,1] - test_targets[:,0,1])**2)
+        mse_z = np.average((test_outputs[:,0,2] - test_targets[:,0,2])**2)
+        
+        # Test on train data
+        train_outputs = np.array([])
+        train_targets = np.array([])
+        for batch_idx, (data, target) in enumerate(tqdm(train_loader)):
+            output, _ = model.model(data.to(device))
+            train_outputs = output.cpu().numpy() if not len(train_outputs) else np.concatenate((train_outputs, output.cpu().numpy()), axis=0)
+            train_targets = target.cpu().numpy() if not len(train_targets) else np.concatenate((train_targets, target.cpu().numpy()), axis=0)
+            
+            if batch_idx >= len(test_outputs): break
+        # plot (100,1,3)
+        test_X = []
+        test_Y = []
+        test_Z = []
+        train_X = []
+        train_Y = []
+        train_Z = []
         plot_tau = tau if tau!=0.0 else 0.005
-        for i in range(len(outputs)):
-            X.append([outputs[i,0,0], targets[i,0,0]])
-            Y.append([outputs[i,0,1], targets[i,0,1]])
-            Z.append([outputs[i,0,2], targets[i,0,2]])
-        plt.figure(figsize=(16,4))
-        ax1 = plt.subplot(1,3,1)
-        ax1.set_title('X')
-        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(X)[:,1], label='true')
-        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(X)[:,0], label='predict')
+        for i in range(len(test_outputs)):
+            test_X.append([test_outputs[i,0,0], test_targets[i,0,0]])
+            test_Y.append([test_outputs[i,0,1], test_targets[i,0,1]])
+            test_Z.append([test_outputs[i,0,2], test_targets[i,0,2]])
+            train_X.append([train_outputs[i,0,0], train_targets[i,0,0]])
+            train_Y.append([train_outputs[i,0,1], train_targets[i,0,1]])
+            train_Z.append([train_outputs[i,0,2], train_targets[i,0,2]])
+        plt.figure(figsize=(16,9))
+        ax1 = plt.subplot(2,3,1)
+        ax1.set_title('test_X')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_X)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_X)[:,0], label='predict')
         plt.xlabel('time / s')
-        ax2 = plt.subplot(1,3,2)
-        ax2.set_title('Y')
-        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Y)[:,1], label='true')
-        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Y)[:,0], label='predict')
+        ax2 = plt.subplot(2,3,2)
+        ax2.set_title('test_Y')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_Y)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_Y)[:,0], label='predict')
         plt.xlabel('time / s')
-        ax3 = plt.subplot(1,3,3)
-        ax3.set_title('Z')
-        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Z)[:,1], label='true')
-        plt.plot(np.array([i*plot_tau for i in range(len(X))]), np.array(Z)[:,0], label='predict')
+        ax3 = plt.subplot(2,3,3)
+        ax3.set_title('test_Z')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_Z)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_Z)[:,0], label='predict')
+        plt.xlabel('time / s')
+        ax4 = plt.subplot(2,3,4)
+        ax4.set_title('train_X')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_X)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_X)[:,0], label='predict')
+        plt.xlabel('time / s')
+        ax5 = plt.subplot(2,3,5)
+        ax5.set_title('train_Y')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_Y)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_Y)[:,0], label='predict')
+        plt.xlabel('time / s')
+        ax6 = plt.subplot(2,3,6)
+        ax6.set_title('train_Z')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_Z)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_Z)[:,0], label='predict')
         plt.xlabel('time / s')
         plt.subplots_adjust(left=0.1,
             right=0.9,
             top=0.9,
             bottom=0.15,
             wspace=0.2,
+            hspace=0.35,
         )
         plt.savefig(var_log_dir+"/result.jpg", dpi=300)
 
@@ -582,8 +626,10 @@ def pipeline(trace_num, tau, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    trace_num = 4
+    trace_num = 11
     generate_original_data(trace_num=trace_num, total_t=100)
+    
+    os.system('rm -rf logs/ test_log.txt plot/')
 
     # start pipeline-subprocess of different tau
     tau_list = np.arange(0., 2.51, 0.1)

@@ -41,20 +41,32 @@ def deconv_tanh(inch,outch,kernel_size,stride=1,padding=1):
     )
     return convlayer
 
-def mlp_relu_drop(input_dim, output_dim):
-    mlplayer = nn.Sequential(
-        nn.Linear(input_dim, output_dim, bias=True),
-        nn.ReLU(),
-        nn.Dropout(p=0.01)
-    )
+def mlp_relu_drop(input_dim, output_dim, dropout=True):
+    if dropout:
+        mlplayer = nn.Sequential(
+            nn.Linear(input_dim, output_dim, bias=True),
+            nn.ReLU(),
+            nn.Dropout(p=0.01)
+        )
+    else:
+        mlplayer = nn.Sequential(
+            nn.Linear(input_dim, output_dim, bias=True),
+            nn.ReLU(),
+        )
     return mlplayer 
 
-def mlp_tanh_drop(input_dim, output_dim):
-    mlplayer = nn.Sequential(
-        nn.Linear(input_dim, output_dim, bias=True),
-        nn.Tanh(),
-        nn.Dropout(p=0.01)
-    )
+def mlp_tanh_drop(input_dim, output_dim, dropout=True):
+    if dropout:
+        mlplayer = nn.Sequential(
+            nn.Linear(input_dim, output_dim, bias=True),
+            nn.Tanh(),
+            nn.Dropout(p=0.01)
+        )
+    else:
+        mlplayer = nn.Sequential(
+            nn.Linear(input_dim, output_dim, bias=True),
+            nn.Tanh(),
+        )
     return mlplayer 
 
 class Cnov_AE(nn.Module):
@@ -152,12 +164,12 @@ class MLP_AE(nn.Module):
         self.in_channels = in_channels
 
         # MLP_encoder_layer, (batchsize,1,3)-->(batchsize,64,1)
-        self.mlp_stack1 = mlp_relu_drop(input_1d_width, 64)
-        self.mlp_stack2 = mlp_relu_drop(64, 64)
+        self.mlp_stack1 = mlp_relu_drop(input_1d_width, 64, dropout=True)
+        self.mlp_stack2 = mlp_relu_drop(64, 64, dropout=False)
         
         # Conv_time-lagged_decoder_layer,(batchsize,64,1)-->(batchsize,3)
-        self.demlp1 = mlp_tanh_drop(64, 64)
-        self.demlp2 = mlp_tanh_drop(64, input_1d_width)
+        self.demlp1 = mlp_tanh_drop(64, 64, dropout=True)
+        self.demlp2 = mlp_tanh_drop(64, input_1d_width, dropout=False)
 
     def encoder(self, x):
 

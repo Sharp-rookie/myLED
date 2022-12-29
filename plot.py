@@ -83,7 +83,7 @@ def plot_epoch_test_log():
 
     os.makedirs('plot/', exist_ok=True)
 
-    max_epoch = 1000+1
+    max_epoch = 500+1
     class MSE():
         def __init__(self, tau):
             self.tau = tau
@@ -169,6 +169,7 @@ def plot_epoch_test_log():
         # plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
         plt.legend()
         plt.savefig(f'plot/test_tau{M.tau:.3f}.jpg', dpi=300)
+        plt.close()
 
 
 def plot_y_corr():
