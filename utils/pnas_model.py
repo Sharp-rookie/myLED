@@ -35,17 +35,24 @@ class PNAS_VisDynamicsModel(pl.LightningModule):
         self.kwargs = {'num_workers': self.hparams.num_workers, 'pin_memory': self.hparams.pin_memory} if self.hparams.if_cuda else {}
 
         self.__build_model()
-        self.model.apply(weights_xavier_uniform_init)
+        self.model.apply(weights_normal_init)
         # self.model.print_nets_weight()
 
     def __build_model(self):
         
         # model
-        self.model = Cnov_AE(in_channels=self.hparams.in_channels, input_1d_width=self.hparams.input_1d_width)
-        # self.model = MLP_AE(in_channels=self.hparams.in_channels, input_1d_width=self.hparams.input_1d_width)
+        # self.model = Cnov_AE(in_channels=self.hparams.in_channels, input_1d_width=self.hparams.input_1d_width)
+        self.model = MLP_AE(in_channels=self.hparams.in_channels, input_1d_width=self.hparams.input_1d_width)
         
         # loss
         self.loss_func = nn.MSELoss()
+        
+    def configure_optimizers(self):
+        # optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
+        # optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.)
+        optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.lr, weight_decay=0.)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.hparams.lr_schedule, gamma=self.hparams.gamma)
+        return [optimizer], [scheduler]
 
     def train_forward(self, x):
 
@@ -84,11 +91,6 @@ class PNAS_VisDynamicsModel(pl.LightningModule):
     def test_save(self):
         
         np.save(os.path.join(self.var_log_dir, 'latent.npy'), self.all_latents)
-
-    def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.hparams.lr_schedule, gamma=self.hparams.gamma)
-        return [optimizer], [scheduler]
     
     def paths_to_tuple(self, paths):
         new_paths = []
