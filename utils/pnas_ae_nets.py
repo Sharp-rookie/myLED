@@ -158,7 +158,7 @@ class Cnov_AE(nn.Module):
 
 class MLP_AE(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width):
+    def __init__(self, in_channels, input_1d_width, ouput_1d_width):
         super(MLP_AE,self).__init__()
         
         self.in_channels = in_channels
@@ -169,7 +169,7 @@ class MLP_AE(nn.Module):
         
         # Conv_time-lagged_decoder_layer,(batchsize,64,1)-->(batchsize,3)
         self.demlp1 = mlp_tanh_drop(64, 64, dropout=True)
-        self.demlp2 = mlp_tanh_drop(64, input_1d_width, dropout=False)
+        self.demlp2 = mlp_tanh_drop(64, ouput_1d_width, dropout=False)
 
     def encoder(self, x):
 

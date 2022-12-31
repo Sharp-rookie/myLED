@@ -29,6 +29,7 @@ class PNAS_VisDynamicsModel(pl.LightningModule):
                  lr_schedule: list=[20, 50, 100],
                  in_channels: int=2,
                  input_1d_width: int=101,
+                 ouput_1d_width: int=101,
                  ) -> None:
         super().__init__()
         self.save_hyperparameters()
@@ -42,23 +43,18 @@ class PNAS_VisDynamicsModel(pl.LightningModule):
         
         # model
         # self.model = Cnov_AE(in_channels=self.hparams.in_channels, input_1d_width=self.hparams.input_1d_width)
-        self.model = MLP_AE(in_channels=self.hparams.in_channels, input_1d_width=self.hparams.input_1d_width)
+        self.model = MLP_AE(in_channels=self.hparams.in_channels, input_1d_width=self.hparams.input_1d_width, ouput_1d_width=self.hparams.ouput_1d_width)
         
         # loss
         self.loss_func = nn.MSELoss()
         
     def configure_optimizers(self):
         # optimizer = torch.optim.Adam(self.parameters(), lr=self.hparams.lr)
-        # optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.)
-        optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.lr, weight_decay=0.)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.001)
+        # optimizer = torch.optim.SGD(self.parameters(), lr=self.hparams.lr, weight_decay=0.)
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=self.hparams.lr_schedule, gamma=self.hparams.gamma)
         return [optimizer], [scheduler]
-
-    def train_forward(self, x):
-
-        output, latent = self.model(x)
-        return output, latent
-
+    
     def training_step(self, batch, batch_idx):
         
         data, target = batch
@@ -66,6 +62,11 @@ class PNAS_VisDynamicsModel(pl.LightningModule):
         train_loss = self.loss_func(output, target)
         self.log('train_loss', train_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return train_loss
+
+    def train_forward(self, x):
+
+        output, latent = self.model(x)
+        return output, latent
 
     def validation_step(self, batch, batch_idx):
         

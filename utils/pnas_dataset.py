@@ -178,7 +178,7 @@ class PNASDataset(Dataset):
 
 if __name__=='__main__':
 
-    tau = 0.005
+    tau = 0.1
     input_scaler = scaler(
                         scaler_type='MinMaxZeroOne',
                         data_min=np.loadtxt(f"Data/data/tau_{tau}/data_min.txt"),

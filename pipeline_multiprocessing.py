@@ -14,8 +14,8 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 import warnings;warnings.simplefilter('ignore')
 
-from utils.gillespie import generate_origin
-from utils.data_process import time_discretization
+from utils.pnas_gillespie import generate_origin
+from utils.pnas_data_process import time_discretization
 from utils.pnas_dataset import PNASDataset, scaler
 from utils.pnas_model import PNAS_VisDynamicsModel
 from utils.intrinsic_dimension import eval_id_latent
