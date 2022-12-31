@@ -81,9 +81,9 @@ def plot_val_mse():
 
 def plot_epoch_test_log():
 
-    os.makedirs('plot/', exist_ok=True)
+    os.makedirs('logs/time-lagged/plot/', exist_ok=True)
 
-    max_epoch = 500+1
+    max_epoch = 300+1
     class MSE():
         def __init__(self, tau):
             self.tau = tau
@@ -168,8 +168,23 @@ def plot_epoch_test_log():
         plt.plot(range(max_epoch), mse_z_list, label='z')
         # plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
         plt.legend()
-        plt.savefig(f'plot/test_tau{M.tau:.3f}.jpg', dpi=300)
+        plt.savefig(f'logs/time-lagged/plot/test_tau{M.tau:.3f}.jpg', dpi=300)
         plt.close()
+        
+        
+def plot_slow_ae_loss():
+    tau = 0.0
+    pretrain_epoch = [6, 30]
+    id_list = [1,2,3,4,5]
+    for epoch in pretrain_epoch:
+        plt.figure()
+        for id in id_list:
+            loss = np.load(f'logs/slow_ae/tau_{tau}/pretrain_epoch{epoch}/id{id}/loss_curve.npy')
+            plt.plot(loss, label=f'ID[{id}]')
+        plt.xlabel('epoch')
+        plt.legend()
+        plt.title(f'tau[{tau}] | pretrain_epoch[{epoch}]')
+        plt.savefig(f'logs/slow_ae/tau_{tau}/pretrain_epoch{epoch}/loss_curves.jpg', dpi=300)
 
 
 def plot_y_corr():
@@ -317,5 +332,7 @@ if __name__ == '__main__':
     # plot_id()
     # plot_val_mse()
     
-    plot_epoch_test_log()
+    # plot_epoch_test_log()
     # plot_y_corr()
+    
+    plot_slow_ae_loss()

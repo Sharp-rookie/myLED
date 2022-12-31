@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 import time
-import glob
 import torch
 import shutil
 import traceback
@@ -14,8 +13,8 @@ from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 import warnings;warnings.simplefilter('ignore')
 
-from utils.gillespie import generate_origin
-from utils.data_process import time_discretization
+from utils.pnas_gillespie import generate_origin
+from utils.pnas_data_process import time_discretization
 from utils.pnas_dataset import PNASDataset, scaler
 from utils.pnas_model import PNAS_VisDynamicsModel
 from utils.intrinsic_dimension import eval_id_latent
@@ -104,8 +103,8 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     #######################
 
     # select 10 traces for train
-    N_TRAIN = len([0])
-    data_train = data[[0]]
+    N_TRAIN = len(range(30))
+    data_train = data[range(30)]
 
     # select sliding window index from 2 trace
     idxs_timestep = []
@@ -177,8 +176,8 @@ def generate_tau_data(trace_num, tau, sample_num=None):
     #######################
 
     # select 1 traces for val
-    N_VAL = len([10])
-    data_train = data[[10]]
+    N_VAL = len([30])
+    data_train = data[[30]]
 
     # select sliding window index from 1 trace
     idxs_timestep = []
@@ -253,8 +252,8 @@ def generate_tau_data(trace_num, tau, sample_num=None):
         return
 
     # select 1 traces for train
-    N_TEST = len([3])
-    data_train = data[[3]]
+    N_TEST = len([31])
+    data_train = data[[31]]
 
     # select sliding window index from 1 trace
     idxs_timestep = []
@@ -355,6 +354,7 @@ def pnas_main(random_seed, tau):
         lr_schedule=cfg.lr_schedule,
         in_channels=cfg.in_channels,
         input_1d_width=cfg.input_1d_width,
+        ouput_1d_width=cfg.ouput_1d_width,
     )
 
     # clear old checkpoint files
@@ -421,6 +421,7 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         lr_schedule=cfg.lr_schedule,
         in_channels=cfg.in_channels,
         input_1d_width=cfg.input_1d_width,
+        ouput_1d_width=cfg.ouput_1d_width,
     )
 
     # prepare train and test dataset
@@ -530,8 +531,8 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         plt.xlabel('time / s')
         ax3 = plt.subplot(2,3,3)
         ax3.set_title('test_Z')
-        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_Z)[:,1], label='true')
-        plt.plot(np.array([i*plot_tau for i in range(len(test_X))]), np.array(test_Z)[:,0], label='predict')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_Z))]), np.array(test_Z)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(test_Z))]), np.array(test_Z)[:,0], label='predict')
         plt.xlabel('time / s')
         ax4 = plt.subplot(2,3,4)
         ax4.set_title('train_X')
@@ -545,8 +546,8 @@ def pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, checkpoint_
         plt.xlabel('time / s')
         ax6 = plt.subplot(2,3,6)
         ax6.set_title('train_Z')
-        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_Z)[:,1], label='true')
-        plt.plot(np.array([i*plot_tau for i in range(len(train_X))]), np.array(train_Z)[:,0], label='predict')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_Z))]), np.array(train_Z)[:,1], label='true')
+        plt.plot(np.array([i*plot_tau for i in range(len(train_Z))]), np.array(train_Z)[:,0], label='predict')
         plt.xlabel('time / s')
         plt.subplots_adjust(left=0.1,
             right=0.9,
@@ -608,11 +609,11 @@ def pipeline(trace_num, tau, queue: JoinableQueue):
             pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, None)
             
             # train
-            if not os.path.exists(f'logs/logs_tau{tau}_pnas_pnas-ae_{random_seed}/lightning_logs/checkpoints/epoch=0.ckpt'):
+            if not os.path.exists(f'logs/time-lagged/logs_tau{tau}_pnas_pnas-ae_{random_seed}/lightning_logs/checkpoints/epoch=0.ckpt'):
                 pnas_main(random_seed, tau)
             
             # trained net for ID
-            pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/logs_tau{tau}")
+            pnas_gather_latent_from_trained_high_dim_model(random_seed, tau, f"logs/time-lagged/logs_tau{tau}")
             
             queue.put_nowait([f'Part--{tau}--{random_seed}'])
     
@@ -626,10 +627,10 @@ def pipeline(trace_num, tau, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    trace_num = 11
+    trace_num = 30+2
     generate_original_data(trace_num=trace_num, total_t=100)
     
-    os.system('rm -rf logs/ test_log.txt plot/')
+    os.system('rm -rf logs/time-lagged/ test_log.txt')
 
     # start pipeline-subprocess of different tau
     tau_list = np.arange(0., 2.51, 0.1)
