@@ -12,6 +12,7 @@ import warnings;warnings.simplefilter('ignore')
 
 from Data.gillespie import generate_origin
 from Data.data_process import time_discretization
+from utils import set_cpu_num
 from utils.pnas_dataset import PNASDataset
 from utils.intrinsic_dimension import eval_id_embedding
 
@@ -40,7 +41,7 @@ class TIME_LAGGED_AE(nn.Module):
             nn.Linear(64, 64, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
-            nn.Linear(64, output_1d_width, bias=True),
+            nn.Linear(64, 3, bias=True),
             nn.Tanh(),
             nn.Unflatten(-1, (self.in_channels, int(output_1d_width/self.in_channels)))
         )
@@ -48,6 +49,9 @@ class TIME_LAGGED_AE(nn.Module):
         def weights_normal_init(m):
             classname = m.__class__.__name__
             if classname.find('Linear') != -1:
+                torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
+                torch.nn.init.zeros_(m.bias)
+            elif classname.find('BatchNorm') != -1:
                 torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
                 torch.nn.init.zeros_(m.bias)
         self.apply(weights_normal_init)
@@ -61,8 +65,9 @@ class TIME_LAGGED_AE(nn.Module):
 
 def generate_original_data(trace_num, total_t):
 
-    seed_everything(trace_num+729)
+    if os.path.exists(f'Data/origin/{trace_num}/data.npz'): return
 
+    seed_everything(trace_num+729)
     os.makedirs('Data/origin', exist_ok=True)
 
     # generate original data by gillespie algorithm
@@ -210,13 +215,9 @@ def train_time_lagged_ae(tau, is_print=False):
     
     # dataset
     train_dataset = PNASDataset(data_filepath, 'train', 'MinMaxZeroOne',)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                             batch_size=batch_size,
-                                             shuffle=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
     val_dataset = PNASDataset(data_filepath, 'val', 'MinMaxZeroOne')
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset,
-                                             batch_size=batch_size,
-                                             shuffle=False)
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False)
     
     # training pipeline
     losses = []
@@ -255,6 +256,7 @@ def train_time_lagged_ae(tau, is_print=False):
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE={mse:.5f}', end='')
         
         # save each epoch model
+        model.train()
         torch.save(model.state_dict(), log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
         
     # plot loss curve
@@ -284,13 +286,9 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
     
     # dataset
     train_dataset = PNASDataset(data_filepath, 'train', 'MinMaxZeroOne',)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset,
-                                             batch_size=batch_size,
-                                             shuffle=False)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
     test_dataset = PNASDataset(data_filepath, 'test', 'MinMaxZeroOne',)
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset,
-                                             batch_size=batch_size,
-                                             shuffle=False)
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
     # testing pipeline
     fp = open(log_dir+'/test/log.txt', 'a')
@@ -300,9 +298,9 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
         epoch = ep
         if checkpoint_filepath is not None:
             epoch = ep + 1
-            ckpt_path = checkpoint_filepath + f"/checkpoints/" + f'epoch-{epoch-1}.ckpt'
+            ckpt_path = checkpoint_filepath + f"/checkpoints/" + f'epoch-{epoch}.ckpt'
             ckpt = torch.load(ckpt_path)
-            model.load_state_dict(ckpt['state_dict'])
+            model.load_state_dict(ckpt)
         model = model.to(device)
         model.eval()
         
@@ -354,8 +352,8 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
             for j in range(len(test_plot)):
                 ax = plt.subplot(2,3,j+1+3*i)
                 ax.set_title(item+'_'+['X','Y','Z'][j])
-                plt.plot(np.array(test_plot[0])[:,1], label='true')
-                plt.plot(np.array(test_plot[0])[:,0], label='predict')
+                plt.plot(np.array(test_plot[j])[:,1], label='true')
+                plt.plot(np.array(test_plot[j])[:,0], label='predict')
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
         plt.savefig(var_log_dir+"/result.jpg", dpi=300)
 
@@ -373,8 +371,9 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
         fp.write(f"{tau},0,{mse_x},{mse_y},{mse_z},{epoch},{LB_id},0,0,0\n")
         fp.flush()
 
-        if checkpoint_filepath is None:
-            break
+        if checkpoint_filepath is None: break
+
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}]               ', end='')
         
     fp.close()
 
@@ -391,6 +390,7 @@ def cal_id_embedding(tau, epoch, method='MLE', is_print=False):
 def pipeline(trace_num, tau, random_seed, is_print, queue: JoinableQueue):
 
     time.sleep(1)
+    set_cpu_num(1)
 
     try:
         # generate dataset
@@ -401,13 +401,13 @@ def pipeline(trace_num, tau, random_seed, is_print, queue: JoinableQueue):
 
         # untrained net for ID
         testing_and_save_embeddings_of_time_lagged_ae(tau, None, is_print)
-        
+
         # training
-        if not os.path.exists(f'logs/time-lagged/logs_tau{tau}_pnas_pnas-ae_{random_seed}/lightning_logs/version_0'):
-            train_time_lagged_ae(tau, is_print)
+        # if not os.path.exists(f'logs/time-lagged/tau_{tau}/loss_curve.jpg'):
+        train_time_lagged_ae(tau, is_print)
         
         # testing and calculating ID
-        testing_and_save_embeddings_of_time_lagged_ae(tau, f"logs/time-lagged/logs_tau{tau}", is_print)
+        testing_and_save_embeddings_of_time_lagged_ae(tau, f"logs/time-lagged/tau_{tau}", is_print)
         
         queue.put_nowait([f'Part--{tau}--{random_seed}'])
     
@@ -426,7 +426,7 @@ if __name__ == '__main__':
 
     # start pipeline-subprocess of different tau
     random_seed = 1
-    tau_list = np.arange(0., 2.51, 0.1)
+    tau_list = np.arange(0., 2.51, 0.25)
     queue = JoinableQueue()
     subprocesses = []
     for tau in tau_list:
@@ -435,13 +435,12 @@ if __name__ == '__main__':
         subprocesses.append(Process(target=pipeline, args=(trace_num, tau, random_seed, is_print, queue, ), daemon=True))
         subprocesses[-1].start()
         print(f'Start process[tau={tau}]')
-    
+
     # join main-process
-    finish_num = 0
     os.makedirs('logs/time-lagged/', exist_ok=True)
     log_fp = open(f'logs/time-lagged/log_tau{tau_list[0]}to{tau_list[-1]}.txt', 'w')
-    while finish_num < len(tau_list):
 
+    while any([subp.exitcode == None for subp in subprocesses]):
         # listen
         if not queue.empty():
             pkt = queue.get_nowait()
@@ -461,13 +460,6 @@ if __name__ == '__main__':
                 log_fp.write(f'Processing[tau={tau}] error in seed {int(random_seed)}\n')
                 log_fp.write(str(pkt[1]))
                 log_fp.flush()
-        # check
-        kill_list = []
-        for subprocess in subprocesses:
-            if subprocess.exitcode != None:
-                finish_num += 1
-                log_fp.write(f"Processing done with exitcode[{subprocess.exitcode}]\n")
-                log_fp.flush()
-                kill_list.append(subprocess)
-        [subprocesses.remove(subprocess) for subprocess in kill_list]
+    
     log_fp.close()
+    print()
