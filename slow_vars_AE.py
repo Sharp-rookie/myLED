@@ -9,8 +9,22 @@ from multiprocessing import Process
 from pytorch_lightning import seed_everything
 import warnings;warnings.simplefilter('ignore')
 
-from utils.pnas_dataset import PNASDataset, scaler
+from utils import set_cpu_num
+from utils.pnas_dataset import PNASDataset
 from time_lagged_AE import TIME_LAGGED_AE
+
+
+class K_OPT(nn.Module):
+
+    def __init__(self):
+        super(K_OPT, self).__init__()
+
+        self.Knet = nn.Sequential(
+            nn.Linear(id, id, bias=True),
+        )
+    
+    # TODO: dataset部分需要先仔细设计好（看看是依赖time-lagged提前保存的embedding，还是即用即生成），并且目前K算符一次推演的时间间隔受制于time-lagged的tau
+    # TODO：还有E2E的综合loss设计
 
 
 class SLOW_AE(nn.Module):
@@ -60,48 +74,32 @@ def generate_input_and_embedding(tau, pretrain_epoch, data_filepath):
     os.makedirs(f'Data/slow_AE/tau_{tau}/pretrain_epoch{pretrain_epoch}', exist_ok=True)
     
     # load pretrained Time-lagged AE model
-    # TODO: 修改
-    TL_AE = TIME_LAGGED_AE(in_channels=1, input_1d_width=3, ouput_1d_width=3,)
+    TL_AE = TIME_LAGGED_AE(in_channels=1, input_1d_width=3, output_1d_width=3,)
     ckpt = torch.load(ckpt_path)
-    TL_AE.load_state_dict(ckpt['state_dict'])
-    TL_AE.eval().freeze()
+    TL_AE.load_state_dict(ckpt)
+    TL_AE.eval()
     TL_AE = TL_AE.to('cpu')
-    
-    # Scaler
-    input_scaler = scaler(
-                        scaler_type='MinMaxZeroOne',
-                        data_min=np.loadtxt(data_filepath+"/data_min.txt"),
-                        data_max=np.loadtxt(data_filepath+"/data_max.txt"),)
-    target_scaler = scaler(
-                        scaler_type='MinMaxZeroOne',
-                        data_min=np.loadtxt(data_filepath+"/data_min.txt"),
-                        data_max=np.loadtxt(data_filepath+"/data_max.txt"))
     
     for item in ['train', 'val', 'test']:
         
         # 导入数据集
-        dataset = PNASDataset(
-                            file_path=data_filepath+f'/{item}.npz', 
-                            input_scaler=input_scaler,
-                            target_scaler=target_scaler)
-        dataloader = torch.utils.data.DataLoader(
-                            dataset=dataset,
-                            batch_size=256,
-                            shuffle=False)
+        dataset = PNASDataset(data_filepath, item, 'MinMaxZeroOne',)
+        dataloader = torch.utils.data.DataLoader(dataset=dataset, batch_size=256, shuffle=False)
         
         # 编码得到train、val、test的embedding
         inputs = []
         embeddings = []
-        for input, _ in dataloader:
-            _, embedding = TL_AE.model(input.to('cpu'))
-            embeddings.append(embedding.cpu().detach().numpy())
-            inputs.append(input.cpu().detach().numpy())
+        with torch.no_grad():
+            for input, _ in dataloader:
+                _, embedding = TL_AE.forward(input.to('cpu'))
+                embeddings.append(embedding.cpu().detach().numpy())
+                inputs.append(input.cpu().detach().numpy())
         
         # input和embedding对应存储在指定路径
         np.savez(f'Data/slow_AE/tau_{tau}/pretrain_epoch{pretrain_epoch}/{item}.npz', inputs=inputs, embeddings=embeddings)
 
 
-def slow_ae_main(tau, pretrain_epoch, id):
+def slow_ae_main(tau, pretrain_epoch, id, is_print=False):
     
     # prepare
     data_filepath = f'Data/slow_AE/tau_{tau}/pretrain_epoch{pretrain_epoch}'
@@ -109,6 +107,10 @@ def slow_ae_main(tau, pretrain_epoch, id):
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"checkpoints/", exist_ok=True)
     os.makedirs(log_dir+"slow_variable/", exist_ok=True)
+
+    # 初始化model
+    model = SLOW_AE(input_dim=64, slow_dim=id, output_dim=64)
+    model.to(torch.device('cpu'))
     
     # 训练设置
     lr = 0.01
@@ -118,13 +120,9 @@ def slow_ae_main(tau, pretrain_epoch, id):
     loss_func = nn.MSELoss()
     
     # 导入数据
-    train_data = np.load(data_filepath+'/train.npz', allow_pickle=True)['embeddings']
-    val_data = np.load(data_filepath+'/val.npz', allow_pickle=True)['embeddings']
+    train_embeddings = np.load(data_filepath+'/train.npz', allow_pickle=True)['embeddings']
+    val_embeddings = np.load(data_filepath+'/val.npz', allow_pickle=True)['embeddings']
     val_inputs = np.load(data_filepath+'/val.npz', allow_pickle=True)['inputs']
-    
-    # 初始化model
-    model = SLOW_AE(input_dim=64, slow_dim=id, output_dim=64)
-    model.to(torch.device('cpu'))
     
     # 训练pipeline
     losses = []
@@ -134,11 +132,13 @@ def slow_ae_main(tau, pretrain_epoch, id):
         
         # train
         model.train()
-        for input in train_data:
-            input = torch.from_numpy(input)
-            output, _ = model.forward(input)
+        for embedding in train_embeddings:
+
+            embedding = torch.from_numpy(embedding)
+
+            reconstruct_embedding, _ = model.forward(embedding)
             
-            loss = loss_func(output, input) # reconstruction
+            loss = loss_func(reconstruct_embedding, embedding)
             
             optimizer.zero_grad()
             loss.backward()
@@ -150,29 +150,32 @@ def slow_ae_main(tau, pretrain_epoch, id):
 
         # validate
         with torch.no_grad():
-            # TODO: 变量重命名，避免歧义
+            
             inputs = []
             embeddings = []
-            outputs = []
+            reconstruct_embeddings = []
             slow_variables = []
             
             model.eval()
-            for embedding, input in zip(val_data, val_inputs):
+            for embedding, input in zip(val_embeddings, val_inputs):
+
                 input = torch.from_numpy(input)
                 embedding = torch.from_numpy(embedding)
-                output, slow = model.forward(embedding)
-                inputs.append(input.cpu().detach())
-                embeddings.append(embedding.cpu().detach())
-                outputs.append(output.cpu().detach())
-                slow_variables.append(slow.cpu().detach())
+
+                reconstruct_embedding, slow = model.forward(embedding)
+
+                inputs.append(input.cpu())
+                reconstruct_embeddings.append(reconstruct_embedding.cpu())
+                embeddings.append(embedding.cpu())
+                slow_variables.append(slow.cpu())
                 
             inputs = torch.concat(inputs, axis=0)
             embeddings = torch.concat(embeddings, axis=0)
-            outputs = torch.concat(outputs, axis=0)
+            reconstruct_embeddings = torch.concat(reconstruct_embeddings, axis=0)
             slow_variables = torch.concat(slow_variables, axis=0)
             
-            mse = loss_func(outputs, embeddings)
-            print(f'\rTau[{tau}] | ID[{id}] | epoch[{epoch}/{max_epoch}] Val-MSE={mse:.5f}', end='')
+            mse = loss_func(reconstruct_embeddings, embeddings)
+            if is_print: print(f'\rTau[{tau}] | ID[{id}] | epoch[{epoch}/{max_epoch}] Val-MSE={mse:.5f}', end='')
             
             
             # plot slow variable
@@ -193,8 +196,8 @@ def slow_ae_main(tau, pretrain_epoch, id):
                 best_model = model.state_dict()
     
     # save model
-    torch.save(best_model, log_dir+f"checkpoints/epoch-{epoch}_val-mse{mse:.5f}.ckpt")
-    print(f'\nsave model(bet val loss: {mse:.5f})')
+    torch.save(best_model, log_dir+f"checkpoints/epoch-{epoch}_val-mse-{mse:.5f}.ckpt")
+    if is_print: print(f'\nsave model(bet val loss: {mse:.5f})')
     
     # plot loss curve
     plt.figure()
@@ -214,28 +217,28 @@ def test_mse_and_pertinence():
     # 绘制embedding与input-X、Y、Z各自的变化曲线
 
 
-def pipeline(tau, pretrain_epoch, id, random_seed=1):
+def pipeline(tau, pretrain_epoch, id, is_print=False, random_seed=1):
     
     time.sleep(1.0)
+    set_cpu_num(1)
+
     seed_everything(random_seed)
-    generate_input_and_embedding(tau, pretrain_epoch, f'Data/data/tau_{tau}')
-    slow_ae_main(tau, pretrain_epoch, id)
+    slow_ae_main(tau, pretrain_epoch, id, is_print=is_print)
 
 
 if __name__ == '__main__':
-        
+
     subprocess = []
-    subprocess.append(Process(target=pipeline, args=(0.0, 6, 1), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 6, 2), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 6, 3), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 6, 4), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 6, 5), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 30, 1), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 30, 2), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 30, 3), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 30, 4), daemon=True))
-    subprocess.append(Process(target=pipeline, args=(0.0, 30, 5), daemon=True))
-    [subp.start() for subp in subprocess]
+    
+    for tau in [0.0]:
+        for pretrain_epoch in [4, 20]:
+
+            generate_input_and_embedding(tau, pretrain_epoch, f'Data/data/tau_{tau}')
+
+            for id in [1,2,3,4]:
+                is_print = True if len(subprocess)==0 else False
+                subprocess.append(Process(target=pipeline, args=(tau, pretrain_epoch, id, is_print), daemon=True))
+                subprocess[-1].start()
     
     while any([subp.exitcode == None for subp in subprocess]):
         pass

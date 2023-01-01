@@ -4,11 +4,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 
-def plot_epoch_test_log():
+def plot_epoch_test_log(tau, max_epoch):
 
-    os.makedirs('logs/time-lagged/plot/', exist_ok=True)
-
-    max_epoch = 300+1
     class MSE():
         def __init__(self, tau):
             self.tau = tau
@@ -20,7 +17,7 @@ def plot_epoch_test_log():
             self.MADA_id = [[] for _ in range(max_epoch)]
             self.PCA_id = [[] for _ in range(max_epoch)]
 
-    fp = open('test_log.txt', 'r')
+    fp = open(f'logs/time-lagged/tau_{tau}/test/log.txt', 'r')
     items = []
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
@@ -93,14 +90,12 @@ def plot_epoch_test_log():
         plt.plot(range(max_epoch), mse_z_list, label='z')
         # plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
         plt.legend()
-        plt.savefig(f'logs/time-lagged/plot/test_tau{M.tau:.3f}.jpg', dpi=300)
+        plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.jpg', dpi=300)
         plt.close()
         
         
-def plot_slow_ae_loss():
-    tau = 0.0
-    pretrain_epoch = [6, 30]
-    id_list = [1,2,3,4,5]
+def plot_slow_ae_loss(tau=0.0, pretrain_epoch=[1], id_list = [1,2,3,4]):
+    
     for epoch in pretrain_epoch:
         plt.figure()
         for id in id_list:
@@ -139,7 +134,6 @@ def plot_y_corr():
 
 if __name__ == '__main__':
     
-    plot_epoch_test_log()
+    [plot_epoch_test_log(round(tau, 3), max_epoch=100+1) for tau in np.arange(0., 2.51, 0.25)]
     # plot_y_corr()
-    
-    # plot_slow_ae_loss()
+    plot_slow_ae_loss(tau=0.0, pretrain_epoch=[4, 20], id_list=[1,2,3,4])
