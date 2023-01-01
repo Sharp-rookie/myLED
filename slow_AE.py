@@ -10,8 +10,7 @@ from pytorch_lightning import seed_everything
 import warnings;warnings.simplefilter('ignore')
 
 from utils.pnas_dataset import PNASDataset, scaler
-from utils.pnas_model import PNAS_VisDynamicsModel
-from utils.common import rm_mkdir
+from time_lagged_AE import TIME_LAGGED_AE
 
 
 class SLOW_AE(nn.Module):
@@ -34,6 +33,13 @@ class SLOW_AE(nn.Module):
             nn.Linear(64, output_dim, bias=True),
             nn.Tanh(),
         )
+        
+        def weights_normal_init(m):
+            classname = m.__class__.__name__
+            if classname.find('Linear') != -1:
+                torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
+                torch.nn.init.zeros_(m.bias)
+        self.apply(weights_normal_init)
     
     def forward(self, x):
         
@@ -50,15 +56,12 @@ def generate_input_and_embedding(tau, pretrain_epoch, data_filepath):
     if os.path.exists(f'Data/slow_AE/tau_{tau}/pretrain_epoch{pretrain_epoch}/test.npz'): return
     
     # prepare
-    ckpt_path = f'logs/time-lagged/logs_tau{tau}_pnas_pnas-ae_1/lightning_logs/checkpoints/epoch={pretrain_epoch}.ckpt'
+    ckpt_path = f'logs/time-lagged/tau_{tau}/checkpoints/epoch-{pretrain_epoch}.ckpt'
     os.makedirs(f'Data/slow_AE/tau_{tau}/pretrain_epoch{pretrain_epoch}', exist_ok=True)
     
     # load pretrained Time-lagged AE model
-    TL_AE = PNAS_VisDynamicsModel(
-        in_channels=1,
-        input_1d_width=3,
-        ouput_1d_width=3,
-    )
+    # TODO: 修改
+    TL_AE = TIME_LAGGED_AE(in_channels=1, input_1d_width=3, ouput_1d_width=3,)
     ckpt = torch.load(ckpt_path)
     TL_AE.load_state_dict(ckpt['state_dict'])
     TL_AE.eval().freeze()
@@ -107,6 +110,13 @@ def slow_ae_main(tau, pretrain_epoch, id):
     os.makedirs(log_dir+"checkpoints/", exist_ok=True)
     os.makedirs(log_dir+"slow_variable/", exist_ok=True)
     
+    # 训练设置
+    lr = 0.01
+    max_epoch = 100
+    weight_decay = 0.001
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    loss_func = nn.MSELoss()
+    
     # 导入数据
     train_data = np.load(data_filepath+'/train.npz', allow_pickle=True)['embeddings']
     val_data = np.load(data_filepath+'/val.npz', allow_pickle=True)['embeddings']
@@ -116,13 +126,6 @@ def slow_ae_main(tau, pretrain_epoch, id):
     model = SLOW_AE(input_dim=64, slow_dim=id, output_dim=64)
     model.to(torch.device('cpu'))
     
-    # 训练设置
-    lr = 0.01
-    max_epoch = 100
-    weight_decay = 0.001
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    loss_func = nn.MSELoss()
-    
     # 训练pipeline
     losses = []
     loss_curve = []
@@ -130,6 +133,7 @@ def slow_ae_main(tau, pretrain_epoch, id):
     for epoch in range(1, max_epoch+1):
         
         # train
+        model.train()
         for input in train_data:
             input = torch.from_numpy(input)
             output, _ = model.forward(input)
@@ -151,6 +155,8 @@ def slow_ae_main(tau, pretrain_epoch, id):
             embeddings = []
             outputs = []
             slow_variables = []
+            
+            model.eval()
             for embedding, input in zip(val_data, val_inputs):
                 input = torch.from_numpy(input)
                 embedding = torch.from_numpy(embedding)
@@ -159,13 +165,15 @@ def slow_ae_main(tau, pretrain_epoch, id):
                 embeddings.append(embedding.cpu().detach())
                 outputs.append(output.cpu().detach())
                 slow_variables.append(slow.cpu().detach())
+                
             inputs = torch.concat(inputs, axis=0)
             embeddings = torch.concat(embeddings, axis=0)
             outputs = torch.concat(outputs, axis=0)
             slow_variables = torch.concat(slow_variables, axis=0)
             
             mse = loss_func(outputs, embeddings)
-            print(f'\rTau[{tau}] | ID[{id}] | Epoch[{epoch}] Val-MSE = {mse:.5f}', end='')
+            print(f'\rTau[{tau}] | ID[{id}] | epoch[{epoch}/{max_epoch}] Val-MSE={mse:.5f}', end='')
+            
             
             # plot slow variable
             plt.figure(figsize=(12,4+2*id))
@@ -176,7 +184,7 @@ def slow_ae_main(tau, pretrain_epoch, id):
                     plt.xlabel(item)
                     plt.ylabel(f'ID[{id_var+1}]')
             plt.subplots_adjust(wspace=0.35, hspace=0.35)
-            plt.savefig(log_dir+f"slow_variable/epoch{epoch}.jpg", dpi=300)
+            plt.savefig(log_dir+f"slow_variable/epoch-{epoch}.jpg", dpi=300)
             plt.close()
             
             # record best model
@@ -185,7 +193,7 @@ def slow_ae_main(tau, pretrain_epoch, id):
                 best_model = model.state_dict()
     
     # save model
-    torch.save(best_model, log_dir+f"checkpoints/epoch{epoch}_val_loss{mse:.5f}.ckpt")
+    torch.save(best_model, log_dir+f"checkpoints/epoch-{epoch}_val-mse{mse:.5f}.ckpt")
     print(f'\nsave model(bet val loss: {mse:.5f})')
     
     # plot loss curve
@@ -206,17 +214,16 @@ def test_mse_and_pertinence():
     # 绘制embedding与input-X、Y、Z各自的变化曲线
 
 
-def pipeline(tau, pretrain_epoch, id):
+def pipeline(tau, pretrain_epoch, id, random_seed=1):
     
     time.sleep(1.0)
+    seed_everything(random_seed)
     generate_input_and_embedding(tau, pretrain_epoch, f'Data/data/tau_{tau}')
     slow_ae_main(tau, pretrain_epoch, id)
 
 
 if __name__ == '__main__':
-    
-    seed_everything(1)
-    
+        
     subprocess = []
     subprocess.append(Process(target=pipeline, args=(0.0, 6, 1), daemon=True))
     subprocess.append(Process(target=pipeline, args=(0.0, 6, 2), daemon=True))
