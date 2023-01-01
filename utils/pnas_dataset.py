@@ -142,16 +142,24 @@ class PNASDataset(Dataset):
     def __init__(
         self,
         file_path,
-        input_scaler=None,
-        target_scaler=None,
+        mode='train',
+        scaler_type='MinMaxZeroOne',
     ):
         super().__init__()
 
-        self.input_scaler = input_scaler
-        self.target_scaler = target_scaler
+        self.input_scaler = scaler(
+                            scaler_type=scaler_type,
+                            data_min=np.loadtxt(file_path+"/data_min.txt"),
+                            data_max=np.loadtxt(file_path+"/data_max.txt"),
+                )
+        self.target_scaler = scaler(
+                            scaler_type=scaler_type,
+                            data_min=np.loadtxt(file_path+"/data_min.txt"),
+                            data_max=np.loadtxt(file_path+"/data_max.txt"),
+                )
 
         # Search for txt files
-        self.data = np.load(file_path)['data'] # (N, 2, 3)
+        self.data = np.load(file_path+f'/{mode}.npz')['data'] # (N, 2, 3)
 
     # 0 --> 1
     def __getitem__(self, index):
@@ -179,21 +187,7 @@ class PNASDataset(Dataset):
 if __name__=='__main__':
 
     tau = 0.1
-    input_scaler = scaler(
-                        scaler_type='MinMaxZeroOne',
-                        data_min=np.loadtxt(f"Data/data/tau_{tau}/data_min.txt"),
-                        data_max=np.loadtxt(f"Data/data/tau_{tau}/data_max.txt"),
-            )
-    target_scaler = scaler(
-                        scaler_type='MinMaxZeroOne',
-                        data_min=np.loadtxt(f"Data/data/tau_{tau}/data_min.txt"),
-                        data_max=np.loadtxt(f"Data/data/tau_{tau}/data_max.txt"),
-            )
-    dataset = PNASDataset(
-        f'Data/data/tau_{tau}/val.npz', 
-        input_scaler=input_scaler,
-        target_scaler=target_scaler,
-        )
+    dataset = PNASDataset(f"Data/data/tau_{tau}", 'val', 'MinMaxZeroOne')
 
     data, target = dataset.__getitem__(0)
     print(len(dataset), data.shape, target.shape)

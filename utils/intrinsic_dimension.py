@@ -1,28 +1,10 @@
-import os
 import skdim
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
-
-from .common import load_config
-
-
-def kNN(X, n_neighbors, n_jobs):
-    neigh = NearestNeighbors(n_neighbors=n_neighbors, n_jobs=n_jobs).fit(X)
-    dists, inds = neigh.kneighbors(X)
-    return dists, inds
-
-
-def Levina_Bickel(X, dists, k):
-    m = np.log(dists[:, k:k+1] / dists[:, 1:k])
-    m = (k-2) / np.sum(m, axis=1)
-    # m = np.sum(m, axis=1) / (k-2)
-    dim = np.mean(m)
-    return dim
 
 
 class ID_Estimator:
-    def __init__(self, method='Levina_Bickel'):
-        self.all_methods = ['Levina_Bickel', 'MiND_ML', 'MLE', 'MADA', 'PCA']
+    def __init__(self, method='MLE'):
+        self.all_methods = ['MiND_ML', 'MLE', 'MADA', 'PCA']
         self.set_method(method)
     
     def set_method(self, method='Levina_Bickel'):
@@ -31,20 +13,16 @@ class ID_Estimator:
         else:
             self.method = method
             
-    def fit(self, X, k_list=20, n_jobs=4):
+    def fit(self, X, k_list=20):
 
         if np.isscalar(k_list):
             k_list = np.array([k_list])
         else:
             k_list = np.array(k_list)
 
-        kmax = np.max(k_list) + 2
-        dists, inds = kNN(X, kmax, n_jobs)
         dims = []
         for k in k_list:
-            if self.method == 'Levina_Bickel':
-                dims.append(Levina_Bickel(X, dists, k))
-            elif self.method == 'MiND_ML':
+            if self.method == 'MiND_ML':
                 dims.append(np.mean(skdim.id.MiND_ML().fit_pw(X, n_neighbors=k).dimension_pw_))
             elif self.method == 'MLE':
                 dims.append(np.mean(skdim.id.MLE().fit(X, n_neighbors=k).dimension_pw_))
@@ -60,53 +38,16 @@ class ID_Estimator:
             return np.array(dims)
 
 
-def remove_duplicates(X):
-    return np.unique(X, axis=0)
-
-
-def eval_id_latent(vars_filepath, method='Levina_Bickel'):
+def eval_id_embedding(vars_filepath, method='MLE', is_print=False):
     
-    latent = np.load(os.path.join(vars_filepath, 'latent.npy'))
-    latent = remove_duplicates(latent)
-    print(f'Samples (unique): {latent.shape[0]}')
+    embedding = np.load(vars_filepath+'/embedding.npy')
+    embedding = np.unique(embedding, axis=0)
+    if is_print: print(f'Samples (unique): {embedding.shape[0]}')
     
     estimator = ID_Estimator(method=method)
-    # k_list = (latent.shape[0] * np.linspace(0.005, 0.025, 10)).astype('int')
-    k_list = np.array(range(10, 30+1)).astype('int') # lrk: hyper-parameters to tune
-    k_list = np.clip(k_list, a_min=3, a_max=latent.shape[0]-1-2) # lrk: avoid divide by zero error in LB algorithm
-    print(f'List of numbers of nearest neighbors: {k_list}')
+    k_list = np.array(range(10, 30+1)).astype('int')
+    k_list = np.clip(k_list, a_min=1, a_max=embedding.shape[0]-1)
+    if is_print: print(f'List of numbers of nearest neighbors: {k_list}')
     
-    dims = estimator.fit(latent, k_list)
-    np.save(os.path.join(vars_filepath, 'intrinsic_dimension.npy'), dims)
-
-
-if __name__ == '__main__':
-    
-    from munch import munchify
-    os.system("rm logs/ID.txt")
-    for tau in np.arange(0.25, 10.01, 0.25):
-        print('Tau: ', tau)
-        cfg = load_config(filepath='config.yaml')
-        cfg = munchify(cfg)
-
-        dims_all = []
-
-        random_seeds = range(1, 6)
-        for random_seed in random_seeds:
-            cfg.seed = random_seed
-            log_dir = '_'.join([cfg.log_dir+str(tau),
-                                cfg.dataset,
-                                cfg.model_name,
-                                str(cfg.seed)])
-            var_log_dir = log_dir + '/variables_val'
-            if os.path.exists(var_log_dir):
-                eval_id_latent(var_log_dir)
-                dims = np.load(os.path.join(var_log_dir, 'intrinsic_dimension.npy'))
-            dims_all.append(dims)
-            dim_mean = np.mean(dims_all)
-            dim_std = np.std(dims_all)
-
-        with open("logs/ID.txt", 'a+b') as fp:
-            print(f'tau[{tau}] Mean(std): ' + f'{dim_mean:.4f} (+-{dim_std:.4f})\n')
-            fp.write(f'{tau}--{dim_mean:.4f}\n'.encode('utf-8'))
-            fp.flush()
+    dims = estimator.fit(embedding, k_list)
+    np.save(vars_filepath+f'/id_{method}.npy', dims)
