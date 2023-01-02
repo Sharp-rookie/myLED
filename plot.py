@@ -99,12 +99,12 @@ def plot_slow_ae_loss(tau=0.0, pretrain_epoch=[1], id_list = [1,2,3,4]):
     for epoch in pretrain_epoch:
         plt.figure()
         for id in id_list:
-            loss = np.load(f'logs/slow_ae/tau_{tau}/pretrain_epoch{epoch}/id{id}/loss_curve.npy')
+            loss = np.load(f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{epoch}/id{id}/loss_curve.npy')
             plt.plot(loss, label=f'ID[{id}]')
         plt.xlabel('epoch')
         plt.legend()
         plt.title(f'tau[{tau}] | pretrain_epoch[{epoch}]')
-        plt.savefig(f'logs/slow_ae/tau_{tau}/pretrain_epoch{epoch}/loss_curves.jpg', dpi=300)
+        plt.savefig(f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{epoch}/loss_curves.jpg', dpi=300)
 
 
 def plot_y_corr():
@@ -134,6 +134,6 @@ def plot_y_corr():
 
 if __name__ == '__main__':
     
-    [plot_epoch_test_log(round(tau, 3), max_epoch=100+1) for tau in np.arange(0., 2.51, 0.25)]
+    [plot_epoch_test_log(round(tau, 3), max_epoch=50+1) for tau in np.arange(0., 2.51, 0.25)]
     # plot_y_corr()
-    plot_slow_ae_loss(tau=0.0, pretrain_epoch=[4, 20], id_list=[1,2,3,4])
+    plot_slow_ae_loss(tau=1.5, pretrain_epoch=[2, 30], id_list=[1,2,3,4])

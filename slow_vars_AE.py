@@ -14,19 +14,6 @@ from utils.pnas_dataset import PNASDataset
 from time_lagged_AE import TIME_LAGGED_AE
 
 
-class K_OPT(nn.Module):
-
-    def __init__(self):
-        super(K_OPT, self).__init__()
-
-        self.Knet = nn.Sequential(
-            nn.Linear(id, id, bias=True),
-        )
-    
-    # TODO: dataset部分需要先仔细设计好（看看是依赖time-lagged提前保存的embedding，还是即用即生成），并且目前K算符一次推演的时间间隔受制于time-lagged的tau
-    # TODO：还有E2E的综合loss设计
-
-
 class SLOW_AE(nn.Module):
     
     def __init__(self, input_dim, slow_dim, output_dim):
@@ -206,15 +193,6 @@ def slow_ae_main(tau, pretrain_epoch, id, is_print=False):
     plt.title('Train MSELoss Curve')
     plt.savefig(log_dir+'loss_curve.jpg', dpi=300)
     np.save(log_dir+'loss_curve.npy', loss_curve)
-    
-
-
-def test_mse_and_pertinence():
-    pass
-    # 加载训练好的slow-AE模型
-    # 加载测试集Dataloader
-    # 测试mse
-    # 绘制embedding与input-X、Y、Z各自的变化曲线
 
 
 def pipeline(tau, pretrain_epoch, id, is_print=False, random_seed=1):

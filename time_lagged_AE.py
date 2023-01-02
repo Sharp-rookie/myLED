@@ -23,6 +23,8 @@ class TIME_LAGGED_AE(nn.Module):
         super(TIME_LAGGED_AE, self).__init__()
         
         self.in_channels = in_channels
+        
+        # TODO: 把embedding形状从（batchsize，64，1）改成（batchsize，64）；另外维度64用传参来指定
 
         # MLP_encoder_layer, (batchsize,1,3)-->(batchsize,64,1)
         self.encoder = nn.Sequential(
@@ -32,7 +34,7 @@ class TIME_LAGGED_AE(nn.Module):
             nn.Dropout(p=0.01),
             nn.Linear(64, 64, bias=True),
             nn.Tanh(),
-            nn.Unflatten(-1, (64,1))
+            nn.Unflatten(-1, (64, 1))
         )
         
         # Conv_time-lagged_decoder_layer,(batchsize,64,1)-->(batchsize,1,3)
@@ -49,9 +51,6 @@ class TIME_LAGGED_AE(nn.Module):
         def weights_normal_init(m):
             classname = m.__class__.__name__
             if classname.find('Linear') != -1:
-                torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
-                torch.nn.init.zeros_(m.bias)
-            elif classname.find('BatchNorm') != -1:
                 torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
                 torch.nn.init.zeros_(m.bias)
         self.apply(weights_normal_init)
@@ -208,7 +207,7 @@ def train_time_lagged_ae(tau, is_print=False):
     # training params
     lr = 0.01
     batch_size = 256
-    max_epoch = 100
+    max_epoch = 50
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
@@ -246,7 +245,7 @@ def train_time_lagged_ae(tau, is_print=False):
             
             model.eval()
             for input, target in val_loader:
-                output, _ = model.forward(input)
+                output, _ = model.forward(input.to(device))
                 outputs.append(output.cpu().detach())
                 targets.append(target.cpu().detach())
                 
@@ -278,7 +277,7 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
     
     # testing params
     batch_size = 256
-    max_epoch = 100
+    max_epoch = 50
     loss_func = nn.MSELoss()
     
     # init model
@@ -356,19 +355,20 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
                 plt.plot(np.array(test_plot[j])[:,0], label='predict')
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
         plt.savefig(var_log_dir+"/result.jpg", dpi=300)
+        plt.close()
 
         # save embedding
         np.save(var_log_dir+'/embedding.npy', all_embeddings)
 
         # calculae ID
         LB_id = cal_id_embedding(tau, epoch, 'MLE')
-        # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
+        MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
         # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
         # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
         # fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
-        fp.write(f"{tau},0,{mse_x},{mse_y},{mse_z},{epoch},{LB_id},0,0,0\n")
+        fp.write(f"{tau},0,{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},0,0\n")
         fp.flush()
 
         if checkpoint_filepath is None: break
@@ -394,7 +394,7 @@ def pipeline(trace_num, tau, random_seed, is_print, queue: JoinableQueue):
 
     try:
         # generate dataset
-        generate_dataset(trace_num=trace_num, tau=tau, sample_num=100, is_print=is_print)
+        generate_dataset(trace_num=trace_num, tau=tau, sample_num=200, is_print=is_print)
         
         # random seed
         seed_everything(random_seed)
