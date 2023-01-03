@@ -64,8 +64,6 @@ class TIME_LAGGED_AE(nn.Module):
 
 def generate_original_data(trace_num, total_t):
 
-    if os.path.exists(f'Data/origin/{trace_num}/data.npz'): return
-
     seed_everything(trace_num+729)
     os.makedirs('Data/origin', exist_ok=True)
 
@@ -73,11 +71,12 @@ def generate_original_data(trace_num, total_t):
     subprocess = []
     for seed in range(1, trace_num+1):
         if not os.path.exists(f'Data/origin/{seed}/origin.npz'):
-            subprocess.append(Process(target=generate_origin, args=(total_t, seed,), daemon=True))
+            IC = [np.random.randint(0,200), np.random.randint(0,100), np.random.randint(0,5000)]
+            subprocess.append(Process(target=generate_origin, args=(total_t, seed, IC), daemon=True))
             subprocess[-1].start()
             print(f'\rStart process[seed={seed}] for origin data' + ' '*30)
         else:
-            print(f'\rOrigin data [seed={seed}] existed' + ' '*30)
+            pass
     while any([subp.exitcode == None for subp in subprocess]):
         pass
     
@@ -85,7 +84,7 @@ def generate_original_data(trace_num, total_t):
     subprocess = []
     for seed in range(1, trace_num+1):
         if not os.path.exists(f'Data/origin/{seed}/data.npz'):
-            subprocess.append(Process(target=time_discretization, args=(seed, total_t,), daemon=True))
+            subprocess.append(Process(target=time_discretization, args=(seed, total_t, True), daemon=True))
             subprocess[-1].start()
             print(f'\rStart process[seed={seed}] for time-discrete data' + ' '*30)
     while any([subp.exitcode == None for subp in subprocess]):
@@ -100,17 +99,18 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False):
         return
 
     # load original data
-    if is_print: print('loading original data ...')
+    if is_print: print('loading original trace data:')
     data = []
-    for id in range(1, trace_num+1):
-        tmp = np.load(f"Data/origin/{id}/data.npz")
+    from tqdm import tqdm
+    for trace_id in tqdm(range(1, trace_num+1)):
+        tmp = np.load(f"Data/origin/{trace_id}/data.npz")
         X = np.array(tmp['X'])[:, np.newaxis]
         Y = np.array(tmp['Y'])[:, np.newaxis]
         Z = np.array(tmp['Z'])[:, np.newaxis]
 
-        trace = np.concatenate((X, Y, Z),axis=1)
-        data.append(trace)
-    data = np.array(data)
+        trace = np.concatenate((X, Y, Z), axis=1)
+        data.append(trace[np.newaxis])
+    data = np.concatenate(data, axis=0)
 
     # subsampling
     dt = tmp['dt']
@@ -130,10 +130,10 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False):
     # single-sample time steps for train
     sequence_length = 2 if tau != 0. else 1
 
-    #######################
+    #######################j
     # Create [train,val,test] dataset
     #######################
-    trace_list = {'train':range(30), 'val':[30], 'test':[31]}
+    trace_list = {'train':range(500), 'val':range(500,550), 'test':range(550,600)}
     for item in ['train','val','test']:
         
         if os.path.exists(data_dir+f'/{item}.npz'): continue
@@ -363,18 +363,18 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
 
         # calculae ID
         LB_id = cal_id_embedding(tau, epoch, 'MLE')
-        MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
+        # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
         # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
         # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
         # fp.write(f"{tau},{random_seed},{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
-        fp.write(f"{tau},0,{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},0,0\n")
+        fp.write(f"{tau},0,{mse_x},{mse_y},{mse_z},{epoch},{LB_id},0,0,0\n")
         fp.flush()
 
-        if checkpoint_filepath is None: break
-
         if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}]               ', end='')
+        
+        if checkpoint_filepath is None: break
         
     fp.close()
 
@@ -382,7 +382,7 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
 def cal_id_embedding(tau, epoch, method='MLE', is_print=False):
 
     var_log_dir = f'logs/time-lagged/tau_{tau}/test/epoch-{epoch}'
-    eval_id_embedding(var_log_dir, method=method, is_print=is_print)
+    eval_id_embedding(var_log_dir, method=method, is_print=is_print, max_point=100)
     dims = np.load(var_log_dir+f'/id_{method}.npy')
 
     return np.mean(dims)
@@ -395,7 +395,7 @@ def pipeline(trace_num, tau, random_seed, is_print, queue: JoinableQueue):
 
     try:
         # generate dataset
-        generate_dataset(trace_num=trace_num, tau=tau, sample_num=200, is_print=is_print)
+        generate_dataset(trace_num=trace_num, tau=tau, sample_num=50, is_print=is_print)
         
         # random seed
         seed_everything(random_seed)
@@ -422,16 +422,17 @@ def pipeline(trace_num, tau, random_seed, is_print, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    trace_num = 30+2
-    generate_original_data(trace_num=30+2, total_t=100)
+    trace_num = 500+50+50
+    total_t = 6
+    generate_original_data(trace_num=trace_num, total_t=total_t)
 
     # start pipeline-subprocess of different tau
     random_seed = 1
-    tau_list = np.arange(0., 2.51, 0.25)
+    tau_list = [0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 2.0, 3.0]
     queue = JoinableQueue()
     subprocesses = []
     for tau in tau_list:
-        tau = round(tau, 3)
+        tau = round(tau, 5)
         is_print = True if len(subprocesses)==0 else False
         subprocesses.append(Process(target=pipeline, args=(trace_num, tau, random_seed, is_print, queue, ), daemon=True))
         subprocesses[-1].start()

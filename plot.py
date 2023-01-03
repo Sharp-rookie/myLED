@@ -134,6 +134,7 @@ def plot_y_corr():
 
 if __name__ == '__main__':
     
-    [plot_epoch_test_log(round(tau, 3), max_epoch=50+1) for tau in np.arange(0., 2.51, 0.25)]
+    # [plot_epoch_test_log(round(tau, 3), max_epoch=50+1) for tau in np.arange(0., 2.51, 0.25)]
+    [plot_epoch_test_log(round(tau, 5), max_epoch=50+1) for tau in [0.00001, 0.0001, 0.001, 0.01, 0.1, 1.0, 2.0, 3.0]]
     # plot_y_corr()
-    plot_slow_ae_loss(tau=1.5, pretrain_epoch=[2, 30], id_list=[1,2,3,4])
+    # plot_slow_ae_loss(tau=1.5, pretrain_epoch=[2, 30], id_list=[1,2,3,4])

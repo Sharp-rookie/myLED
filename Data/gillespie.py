@@ -83,7 +83,7 @@ class System: # 封装的类，代表多个化学反应构成的系统
                 d = np.random.choice(self.reactions, p=A) # 按概率选择其中一个反应发生
                 self.n.append(self.n[-1] + d.num_diff)
                 if seed == 1:
-                    print(f'\rSeed[{seed}] time: {self.t[-1]:.3f}/{total_t}s | X={self.n[-1][0]}, Y={self.n[-1][1]}, Z={self.n[-1][2]},', end='')
+                    print(f'\rSeed[{seed}] time: {self.t[-1]:.3f}/{total_t}s | X={self.n[-1][0]}, Y={self.n[-1][1]}, Z={self.n[-1][2]}', end='')
 
     def reset(self, IC):
 
@@ -142,8 +142,12 @@ def generate_origin(total_t=None, seed=729, IC=[100,40,2500]):
         wspace=0.2
     )
     plt.savefig(f'Data/origin/{seed}/origin.png', dpi=500)
+    
+    # calculate average dt
+    digit = f'{np.average(np.diff(t)):.20f}'.count("0")
+    avg = np.round(np.average(np.diff(t)), digit)
 
-    np.savez(f'Data/origin/{seed}/origin.npz', t=t, X=X, Y=Y, Z=Z)
+    np.savez(f'Data/origin/{seed}/origin.npz', t=t, X=X, Y=Y, Z=Z, dt=avg)
 
     print(f'\nSeed[{seed}] subprocess finished!\n')
 
@@ -151,8 +155,8 @@ def generate_origin(total_t=None, seed=729, IC=[100,40,2500]):
 if __name__ == '__main__':
 
     subprocess = []
-    for seed in range(1, 5):
-        subprocess.append(Process(target=generate_origin, args=(100, seed, [100,40,2500]), daemon=True))
+    for seed in range(1, 2):
+        subprocess.append(Process(target=generate_origin, args=(1, seed, [100,40,2500]), daemon=True))
         subprocess[-1].start()
         print(f'\rStart process[seed={seed}]' + ' '*30)
 

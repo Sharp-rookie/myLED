@@ -19,7 +19,7 @@ def findNearestPoint(data_t, start=0, object_t=10.0):
     
     return index
 
-def time_discretization(seed, total_t):
+def time_discretization(seed, total_t, origin_dt=False):
     """Time-forward NearestNeighbor interpolate to discretizate the time"""
 
     data = np.load(f'Data/origin/{seed}/origin.npz')
@@ -28,7 +28,7 @@ def time_discretization(seed, total_t):
     data_Y = data['Y']
     data_Z = data['Z']
 
-    dt = 5e-3
+    dt = 5e-6 if origin_dt else 5e-3 # 5e-6是手动pnas这个实验仿真得出的时间间隔大概平均值
     current_t = 0.0
     index = 0
     t, X, Y, Z = [], [], [], []
