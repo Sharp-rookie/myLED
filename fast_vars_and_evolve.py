@@ -135,7 +135,7 @@ def train_fast_vars_evolve(tau, pretrain_epoch, is_print=False):
                 
                 outputs.append(output.cpu().detach())
                 targets.append(target.cpu().detach())
-
+            
             targets = torch.concat(targets, axis=0)
             outputs = torch.concat(outputs, axis=0)
             mse = loss_func(outputs, targets)
@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
     subprocess = []
     
-    for tau in [1.5]:
+    for tau in [0.25, 1.5]:
         for pretrain_epoch in [2, 30]:
             is_print = True if len(subprocess)==0 else False
             subprocess.append(Process(target=pipeline, args=(tau, pretrain_epoch, is_print), daemon=True))

@@ -38,9 +38,10 @@ class ID_Estimator:
             return np.array(dims)
 
 
-def eval_id_embedding(vars_filepath, method='MLE', is_print=False):
+def eval_id_embedding(vars_filepath, method='MLE', is_print=False, max_point=1000):
     
     embedding = np.load(vars_filepath+'/embedding.npy')
+    if len(embedding) > max_point: embedding = np.random.permutation(embedding)[:max_point] # 避免计算耗时过长，随机取max_point个点计算ID
     embedding = np.unique(embedding, axis=0)
     if is_print: print(f'Samples (unique): {embedding.shape[0]}')
     
