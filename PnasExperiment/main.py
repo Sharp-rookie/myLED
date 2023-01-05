@@ -334,7 +334,7 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE={mse:.5f}', end='')
             
             val_loss.append(mse.detach().item())
-            
+
             # plot slow variable
             plt.figure(figsize=(12,4+2*slow_id))
             for id_var in range(slow_id):
@@ -342,7 +342,7 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
                     plt.subplot(slow_id, 3, index+1+3*(id_var))
                     plt.scatter(inputs[:, 0, index], slow_vars[:, id_var], s=5)
                     plt.xlabel(item)
-                    plt.ylabel(f'ID[{id_var+1}]')
+                    plt.ylabel(f'U{id_var+1}')
             plt.subplots_adjust(wspace=0.35, hspace=0.35)
             plt.savefig(log_dir+f"/slow_variable/epoch-{epoch}.jpg", dpi=300)
             plt.close()
