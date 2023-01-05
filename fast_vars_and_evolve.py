@@ -35,8 +35,8 @@ class FAST_EVOLVE(nn.Module):
         def weights_normal_init(m):
             classname = m.__class__.__name__
             if classname.find('Linear') != -1:
-                torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
-                torch.nn.init.zeros_(m.bias)
+                nn.init.normal_(m.weight, mean=0.0, std=0.01)
+                if m.bias is not None: nn.init.zeros_(m.bias)
         self.apply(weights_normal_init)
 
     def forward(self,x):
