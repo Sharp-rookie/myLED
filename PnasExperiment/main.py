@@ -17,7 +17,7 @@ from util.plot import plot_epoch_test_log, plot_slow_ae_loss
 from util.intrinsic_dimension import eval_id_embedding
 
 
-def train_time_lagged_ae(tau, is_print=False):
+def train_time_lagged(tau, is_print=False):
     
     # prepare
     device = torch.device('cpu')
@@ -107,7 +107,7 @@ def train_time_lagged_ae(tau, is_print=False):
     if is_print: print()
     
 
-def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None, is_print=False):
+def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False):
     
     # prepare
     device = torch.device('cpu')
@@ -234,7 +234,7 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
     if is_print: print()
     
     
-def train_slow_ae_and_knet(tau, pretrain_epoch, slow_id, delta_t, is_print=False):
+def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_print=False):
         
     # prepare
     device = torch.device('cpu')
@@ -374,10 +374,10 @@ def worker_1(tau, random_seed=729, cpu_num=1, is_print=False):
     # generate dataset
     generate_dataset(256+32+32, tau, 50, is_print=is_print)
     # training
-    train_time_lagged_ae(tau, is_print)
+    train_time_lagged(tau, is_print)
     # testing and calculating ID
-    testing_and_save_embeddings_of_time_lagged_ae(tau, None, is_print)
-    testing_and_save_embeddings_of_time_lagged_ae(tau, f"logs/time-lagged/tau_{tau}", is_print)
+    test_and_save_embeddings_of_time_lagged(tau, None, is_print)
+    test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}", is_print)
     # plot id of each epoch
     plot_epoch_test_log(tau, max_epoch=50+1)
 
@@ -389,7 +389,7 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1,i
     set_cpu_num(cpu_num)
 
     # training
-    train_slow_ae_and_knet(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
+    train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
     # plot mse curve of each id
     try: plot_slow_ae_loss(tau, pretrain_epoch, id_list) 
     except: pass
@@ -432,5 +432,5 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 
 if __name__ == '__main__':
     
-    id_esitimate_pipeline()
+    # id_esitimate_pipeline()
     slow_evolve_pipeline()
