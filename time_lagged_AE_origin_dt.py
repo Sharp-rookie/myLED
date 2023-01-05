@@ -51,8 +51,8 @@ class TIME_LAGGED_AE(nn.Module):
         def weights_normal_init(m):
             classname = m.__class__.__name__
             if classname.find('Linear') != -1:
-                torch.nn.init.normal_(m.weight, mean=0.0, std=0.01)
-                torch.nn.init.zeros_(m.bias)
+                nn.init.normal_(m.weight, mean=0.0, std=0.01)
+                if m.bias is not None: nn.init.zeros_(m.bias)
         self.apply(weights_normal_init)
 
     def forward(self,x):
@@ -133,7 +133,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False):
     #######################j
     # Create [train,val,test] dataset
     #######################
-    trace_list = {'train':range(500), 'val':range(500,550), 'test':range(550,600)}
+    trace_list = {'train':range(256), 'val':range(256,288), 'test':range(288,320)}
     for item in ['train','val','test']:
         
         if os.path.exists(data_dir+f'/{item}.npz'): continue
@@ -362,7 +362,7 @@ def testing_and_save_embeddings_of_time_lagged_ae(tau, checkpoint_filepath=None,
         np.save(var_log_dir+'/embedding.npy', all_embeddings)
 
         # calculae ID
-        LB_id = cal_id_embedding(tau, epoch, 'MLE')
+        LB_id = cal_id_embedding(tau, epoch, 'MLE', is_print)
         # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
         # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
         # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
@@ -422,8 +422,8 @@ def pipeline(trace_num, tau, random_seed, is_print, queue: JoinableQueue):
 if __name__ == '__main__':
 
     # generate original data
-    trace_num = 500+50+50
-    total_t = 6
+    trace_num = 256+32+32
+    total_t = 9
     generate_original_data(trace_num=trace_num, total_t=total_t)
 
     # start pipeline-subprocess of different tau
