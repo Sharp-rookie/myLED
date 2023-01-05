@@ -68,11 +68,9 @@ class SLOW_EVOLVER(nn.Module):
             nn.Dropout(p=0.01),
             nn.Linear(64, slow_dim, bias=True),
             nn.Tanh(),
-            nn.Unflatten(-1, (slow_dim, 1))
         )
         
         self.decoder = nn.Sequential(
-            nn.Flatten(),
             nn.Linear(slow_dim, 64, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
