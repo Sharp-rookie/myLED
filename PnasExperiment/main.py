@@ -42,9 +42,9 @@ def train_time_lagged(tau, is_print=False):
     loss_func = nn.MSELoss()
 
     # dataset
-    train_dataset = PNASDataset(data_filepath, 'train', 'MinMaxZeroOne',)
+    train_dataset = PNASDataset(data_filepath, 'train')
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    val_dataset = PNASDataset(data_filepath, 'val', 'MinMaxZeroOne')
+    val_dataset = PNASDataset(data_filepath, 'val')
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False)
     
     # training pipeline
@@ -128,9 +128,9 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
         model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
 
     # dataset
-    train_dataset = PNASDataset(data_filepath, 'train', 'MinMaxZeroOne',)
+    train_dataset = PNASDataset(data_filepath, 'train')
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
-    test_dataset = PNASDataset(data_filepath, 'test', 'MinMaxZeroOne',)
+    test_dataset = PNASDataset(data_filepath, 'test')
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
     # testing pipeline
@@ -242,7 +242,6 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
     log_dir = f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
-    os.makedirs(log_dir+"/slow_variable/", exist_ok=True)
 
     # init model
     model = models.SLOW_EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t)
@@ -261,44 +260,48 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
     batch_size = 256
     max_epoch = 100
     weight_decay = 0.001
-    loss_func = nn.MSELoss()
+    L1_loss = nn.L1Loss()
+    MSE_loss = nn.MSELoss()
     optimizer = torch.optim.AdamW(
         [{'params': model.encoder_2.parameters()},
          {'params': model.decoder.parameters()}, 
          {'params': model.K_opt.parameters()}],
-        lr=lr, weight_decay=weight_decay)
+        lr=lr, weight_decay=weight_decay) # not involve encoder_1 (freezen)
     
     # dataset
-    train_dataset = PNASDataset(data_filepath, 'train', 'MinMaxZeroOne',)
+    train_dataset = PNASDataset(data_filepath, 'train')
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-    val_dataset = PNASDataset(data_filepath, 'val', 'MinMaxZeroOne')
+    val_dataset = PNASDataset(data_filepath, 'val')
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False)
     
     # training pipeline
     losses = []
     train_loss = []
     val_loss = []
-    best_mse = 1.
+    best_loss = 1.
     for epoch in range(1, max_epoch+1):
         
         # train
         model.train()
         for input, target in train_loader:
             input = model.scale(input)
-            target = model.scale(target)
+            # target = model.scale(target)
             
-            with torch.no_grad():
-                embed = model.encoder_1(input.to(device))
-            slow_var = model.encoder_2(embed)
-            output = model.decoder(slow_var)
+            slow_var, embed = model.extract(input.to(device))
+            slow_info = model.recover(slow_var)
+            _, embed_from_info = model.extract(slow_info)
             
-            loss = loss_func(output, target)
+            # TODO: 目前还没有加入koopman推理的部分
+            
+            adiabatic_loss = L1_loss(embed, embed_from_info)
+            reconstruction_loss = MSE_loss(slow_info, input) # TODO: 理论上这里不能用reconstruction，因为是无监督学习
+            all_loss = reconstruction_loss + 0.05*adiabatic_loss
             
             optimizer.zero_grad()
-            loss.backward()
+            all_loss.backward()
             optimizer.step()
             
-            losses.append(loss.detach().item())
+            losses.append(all_loss.detach().item())
             
         train_loss.append(np.mean(losses))
         
@@ -306,37 +309,42 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
         with torch.no_grad():
             inputs = []
             slow_vars = []
-            targets = []
-            outputs = []
+            # targets = []
+            slow_infos = []
             
             model.eval()
             for input, target in val_loader:
                 input = model.scale(input)
-                target = model.scale(target)
+                # target = model.scale(target)
             
-                embed = model.encoder_1(input.to(device))
-                slow_var = model.encoder_2(embed)
-                output = model.decoder(slow_var)
+                slow_var, embed = model.extract(input.to(device))
+                slow_info = model.recover(slow_var)
+                _, embed_from_info = model.extract(slow_info)
                 
                 # TODO: 目前还没有加入koopman推理的部分
 
                 inputs.append(input.cpu().detach())
                 slow_vars.append(slow_var.cpu().detach())
-                outputs.append(output.cpu().detach())
-                targets.append(target.cpu().detach())
+                slow_infos.append(slow_info.cpu().detach())
+                # targets.append(target.cpu().detach())
             
             inputs = torch.concat(inputs, axis=0)
             slow_vars = torch.concat(slow_vars, axis=0)
-            targets = torch.concat(targets, axis=0)
-            outputs = torch.concat(outputs, axis=0)
+            # targets = torch.concat(targets, axis=0)
+            slow_infos = torch.concat(slow_infos, axis=0)
             
-            mse = loss_func(outputs, targets)
-            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE={mse:.5f}', end='')
+            adiabatic_loss = L1_loss(embed, embed_from_info)
+            reconstruction_loss = MSE_loss(slow_info, input)
+            all_loss = reconstruction_loss + 0.1*adiabatic_loss
+            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={reconstruction_loss:.5f}', end='')
             
-            val_loss.append(mse.detach().item())
+            val_loss.append(all_loss.detach().item())
+            
+            os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
 
             # plot slow variable
-            plt.figure(figsize=(12,4+2*slow_id))
+            plt.figure(figsize=(12,5+2*(slow_id-1)))
+            plt.title('Val Reconstruction Curve')
             for id_var in range(slow_id):
                 for index, item in enumerate(['X', 'Y', 'Z']):
                     plt.subplot(slow_id, 3, index+1+3*(id_var))
@@ -344,17 +352,28 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
                     plt.xlabel(item)
                     plt.ylabel(f'U{id_var+1}')
             plt.subplots_adjust(wspace=0.35, hspace=0.35)
-            plt.savefig(log_dir+f"/slow_variable/epoch-{epoch}.jpg", dpi=300)
+            plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
+            plt.close()
+            
+            # plot reconstruction curve
+            plt.figure(figsize=(16,5))
+            for j, item in enumerate(['X','Y','Z']):
+                ax = plt.subplot(2,3,j+1)
+                ax.set_title(item)
+                plt.plot(inputs[:,0,j], label='true')
+                plt.plot(slow_infos[:,0,j], label='predict')
+            plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2)
+            plt.savefig(log_dir+f"/val/epoch-{epoch}/reconstruction.jpg", dpi=300)
             plt.close()
         
             # record best model
-            if mse < best_mse:
-                best_mse = mse
+            if all_loss < best_loss:
+                best_loss = all_loss
                 best_model = model.state_dict()
 
     # save model
     torch.save(best_model, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
-    if is_print: print(f'\nsave best model at {log_dir}/checkpoints/epoch-{epoch}.ckpt (val_loss={mse})')
+    if is_print: print(f'\nsave best model at {log_dir}/checkpoints/epoch-{epoch}.ckpt (val best_loss={best_loss})')
     
     # plot loss curve
     plt.figure()
@@ -418,7 +437,7 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 
     workers = []
     for tau in tau_list:
-        for pretrain_epoch in [8, 30]:
+        for pretrain_epoch in [5, 30]:
             for slow_id in id_list:
                 is_print = True if len(workers)==0 else False
                 workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, delta_t, 729, cpu_num, is_print, id_list), daemon=True))
