@@ -28,8 +28,8 @@ class TIME_LAGGED_AE(nn.Module):
         )
         
         # scale inside the model
-        self.register_buffer('min', torch.zeros((in_channels, input_1d_width)))
-        self.register_buffer('max', torch.ones((in_channels, input_1d_width)))
+        self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
+        self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
         
     def forward(self,x):
         embed = self.encoder(x)

@@ -3,10 +3,10 @@ import torch
 from torch import nn
 
 
-class K_OPT(nn.Module):
+class Koopman_OPT(nn.Module):
 
     def __init__(self, koopman_dim, delta_t):
-        super(K_OPT, self).__init__()
+        super(Koopman_OPT, self).__init__()
 
         self.koopman_dim = koopman_dim
         self.num_eigenvalues = int(koopman_dim/2)
@@ -27,7 +27,7 @@ class K_OPT(nn.Module):
         mu, omega = torch.unbind(self.parameterization(x).reshape(-1, self.num_eigenvalues, 2), -1)
 
         # K: (B, koopman_dim, koopman_dim)
-        K = torch.zeros((batch_size, self.koopman_dim, self.koopman_dim))
+        K = torch.zeros(batch_size, self.koopman_dim, self.koopman_dim, dtype=torch.float32)
         exp = torch.exp(self.delta_t * mu)
         cos = torch.cos(self.delta_t * omega)
         sin = torch.sin(self.delta_t * omega)
@@ -42,12 +42,38 @@ class K_OPT(nn.Module):
         y = torch.matmul(K, x.unsqueeze(-1)).squeeze()
 
         return y
-
-
-class SLOW_EVOLVER(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t):
-        super(SLOW_EVOLVER, self).__init__()
+
+class LSTM_OPT(nn.Module):
+    
+    def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num, batch_size):
+        super(LSTM_OPT, self).__init__()
+        
+        self.h = torch.zeros(layer_num * 1, batch_size, hidden_dim, dtype=torch.float32)
+        self.c = torch.zeros(layer_num * 1, batch_size, hidden_dim, dtype=torch.float32)
+        self.cell = nn.LSTM(
+            input_size=in_channels*input_1d_width, 
+            hidden_size=hidden_dim, 
+            num_layers=layer_num, 
+            dropout=0.01, 
+            batch_first=True # input: (batch_size, squences, features)
+            )
+        
+        self.fc = nn.Linear(hidden_dim, in_channels*input_1d_width)
+        self.unflatten = nn.Unflatten(-1, (in_channels, int(input_1d_width/in_channels)))
+    
+    def forward(self, x):
+        
+        _, (self.h, self.c) = self.cell(x, (self.h, self.c))        
+        y = self.fc(self.h[-1])
+        y = self.unflatten(y)
+        return y
+
+
+class EVOLVER(nn.Module):
+    
+    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t, batch_size):
+        super(EVOLVER, self).__init__()
         
         self.encoder_1 = nn.Sequential(
             nn.Flatten(),
@@ -80,12 +106,14 @@ class SLOW_EVOLVER(nn.Module):
             nn.Unflatten(-1, (in_channels, int(input_1d_width/in_channels)))
         )
         
-        self.K_opt = K_OPT(slow_dim, delta_t)
+        self.K_opt = Koopman_OPT(slow_dim, delta_t)
         self.delta_t = delta_t
+        
+        self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, batch_size=batch_size)
 
         # scale inside the model
-        self.register_buffer('min', torch.zeros((in_channels, input_1d_width)))
-        self.register_buffer('max', torch.ones((in_channels, input_1d_width)))
+        self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
+        self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
 
     def extract(self, x):
         embed = self.encoder_1(x)
@@ -101,6 +129,13 @@ class SLOW_EVOLVER(nn.Module):
         y = self.K_opt(x)
         for _ in range(1, T): 
             y = self.K_opt(y)
+        return y
+    
+    def lstm_evolve(self, x, T=1):
+        
+        y = self.lstm(x)
+        for _ in range(1, T): 
+            y = self.lstm(y)
         return y
     
     def scale(self, x):
