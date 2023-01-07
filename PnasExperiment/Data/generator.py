@@ -1,5 +1,6 @@
 import os
 import numpy as np
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from multiprocessing import Process
 import warnings;warnings.simplefilter('ignore')
@@ -107,16 +108,18 @@ def generate_original_data(trace_num, total_t):
     print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
     
     
-def generate_dataset(trace_num, tau, sample_num=None, is_print=False):
+def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
-    if os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
+    if sequence_length is not None and os.path.exists(f"Data/data/tau_{tau}/train_pred.npz") and os.path.exists(f"Data/data/tau_{tau}/val_pred.npz") and os.path.exists(f"Data/data/tau_{tau}/test_pred.npz"):
+        return
+    elif sequence_length is None and os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
         return
 
     # load original data
     if is_print: print('loading original trace data:')
     data = []
-    from tqdm import tqdm
-    for trace_id in tqdm(range(1, trace_num+1)):
+    iter = tqdm(range(1, trace_num+1)) if is_print else range(1, trace_num+1)
+    for trace_id in iter:
         tmp = np.load(f"Data/origin/{trace_id}/data.npz")
         X = np.array(tmp['X'])[:, np.newaxis]
         Y = np.array(tmp['Y'])[:, np.newaxis]
@@ -142,7 +145,8 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False):
     np.savetxt(data_dir + "/tau.txt", [tau]) # Save the timestep
 
     # single-sample time steps for train
-    sequence_length = 2 if tau != 0. else 1
+    if sequence_length is None:
+        sequence_length = 2 if tau != 0. else 1
 
     #######################j
     # Create [train,val,test] dataset
@@ -150,7 +154,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False):
     trace_list = {'train':range(256), 'val':range(256,288), 'test':range(288,320)}
     for item in ['train','val','test']:
         
-        if os.path.exists(data_dir+f'/{item}.npz'): continue
+        # if os.path.exists(data_dir+f'/{item}.npz'): continue
         
         # select trace num
         N_TRACE = len(trace_list[item])
@@ -193,17 +197,21 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False):
         if is_print: print(f'tau[{tau}]', f"processed {item} dataset", np.shape(sequences))
 
         # save item dataset
-        np.savez(data_dir+f'/{item}.npz', data=sequences)
+        if sequence_length!=1 and sequence_length!=2:
+            np.savez(data_dir+f'/{item}_pred.npz', data=sequences)
+        else:
+            np.savez(data_dir+f'/{item}.npz', data=sequences)
 
         # plot
-        plt.figure(figsize=(16,10))
-        plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-        for i in range(3):
-            ax = plt.subplot(3,1,i+1)
-            ax.set_title(['X','Y','Z'][i])
-            plt.plot(sequences[:, 0, i])
-        plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
-        plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
+        if sequence_length==1 or sequence_length==2:
+            plt.figure(figsize=(16,10))
+            plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+            for i in range(3):
+                ax = plt.subplot(3,1,i+1)
+                ax.set_title(['X','Y','Z'][i])
+                plt.plot(sequences[:, 0, i])
+            plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
+            plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
 
 
 if __name__ == '__main__':

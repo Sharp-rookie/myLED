@@ -24,10 +24,10 @@ class K_OPT(nn.Module):
         batch_size = x.shape[0]
         
         # mu: (B, koopman_dim/2), omega: (B, koopman_dim/2)
-        mu, omega = torch.unbind(self.parameterization(y).reshape(-1, self.num_eigenvalues, 2),-1)
+        mu, omega = torch.unbind(self.parameterization(x).reshape(-1, self.num_eigenvalues, 2), -1)
 
         # K: (B, koopman_dim, koopman_dim)
-        K = torch.Variable(torch.zeros(batch_size, self.koopman_dim, self.koopman_dim))
+        K = torch.zeros((batch_size, self.koopman_dim, self.koopman_dim))
         exp = torch.exp(self.delta_t * mu)
         cos = torch.cos(self.delta_t * omega)
         sin = torch.sin(self.delta_t * omega)
@@ -39,7 +39,7 @@ class K_OPT(nn.Module):
             K[:, i + 1, i + 1] = cos[:,index] * exp[:,index]
 
         # y = K * x
-        y = torch.matmul(K, x)
+        y = torch.matmul(K, x.unsqueeze(-1)).squeeze()
 
         return y
 
