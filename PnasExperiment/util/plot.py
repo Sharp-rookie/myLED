@@ -94,16 +94,16 @@ def plot_epoch_test_log(tau, max_epoch):
         plt.close()
         
         
-def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, id_list = [1,2,3,4]):
+def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3,4]):
     
     plt.figure()
     for id in id_list:
-        loss = np.load(f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{id}/val_loss_curve.npy')
+        loss = np.load(f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/id{id}/val_loss_curve.npy')
         plt.plot(loss, label=f'ID[{id}]')
     plt.xlabel('epoch')
     plt.legend()
-    plt.title(f'Val mse | tau[{tau}] | pretrain_epoch[{pretrain_epoch}]')
-    plt.savefig(f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/val_loss_curves.jpg', dpi=300)
+    plt.title(f'Val mse | tau[{tau}] | pretrain_epoch[{pretrain_epoch}] | delta_t[{delta_t}]')
+    plt.savefig(f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/val_loss_curves.jpg', dpi=300)
 
 
 def plot_y_corr():

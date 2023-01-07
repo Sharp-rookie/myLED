@@ -4,6 +4,7 @@ import time
 import torch
 from torch import nn
 import numpy as np
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from multiprocessing import Process
 from pytorch_lightning import seed_everything
@@ -238,8 +239,8 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
         
     # prepare
     device = torch.device('cpu')
-    data_filepath = 'Data/data/tau_' + str(tau)
-    log_dir = f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}'
+    data_filepath = 'Data/data/tau_' + str(delta_t)
+    log_dir = f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/id{slow_id}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
@@ -285,17 +286,20 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
         model.train()
         for input, target in train_loader:
             input = model.scale(input)
-            # target = model.scale(target)
+            target = model.scale(target)
             
             slow_var, embed = model.extract(input.to(device))
             slow_info = model.recover(slow_var)
             _, embed_from_info = model.extract(slow_info)
             
             # TODO: 目前还没有加入koopman推理的部分
+            slow_var_next = model.koopman_evolve(slow_var, 1)
+            slow_info_next = model.recover(slow_var_next)
             
             adiabatic_loss = L1_loss(embed, embed_from_info)
-            reconstruction_loss = MSE_loss(slow_info, input) # TODO: 理论上这里不能用reconstruction，因为是无监督学习
-            all_loss = reconstruction_loss + 0.05*adiabatic_loss
+            reconstruct_loss = MSE_loss(slow_info, input) # TODO: 理论上这里不能用reconstruction，因为是无监督学习
+            predict_loss = MSE_loss(slow_info_next, target)
+            all_loss = 0.5*reconstruct_loss + 0.5*predict_loss + 0.05*adiabatic_loss
             
             optimizer.zero_grad()
             all_loss.backward()
@@ -309,34 +313,40 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
         with torch.no_grad():
             inputs = []
             slow_vars = []
-            # targets = []
+            targets = []
             slow_infos = []
+            slow_infos_next = []
             
             model.eval()
             for input, target in val_loader:
                 input = model.scale(input)
-                # target = model.scale(target)
+                target = model.scale(target)
             
                 slow_var, embed = model.extract(input.to(device))
                 slow_info = model.recover(slow_var)
                 _, embed_from_info = model.extract(slow_info)
                 
                 # TODO: 目前还没有加入koopman推理的部分
+                slow_var_next = model.koopman_evolve(slow_var, 1)
+                slow_info_next = model.recover(slow_var_next)
 
                 inputs.append(input.cpu().detach())
                 slow_vars.append(slow_var.cpu().detach())
                 slow_infos.append(slow_info.cpu().detach())
-                # targets.append(target.cpu().detach())
+                targets.append(target.cpu().detach())
+                slow_infos_next.append(slow_info_next.cpu().detach())
             
             inputs = torch.concat(inputs, axis=0)
             slow_vars = torch.concat(slow_vars, axis=0)
-            # targets = torch.concat(targets, axis=0)
             slow_infos = torch.concat(slow_infos, axis=0)
+            targets = torch.concat(targets, axis=0)
+            slow_infos_next = torch.concat(slow_infos_next, axis=0)
             
             adiabatic_loss = L1_loss(embed, embed_from_info)
-            reconstruction_loss = MSE_loss(slow_info, input)
-            all_loss = reconstruction_loss + 0.1*adiabatic_loss
-            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={reconstruction_loss:.5f}', end='')
+            reconstruct_loss = MSE_loss(slow_info, input)
+            predict_loss = MSE_loss(slow_info_next, target)
+            all_loss = 0.5*reconstruct_loss + 0.5*predict_loss + 0.05*adiabatic_loss
+            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={reconstruct_loss:.5f}, pred_loss={predict_loss:.5f}', end='')
             
             val_loss.append(all_loss.detach().item())
             
@@ -358,12 +368,23 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
             # plot reconstruction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['X','Y','Z']):
-                ax = plt.subplot(2,3,j+1)
+                ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
                 plt.plot(inputs[:,0,j], label='true')
                 plt.plot(slow_infos[:,0,j], label='predict')
-            plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2)
+            plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/val/epoch-{epoch}/reconstruction.jpg", dpi=300)
+            plt.close()
+            
+            # plot prediction curve
+            plt.figure(figsize=(16,5))
+            for j, item in enumerate(['X','Y','Z']):
+                ax = plt.subplot(1,3,j+1)
+                ax.set_title(item)
+                plt.plot(targets[:,0,j], label='true')
+                plt.plot(slow_infos_next[:,0,j], label='predict')
+            plt.subplots_adjust(wspace=0.2)
+            plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
             plt.close()
         
             # record best model
@@ -382,6 +403,73 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
     plt.title('Train MSELoss Curve')
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
+
+
+def test_koopman_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_print=False):
+        
+    # prepare
+    device = torch.device('cpu')
+    data_filepath = 'Data/data/tau_' + str(delta_t)
+    log_dir = f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/id{slow_id}'
+
+    # load model
+    model = models.SLOW_EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t)
+    ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
+    ckpt = torch.load(ckpt_path)
+    model.load_state_dict(ckpt)
+    model = model.to(device)
+    
+    mse_T = []
+    
+    for T in range(1, T_max):
+        # dataset
+        test_dataset = PNASDataset(data_filepath, 'test', T=T)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=256, shuffle=False)
+        
+        # testing pipeline        
+        with torch.no_grad():
+            targets = []
+            slow_infos_next = []
+            
+            model.eval()
+            for input, target in test_loader:
+                input = model.scale(input)
+                target = model.scale(target)
+            
+                slow_var, _ = model.extract(input.to(device))
+                slow_var_next = model.koopman_evolve(slow_var, T)
+                slow_info_next = model.recover(slow_var_next)
+
+                targets.append(target.cpu().detach())
+                slow_infos_next.append(slow_info_next.cpu().detach())
+            
+            targets = torch.concat(targets, axis=0)
+            slow_infos_next = torch.concat(slow_infos_next, axis=0)
+            
+            mse_T.append(nn.MSELoss()(slow_infos_next, targets))
+            if is_print: print(f'\rTesting Koopman evolvement | tau[{tau}] | pretrain[{pretrain_epoch}] | delta_t[{delta_t}] | T[{T}] | mse={mse_T[-1]:.5f}     ', end='')
+            
+            os.makedirs(log_dir+f"/test/", exist_ok=True)
+
+            # plot prediction curve
+            plt.figure(figsize=(16,5))
+            for j, item in enumerate(['X','Y','Z']):
+                ax = plt.subplot(1,3,j+1)
+                ax.set_title(item)
+                plt.plot(targets[:,0,j], label='true')
+                plt.plot(slow_infos_next[:,0,j], label='predict')
+            plt.subplots_adjust(wspace=0.2)
+            plt.savefig(log_dir+f"/test/pred_T_{T}.jpg", dpi=300)
+            plt.close()
+    
+    # plot mse per T
+    plt.figure()
+    plt.plot(range(1,len(mse_T)+1), mse_T)
+    plt.xlabel('T')
+    plt.title(f'Koopman evolve MSE curve | delta_t[{delta_t}]')
+    plt.savefig(log_dir+f"/test/mse.jpg", dpi=300)
+    
+    print()
     
     
 def worker_1(tau, random_seed=729, cpu_num=1, is_print=False):
@@ -392,9 +480,9 @@ def worker_1(tau, random_seed=729, cpu_num=1, is_print=False):
 
     # generate dataset
     generate_dataset(256+32+32, tau, 50, is_print=is_print)
-    # training
+    # train
     train_time_lagged(tau, is_print)
-    # testing and calculating ID
+    # test and calculating ID
     test_and_save_embeddings_of_time_lagged(tau, None, is_print)
     test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}", is_print)
     # plot id of each epoch
@@ -407,11 +495,18 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1,i
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    # training
+    sequence_length = 100
+
+    # generate dataset
+    generate_dataset(256+32+32, delta_t, 50, is_print=is_print, sequence_length=sequence_length)
+    generate_dataset(256+32+32, delta_t, 50, is_print=is_print)
+    # train
     train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
     # plot mse curve of each id
-    try: plot_slow_ae_loss(tau, pretrain_epoch, id_list) 
+    try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
     except: pass
+    # test koopman
+    test_koopman_evolve(tau, pretrain_epoch, 100, slow_id, delta_t, sequence_length, is_print)
     
     
 def id_esitimate_pipeline(cpu_num=1):
@@ -432,8 +527,8 @@ def id_esitimate_pipeline(cpu_num=1):
 
 def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
     
-    tau_list = [0.0, 1.5, 3.0]
-    id_list = [1, 2, 3, 4]
+    tau_list = [1.5, 3.0]
+    id_list = [2, 4, 6]
 
     workers = []
     for tau in tau_list:
@@ -451,5 +546,5 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 
 if __name__ == '__main__':
     
-    # id_esitimate_pipeline()
+    id_esitimate_pipeline()
     slow_evolve_pipeline()
