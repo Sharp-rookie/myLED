@@ -235,17 +235,18 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     if is_print: print()
     
     
-def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_print=False):
+def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_print=False):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/id{slow_id}'
+    log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/id{slow_id}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = models.SLOW_EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t)
+    batch_size = 256
+    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t, batch_size=batch_size)
     model.apply(models.weights_normal_init)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
@@ -258,7 +259,6 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
     
     # training params
     lr = 0.001
-    batch_size = 256
     max_epoch = 100
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
@@ -266,7 +266,8 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
     optimizer = torch.optim.AdamW(
         [{'params': model.encoder_2.parameters()},
          {'params': model.decoder.parameters()}, 
-         {'params': model.K_opt.parameters()}],
+         {'params': model.K_opt.parameters()},
+         {'params': model.lstm.parameters()}],
         lr=lr, weight_decay=weight_decay) # not involve encoder_1 (freezen)
     
     # dataset
@@ -288,21 +289,35 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
             input = model.scale(input)
             target = model.scale(target)
             
+            # slow extract
             slow_var, embed = model.extract(input.to(device))
             slow_info = model.recover(slow_var)
             _, embed_from_info = model.extract(slow_info)
             
-            # TODO: 目前还没有加入koopman推理的部分
-            slow_var_next = model.koopman_evolve(slow_var, 1)
+            # slow evolve
+            slow_var_next = model.koopman_evolve(slow_var, T=1)
             slow_info_next = model.recover(slow_var_next)
             
+            # fast evolve
+            fast_info = input - slow_info.detach() # detach() to avoid the gradiant of fast evolver impact the slow evolver
+            fast_info_next = model.lstm_evolve(fast_info, T=1)
+            
+            # total evolve
+            total_info_next = slow_info_next + fast_info_next # TODO: 加了fast项后梯度计算几轮后就出错，都是none
+            
             adiabatic_loss = L1_loss(embed, embed_from_info)
-            reconstruct_loss = MSE_loss(slow_info, input) # TODO: 理论上这里不能用reconstruction，因为是无监督学习
-            predict_loss = MSE_loss(slow_info_next, target)
-            all_loss = 0.5*reconstruct_loss + 0.5*predict_loss + 0.05*adiabatic_loss
+            slow_reconstruct_loss = MSE_loss(slow_info, input)
+            evolve_loss = MSE_loss(total_info_next, target)
+            all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.05*adiabatic_loss
             
             optimizer.zero_grad()
-            all_loss.backward()
+            try:
+                all_loss.backward()
+            except:
+                if is_print:
+                    print(embed.grad, slow_var.grad, slow_info.grad, embed_from_info.grad)
+                    print(adiabatic_loss, adiabatic_loss.grad)
+                exit(0)
             optimizer.step()
             
             losses.append(all_loss.detach().item())
@@ -343,10 +358,10 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
             slow_infos_next = torch.concat(slow_infos_next, axis=0)
             
             adiabatic_loss = L1_loss(embed, embed_from_info)
-            reconstruct_loss = MSE_loss(slow_info, input)
-            predict_loss = MSE_loss(slow_info_next, target)
-            all_loss = 0.5*reconstruct_loss + 0.5*predict_loss + 0.05*adiabatic_loss
-            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={reconstruct_loss:.5f}, pred_loss={predict_loss:.5f}', end='')
+            slow_reconstruct_loss = MSE_loss(slow_info, input)
+            evolve_loss = MSE_loss(slow_info_next, target)
+            all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.05*adiabatic_loss
+            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
             
             val_loss.append(all_loss.detach().item())
             
@@ -365,7 +380,7 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
             plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
             plt.close()
             
-            # plot reconstruction curve
+            # plot slow infomation reconstruction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
@@ -373,10 +388,12 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
                 plt.plot(inputs[:,0,j], label='true')
                 plt.plot(slow_infos[:,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/val/epoch-{epoch}/reconstruction.jpg", dpi=300)
+            plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_recons.jpg", dpi=300)
             plt.close()
             
-            # plot prediction curve
+            # plot fast infomation curve (origin_data - slow_info_recons)
+            
+            # plot slow infomation prediction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
@@ -384,8 +401,12 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
                 plt.plot(targets[:,0,j], label='true')
                 plt.plot(slow_infos_next[:,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
+            plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
             plt.close()
+            
+            # plot fast infomation prediction curve
+            
+            # plot total infomation prediction curve
         
             # record best model
             if all_loss < best_loss:
@@ -396,6 +417,7 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
     torch.save(best_model, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
     if is_print: print(f'\nsave best model at {log_dir}/checkpoints/epoch-{epoch}.ckpt (val best_loss={best_loss})')
     
+    # TODO: 分别画出每种loss曲线
     # plot loss curve
     plt.figure()
     plt.plot(train_loss)
@@ -405,15 +427,16 @@ def train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_pri
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
 
-def test_koopman_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_print=False):
+def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_print=False):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/id{slow_id}'
+    log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/id{slow_id}'
 
     # load model
-    model = models.SLOW_EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t)
+    batch_size = 256
+    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t, batch_size=batch_size)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
@@ -424,7 +447,7 @@ def test_koopman_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max
     for T in range(1, T_max):
         # dataset
         test_dataset = PNASDataset(data_filepath, 'test', T=T)
-        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=256, shuffle=False)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
         
         # testing pipeline        
         with torch.no_grad():
@@ -451,7 +474,7 @@ def test_koopman_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max
             
             os.makedirs(log_dir+f"/test/", exist_ok=True)
 
-            # plot prediction curve
+            # plot slow infomation prediction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
@@ -459,9 +482,12 @@ def test_koopman_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max
                 plt.plot(targets[:,0,j], label='true')
                 plt.plot(slow_infos_next[:,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/test/pred_T_{T}.jpg", dpi=300)
+            plt.savefig(log_dir+f"/test/slow_pred_T_{T}.jpg", dpi=300)
             plt.close()
+            
+            # plot fast infomation prediction curve
     
+    # TODO: 分别画出每种mse曲线
     # plot mse per T
     plt.figure()
     plt.plot(range(1,len(mse_T)+1), mse_T)
@@ -501,12 +527,12 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1,i
     generate_dataset(256+32+32, delta_t, 50, is_print=is_print, sequence_length=sequence_length)
     generate_dataset(256+32+32, delta_t, 50, is_print=is_print)
     # train
-    train_slow_extract_and_koopman(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
+    train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
     # plot mse curve of each id
     try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
     except: pass
-    # test koopman
-    test_koopman_evolve(tau, pretrain_epoch, 100, slow_id, delta_t, sequence_length, is_print)
+    # test evolve
+    test_evolve(tau, pretrain_epoch, 100, slow_id, delta_t, sequence_length, is_print)
     
     
 def id_esitimate_pipeline(cpu_num=1):
@@ -546,5 +572,5 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 
 if __name__ == '__main__':
     
-    id_esitimate_pipeline()
+    # id_esitimate_pipeline()
     slow_evolve_pipeline()
