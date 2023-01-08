@@ -483,7 +483,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
     model = model.to(device)
     
     mse_slow, mse_fast, mse_total = [], [], []
-    mse_fn = nn.MSELoss()
+    l1_fn = nn.L1Loss()
     
     for T in range(1, T_max):
         # dataset
@@ -527,9 +527,9 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             fast_infos_next = torch.concat(fast_infos_next, axis=0)
             total_infos_next = torch.concat(total_infos_next, axis=0)
             
-            mse_slow.append(mse_fn(slow_infos_next, targets))
-            mse_fast.append(mse_fn(fast_infos_next, targets))
-            mse_total.append(mse_fn(total_infos_next, targets))
+            mse_slow.append(l1_fn(slow_infos_next, targets))
+            mse_fast.append(l1_fn(fast_infos_next, targets))
+            mse_total.append(l1_fn(total_infos_next, targets))
             if is_print: print(f'\rTesting Koopman evolvement | tau[{tau}] | pretrain[{pretrain_epoch}] | delta_t[{delta_t}] | T[{T}/{T_max}] | total_mse={mse_total[-1]:.5f}     ', end='')
             
             os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -542,7 +542,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
                 plt.plot(targets[:,0,j], label='true')
                 plt.plot(slow_infos_next[:,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/test/slow_pred_T_{T}.jpg", dpi=300)
+            plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_slow.jpg", dpi=300)
             plt.close()
             
             # plot fast infomation prediction curve
@@ -553,7 +553,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
                 plt.plot(targets[:,0,j], label='true')
                 plt.plot(fast_infos_next[:,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/test/fast_pred_T_{T}.jpg", dpi=300)
+            plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_fast.jpg", dpi=300)
             plt.close()
             
             # plot total infomation prediction curve
@@ -564,7 +564,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
                 plt.plot(targets[:,0,j], label='true')
                 plt.plot(total_infos_next[:,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/test/total_pred_T_{T}.jpg", dpi=300)
+            plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_total.jpg", dpi=300)
             plt.close()
     
     # plot mse per T
@@ -572,7 +572,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
     for item, mse in zip(['slow','fast','total'], [mse_slow, mse_fast, mse_total]):
         plt.plot(range(1,len(mse)+1), mse, label=item)
     plt.xlabel(f'T/{delta_t}s')
-    plt.title(f'Koopman evolve MSE curve | delta_t[{delta_t}]')
+    plt.title(f'Evolve L1-dist curve | delta_t[{delta_t}]')
     plt.legend()
     plt.savefig(log_dir+f"/test/all_mse.jpg", dpi=300)
         
@@ -673,6 +673,6 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 
 if __name__ == '__main__':
     
-    # data_generator_pipeline()
-    # id_esitimate_pipeline()
+    data_generator_pipeline()
+    id_esitimate_pipeline()
     slow_evolve_pipeline()

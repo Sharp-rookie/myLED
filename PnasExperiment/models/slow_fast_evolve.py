@@ -68,7 +68,7 @@ class LSTM_OPT(nn.Module):
         y = self.fc(hc[0][-1])
         y = self.unflatten(y)
         
-        self.h, self.c = hc[0].detach(), hc[1].detach()
+        self.h, self.c = hc[0].detach(), hc[1].detach() # detach() to avoid recurrent deoendencies in grad calculation
         
         return y
 
