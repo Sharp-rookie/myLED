@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-import pickle
 import numpy as np
 
 
@@ -196,31 +195,31 @@ def generate_origin_data(tf=451, dt=0.001):
         energ_act_all.append(energ_act)
         energ_in_all.append(energ_in)
 
-    data = {
-        "rho_act_all":rho_act_all,
-        "rho_in_all":rho_in_all,
-        "t_vec_all":t_vec_all,
-        "mom_act_all":mom_act_all,
-        "mom_in_all":mom_in_all,
-        "energ_act_all":energ_act_all,
-        "energ_in_all":energ_in_all,
-        "dt":dt,
-        "N":N,
-        "L":L,
-        "dx":dx,
-        "x":x,
-        "Dx":Dx,
-        "Dy":Dy,
-        "a0":a0,
-        "a1":a1,
-        "n1":n1,
-        "omegas":omegas,
-        "tf":tf,
-        "a0":a0,
-    }
+    # data = {
+    #     "rho_act_all":rho_act_all,
+    #     "rho_in_all":rho_in_all,
+    #     "t_vec_all":t_vec_all,
+    #     "mom_act_all":mom_act_all,
+    #     "mom_in_all":mom_in_all,
+    #     "energ_act_all":energ_act_all,
+    #     "energ_in_all":energ_in_all,
+    #     "dt":dt,
+    #     "N":N,
+    #     "L":L,
+    #     "dx":dx,
+    #     "x":x,
+    #     "Dx":Dx,
+    #     "Dy":Dy,
+    #     "a0":a0,
+    #     "a1":a1,
+    #     "n1":n1,
+    #     "omegas":omegas,
+    #     "tf":tf,
+    #     "a0":a0,
+    # }
 
     os.makedirs("Data/origin", exist_ok=True)
-    np.savez("Data/origin/lattice_boltzmann.npz", data=data)
+    np.savez("Data/origin/lattice_boltzmann.npz", rho_act_all=rho_act_all, rho_in_all=rho_in_all, t_vec_all=t_vec_all, dt=dt, x=x)
 
 
 if __name__ == '__main__':

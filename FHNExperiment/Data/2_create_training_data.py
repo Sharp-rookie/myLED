@@ -12,7 +12,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
 
     # Load original data
     if is_print: print('loading original trace data ...')
-    simdata = np.load("Data/origin/lattice_boltzmann.npz")['data']
+    simdata = np.load("Data/origin/lattice_boltzmann.npz", allow_pickle=True)
     rho_act_all = np.array(simdata["rho_act_all"])[:, np.newaxis]
     rho_in_all = np.array(simdata["rho_in_all"])[:, np.newaxis]
     data = np.concatenate((rho_act_all, rho_in_all), axis=1)
