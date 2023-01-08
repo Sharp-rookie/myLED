@@ -110,7 +110,7 @@ def generate_original_data(trace_num, total_t):
     
 def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
-    if sequence_length is not None and os.path.exists(f"Data/data/tau_{tau}/train_pred.npz") and os.path.exists(f"Data/data/tau_{tau}/val_pred.npz") and os.path.exists(f"Data/data/tau_{tau}/test_pred.npz"):
+    if sequence_length is not None and os.path.exists(f"Data/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/test_{sequence_length}.npz"):
         return
     elif sequence_length is None and os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
         return
@@ -169,6 +169,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             for idx_ in idxs:
                 idxs_ic.append(ic)
                 idxs_timestep.append(idx_)
+            if is_print: print(f'\rtau[{tau}] {item} data process_1[{ic+1}/{N_TRACE}]', end='')
 
         # generator item dataset
         sequences = []
@@ -177,6 +178,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             idx_timestep = idxs_timestep[bn]
             tmp = data_item[idx_ic, idx_timestep:idx_timestep+sequence_length]
             sequences.append(tmp)
+            if is_print: print(f'\rtau[{tau}] {item} data process_2[{bn+1}/{len(idxs_timestep)}]', end='')
 
         sequences = np.array(sequences) 
         if is_print: print(f'tau[{tau}]', f"original {item} dataset", np.shape(sequences))
@@ -198,7 +200,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
 
         # save item dataset
         if sequence_length!=1 and sequence_length!=2:
-            np.savez(data_dir+f'/{item}_pred.npz', data=sequences)
+            np.savez(data_dir+f'/{item}_{sequence_length}.npz', data=sequences)
         else:
             np.savez(data_dir+f'/{item}.npz', data=sequences)
 

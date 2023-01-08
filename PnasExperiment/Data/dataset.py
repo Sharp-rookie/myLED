@@ -5,16 +5,16 @@ from torch.utils.data import Dataset
 
 class PNASDataset(Dataset):
 
-    def __init__(self, file_path, mode='train', T=None):
+    def __init__(self, file_path, mode='train', T=None, T_max=None):
         super().__init__()
         
         self.T = T
 
         # Search for txt files
-        if T is None:
+        if T_max is None:
             self.data = np.load(file_path+f'/{mode}.npz')['data'] # (N, 2, 3) or (N, 1, 3)
         else:
-            self.data = np.load(file_path+f'/{mode}_pred.npz')['data']
+            self.data = np.load(file_path+f'/{mode}_{T_max}.npz')['data']
 
     # 0 --> 1
     def __getitem__(self, index):
