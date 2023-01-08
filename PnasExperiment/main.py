@@ -44,9 +44,9 @@ def train_time_lagged(tau, is_print=False):
 
     # dataset
     train_dataset = PNASDataset(data_filepath, 'train')
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     val_dataset = PNASDataset(data_filepath, 'val')
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False)
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     
     # training pipeline
     losses = []
@@ -130,9 +130,9 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 
     # dataset
     train_dataset = PNASDataset(data_filepath, 'train')
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     test_dataset = PNASDataset(data_filepath, 'test')
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
 
     # testing pipeline
     fp = open(log_dir+'/test/log.txt', 'a')
@@ -220,14 +220,14 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             return np.mean(dims)
         LB_id = cal_id_embedding(tau, epoch, 'MLE')
         MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
-        # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
+        MADA_id = cal_id_embedding(tau, epoch, 'MADA')
         PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
-        fp.write(f"{tau},0,{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},{0},{PCA_id}\n")
+        fp.write(f"{tau},0,{mse_x},{mse_y},{mse_z},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
         fp.flush()
 
-        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
         
         if checkpoint_filepath is None: break
         
@@ -245,8 +245,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    batch_size = 128
-    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t, batch_size=batch_size)
+    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t)
     model.apply(models.weights_normal_init)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
@@ -259,6 +258,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
     
     # training params
     lr = 0.001
+    batch_size = 128
     max_epoch = 50
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
@@ -477,7 +477,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
 
     # load model
     batch_size = 128
-    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t, batch_size=batch_size)
+    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, delta_t=delta_t)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)

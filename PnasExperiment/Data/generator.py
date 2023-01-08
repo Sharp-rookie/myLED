@@ -123,11 +123,11 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     iter = tqdm(range(1, trace_num+1)) if is_print else range(1, trace_num+1)
     for trace_id in iter:
         tmp = np.load(f"Data/origin/{trace_id}/data.npz")
-        X = np.array(tmp['X'])[:, np.newaxis]
-        Y = np.array(tmp['Y'])[:, np.newaxis]
-        Z = np.array(tmp['Z'])[:, np.newaxis]
+        X = np.array(tmp['X'])[:, np.newaxis, np.newaxis] # (sample_num, channel, feature)
+        Y = np.array(tmp['Y'])[:, np.newaxis, np.newaxis]
+        Z = np.array(tmp['Z'])[:, np.newaxis, np.newaxis]
 
-        trace = np.concatenate((X, Y, Z), axis=1)
+        trace = np.concatenate((X, Y, Z), axis=-1)
         data.append(trace[np.newaxis])
     data = np.concatenate(data, axis=0)
 
@@ -213,14 +213,6 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             for i in range(3):
                 ax = plt.subplot(3,1,i+1)
                 ax.set_title(['X','Y','Z'][i])
-                plt.plot(sequences[:, 0, i])
+                plt.plot(sequences[:, 0, 0, i])
             plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
             plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
-
-
-if __name__ == '__main__':
-
-    # generate original data
-    trace_num = 256+32+32
-    total_t = 9
-    generate_original_data(trace_num=trace_num, total_t=total_t)

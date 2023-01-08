@@ -39,7 +39,7 @@ def train_time_lagged(tau, is_print=False):
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 200
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
@@ -120,7 +120,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     
     # testing params
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 200
     loss_func = nn.MSELoss()
     
     # init model
@@ -222,15 +222,15 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             dims = np.load(var_log_dir+f'/id_{method}.npy')
             return np.mean(dims)
         LB_id = cal_id_embedding(tau, epoch, 'MLE')
-        MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
-        MADA_id = cal_id_embedding(tau, epoch, 'MADA')
-        PCA_id = cal_id_embedding(tau, epoch, 'PCA')
+        # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
+        # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
+        # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
-        fp.write(f"{tau},0,{mse_act},{mse_in},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        fp.write(f"{tau},0,{mse_act},{mse_in},{epoch},{LB_id},{0},{0},{0}\n")
         fp.flush()
 
-        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={0:.1f}, MADA={0:.1f}, PCA={0:.1f}   ', end='')
         
         if checkpoint_filepath is None: break
         
@@ -603,7 +603,7 @@ def worker_1(tau, random_seed=729, cpu_num=1, is_print=False):
     test_and_save_embeddings_of_time_lagged(tau, None, is_print)
     test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}", is_print)
     # plot id of each epoch
-    plot_epoch_test_log(tau, max_epoch=50+1)
+    plot_epoch_test_log(tau, max_epoch=200+1)
 
 
 def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, is_print=False, id_list=[1,2,3,4]):
@@ -633,7 +633,8 @@ def data_generator_pipeline():
     
 def id_esitimate_pipeline(cpu_num=1):
     
-    tau_list = [1.5, 3.0, 4.5]
+    # tau_list = [0.0, 1.5, 3.0, 4.5]
+    tau_list = [1.5, 3.0, 4.5, 6.0, 7.5, 9.0, 20.0, 30.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
     workers = []
     
     # id esitimate sub-process
@@ -680,6 +681,6 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 
 if __name__ == '__main__':
     
-    data_generator_pipeline()
+    # data_generator_pipeline()
     id_esitimate_pipeline()
-    slow_evolve_pipeline()
+    # slow_evolve_pipeline()

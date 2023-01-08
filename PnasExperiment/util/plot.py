@@ -72,7 +72,7 @@ def plot_epoch_test_log(tau, max_epoch):
             MADA_id_list.append(np.mean(M.MADA_id[epoch]))
             PCA_id_list.append(np.mean(M.PCA_id[epoch]))
 
-        plt.figure(figsize=(8,8))
+        plt.figure(figsize=(12,9))
         plt.title(f'tau = {M.tau}')
         ax1 = plt.subplot(2,1,1)
         plt.xlabel('epoch')
