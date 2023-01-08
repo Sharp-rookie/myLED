@@ -380,6 +380,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             
             os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
 
+            # TODO: 把类似的plot写进for循环，压缩行数
             # plot slow variable
             plt.figure(figsize=(12,5+2*(slow_id-1)))
             plt.title('Val Reconstruction Curve')
