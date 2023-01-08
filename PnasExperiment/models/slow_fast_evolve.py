@@ -64,9 +64,12 @@ class LSTM_OPT(nn.Module):
     
     def forward(self, x):
         
-        _, (self.h, self.c) = self.cell(x, (self.h, self.c))        
-        y = self.fc(self.h[-1])
+        _, hc  = self.cell(x, (self.h, self.c))
+        y = self.fc(hc[0][-1])
         y = self.unflatten(y)
+        
+        self.h, self.c = hc[0].detach(), hc[1].detach()
+        
         return y
 
 
