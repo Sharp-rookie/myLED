@@ -80,7 +80,6 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt):
     ## for the FitzHugh-Nagumo
     ###########################################
 
-    # N = 40
     N = 100
     L = 20
     x = np.linspace(0, L, N+1)
@@ -135,7 +134,7 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt):
     energ_in_t = 0.5 * (f1_in + f_1_in)
 
     while np.abs(t-tf)>1e-6:
-        print("\r Generating Data[{:d}/{:d}]: {:.3f}/{:.2f}. {:.2f}%".format(id, num, t, tf, t/tf*100.0), end=' ')
+        print("\r Generating Data[{:d}/{:d}]: {:.3f}/{:.2f}. {:.2f}% (dt={:.3f})".format(id, num, t, tf, t/tf*100.0, dt), end=' ')
 
         # Propagate the Lattice Boltzmann in time
         f1_act, f_1_act, f0_act, f1_in, f_1_in, f0_in = LBM(f1_act, f_1_act, f0_act, f1_in, f_1_in, f0_in, omegas, a1, a0, epsilon, n1, dt)
@@ -164,7 +163,7 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt):
     return rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0
 
 
-def generate_origin_data(tf=400, dt=0.005):
+def generate_origin_data(tf=451, dt=0.001):
     # u is the Activator
     # v is the Inhibitor
 
@@ -181,10 +180,11 @@ def generate_origin_data(tf=400, dt=0.005):
     for f_id, file_name in enumerate(file_names):
         
         # load inital-condition file
-        rho_act_0 = np.loadtxt(f"InitialConditions/{file_name}u.txt", delimiter="\n")
-        rho_in_0 = np.loadtxt(f"InitialConditions/{file_name}v.txt", delimiter="\n")
-        x = np.loadtxt("./InitialConditions/y0x.txt", delimiter="\n")
+        rho_act_0 = np.loadtxt(f"ICs/{file_name}u.txt", delimiter="\n")
+        rho_in_0 = np.loadtxt(f"ICs/{file_name}v.txt", delimiter="\n")
+        x = np.loadtxt("ICs/y0x.txt", delimiter="\n")
         
+        # simulate by LBM
         rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf, dt)
 
         # record
@@ -219,7 +219,10 @@ def generate_origin_data(tf=400, dt=0.005):
         "a0":a0,
     }
 
-    os.makedirs("./Simulation_Data", exist_ok=True)
-    with open(f"./origin/lattice_boltzmann.pickle", "wb") as file:
-        # Pickle the "data" dictionary using the highest protocol available.
-        pickle.dump(data, file, pickle.HIGHEST_PROTOCOL)
+    os.makedirs("Data/origin", exist_ok=True)
+    np.savez("Data/origin/lattice_boltzmann.npz", data=data)
+
+
+if __name__ == '__main__':
+    
+    generate_origin_data()

@@ -571,8 +571,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
     # plot mse per T
     plt.figure()
     for item, mse in zip(['slow','fast','total'], [mse_slow, mse_fast, mse_total]):
-        plt.plot(range(1,len(mse)+1), mse, label=item)
-    plt.xlabel(f'T/{delta_t}s')
+        plt.plot(np.arange(1,len(mse)+1)*delta_t, mse, label=item)
+    plt.xlabel(f'delta_t/s')
     plt.title(f'Evolve L1-dist curve | delta_t[{delta_t}]')
     plt.legend()
     plt.savefig(log_dir+f"/test/all_mse.jpg", dpi=300)
@@ -611,7 +611,8 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
     train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
     # plot mse curve of each id
     try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
-    except: pass
+    except: 
+        if is_print: print('error in plot')
     # test evolve
     test_evolve(tau, pretrain_epoch, sample_num, slow_id, delta_t, sequence_length, is_print)
     
