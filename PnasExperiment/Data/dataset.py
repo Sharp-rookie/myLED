@@ -27,8 +27,8 @@ class PNASDataset(Dataset):
         else:
             target = trace[self.T-1]
 
-        input = torch.from_numpy(input[np.newaxis]).float()
-        target = torch.from_numpy(target[np.newaxis]).float()
+        input = torch.from_numpy(input).float()
+        target = torch.from_numpy(target).float()
 
         return input, target
 

@@ -75,7 +75,7 @@ class LSTM_OPT(nn.Module):
 
 class EVOLVER(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t, batch_size):
+    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t):
         super(EVOLVER, self).__init__()
         
         self.encoder_1 = nn.Sequential(

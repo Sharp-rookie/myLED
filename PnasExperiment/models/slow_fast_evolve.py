@@ -46,11 +46,11 @@ class Koopman_OPT(nn.Module):
 
 class LSTM_OPT(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num, batch_size):
+    def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num):
         super(LSTM_OPT, self).__init__()
         
-        self.h = torch.zeros(layer_num * 1, batch_size, hidden_dim, dtype=torch.float32)
-        self.c = torch.zeros(layer_num * 1, batch_size, hidden_dim, dtype=torch.float32)
+        self.layer_num = layer_num
+        self.hidden_dim = hidden_dim
         self.cell = nn.LSTM(
             input_size=in_channels*input_1d_width, 
             hidden_size=hidden_dim, 
@@ -64,18 +64,18 @@ class LSTM_OPT(nn.Module):
     
     def forward(self, x):
         
-        _, hc  = self.cell(x, (self.h, self.c))
+        h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
+        c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
+        _, hc  = self.cell(x, (h0, c0))
         y = self.fc(hc[0][-1])
         y = self.unflatten(y)
-        
-        self.h, self.c = hc[0].detach(), hc[1].detach() # detach() to avoid recurrent deoendencies in grad calculation
-        
+                
         return y
 
 
 class EVOLVER(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t, batch_size):
+    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t):
         super(EVOLVER, self).__init__()
         
         self.encoder_1 = nn.Sequential(
@@ -104,15 +104,15 @@ class EVOLVER(nn.Module):
             nn.Linear(embed_dim, 64, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
-            nn.Linear(64, 3, bias=True),
+            nn.Linear(64, in_channels*input_1d_width, bias=True),
             nn.Tanh(),
-            nn.Unflatten(-1, (in_channels, int(input_1d_width/in_channels)))
+            nn.Unflatten(-1, (in_channels, input_1d_width))
         )
         
         self.K_opt = Koopman_OPT(slow_dim, delta_t)
         self.delta_t = delta_t
         
-        self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, batch_size=batch_size)
+        self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2)
 
         # scale inside the model
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))

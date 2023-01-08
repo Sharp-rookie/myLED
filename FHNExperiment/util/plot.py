@@ -23,11 +23,11 @@ def plot_epoch_test_log(tau, max_epoch):
         seed = int(line[:-1].split(',')[1])
         mse_act = float(line[:-1].split(',')[2])
         mse_in = float(line[:-1].split(',')[3])
-        epoch = int(line[:-1].split(',')[5])
-        LB_id = float(line[:-1].split(',')[6])
-        MiND_id = float(line[:-1].split(',')[7])
-        MADA_id = float(line[:-1].split(',')[8])
-        PCA_id = float(line[:-1].split(',')[9])
+        epoch = int(line[:-1].split(',')[4])
+        LB_id = float(line[:-1].split(',')[5])
+        MiND_id = float(line[:-1].split(',')[6])
+        MADA_id = float(line[:-1].split(',')[7])
+        PCA_id = float(line[:-1].split(',')[8])
 
         find = False
         for M in items:
@@ -66,7 +66,7 @@ def plot_epoch_test_log(tau, max_epoch):
             MADA_id_list.append(np.mean(M.MADA_id[epoch]))
             PCA_id_list.append(np.mean(M.PCA_id[epoch]))
 
-        plt.figure(figsize=(8,8))
+        plt.figure(figsize=(12,9))
         plt.title(f'tau = {M.tau}')
         ax1 = plt.subplot(2,1,1)
         plt.xlabel('epoch')

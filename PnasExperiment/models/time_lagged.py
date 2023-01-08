@@ -22,9 +22,9 @@ class TIME_LAGGED_AE(nn.Module):
             nn.Linear(embed_dim, 64, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
-            nn.Linear(64, 3, bias=True),
+            nn.Linear(64, in_channels*input_1d_width, bias=True),
             nn.Tanh(),
-            nn.Unflatten(-1, (in_channels, int(input_1d_width/in_channels)))
+            nn.Unflatten(-1, (in_channels, input_1d_width))
         )
         
         # scale inside the model
