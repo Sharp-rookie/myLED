@@ -143,4 +143,4 @@ def generate_origin(total_t=None, seed=729, IC=[100,40,2500]):
 
     np.savez(f'Data/origin/{seed}/origin.npz', t=t, X=X, Y=Y, Z=Z, dt=avg)
 
-    print(f'\nSeed[{seed}] subprocess finished!\n')
+    # print(f'\nSeed[{seed}] subprocess finished!\n')

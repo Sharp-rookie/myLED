@@ -26,7 +26,7 @@ def findNearestPoint(data_t, start=0, object_t=10.0):
     return index
 
 
-def time_discretization(seed, total_t, origin_dt=False):
+def time_discretization(seed, total_t, origin_dt=False, is_print=False):
     """Time-forward NearestNeighbor interpolate to discretizate the time"""
 
     data = np.load(f'Data/origin/{seed}/origin.npz')
@@ -48,8 +48,7 @@ def time_discretization(seed, total_t, origin_dt=False):
 
         current_t += dt
 
-        if seed == 1:
-            print(f'\rSeed[{seed}] interpolating {current_t:.6f}/{total_t}', end='')
+        if is_print == 1: print(f'\rSeed[{seed}] interpolating {current_t:.6f}/{total_t}', end='')
 
     plt.figure(figsize=(16,4))
     plt.title(f'dt = {dt}')
@@ -89,19 +88,22 @@ def generate_original_data(trace_num, total_t):
             IC = [np.random.randint(5,200), np.random.randint(5,100), np.random.randint(0,5000)]
             subprocess.append(Process(target=generate_origin, args=(total_t, seed, IC), daemon=True))
             subprocess[-1].start()
-            print(f'\rStart process[seed={seed}] for origin data' + ' '*30)
+            # print(f'\rStart process[seed={seed}] for origin data' + ' '*30)
         else:
             pass
     while any([subp.exitcode == None for subp in subprocess]):
         pass
+    print()
     
     # time discretization by time-forward NearestNeighbor interpolate
     subprocess = []
     for seed in range(1, trace_num+1):
         if not os.path.exists(f'Data/origin/{seed}/data.npz'):
-            subprocess.append(Process(target=time_discretization, args=(seed, total_t, True), daemon=True))
+            origin_dt = True
+            is_print = len(subprocess)==0
+            subprocess.append(Process(target=time_discretization, args=(seed, total_t, origin_dt, is_print), daemon=True))
             subprocess[-1].start()
-            print(f'\rStart process[seed={seed}] for time-discrete data' + ' '*30)
+            # print(f'\rStart process[seed={seed}] for time-discrete data' + ' '*30)
     while any([subp.exitcode == None for subp in subprocess]):
         pass
 
