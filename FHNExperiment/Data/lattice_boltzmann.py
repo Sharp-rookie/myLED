@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import os
 import numpy as np
 
 
@@ -160,68 +159,3 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt):
         t +=dt
 
     return rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0
-
-
-def generate_origin_data(tf=451, dt=0.001):
-    # u is the Activator
-    # v is the Inhibitor
-
-    file_names = ["y00", "y01", "y02", "y03", "y04", "y05"]
-
-    rho_act_all = []
-    rho_in_all = []
-    t_vec_all = []
-    mom_act_all = []
-    mom_in_all = []
-    energ_act_all = []
-    energ_in_all = []
-
-    for f_id, file_name in enumerate(file_names):
-        
-        # load inital-condition file
-        rho_act_0 = np.loadtxt(f"ICs/{file_name}u.txt", delimiter="\n")
-        rho_in_0 = np.loadtxt(f"ICs/{file_name}v.txt", delimiter="\n")
-        x = np.loadtxt("ICs/y0x.txt", delimiter="\n")
-        
-        # simulate by LBM
-        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf, dt)
-
-        # record
-        rho_act_all.append(rho_act)
-        rho_in_all.append(rho_in)
-        t_vec_all.append(t_vec)
-        mom_act_all.append(mom_act)
-        mom_in_all.append(mom_in)
-        energ_act_all.append(energ_act)
-        energ_in_all.append(energ_in)
-
-    # data = {
-    #     "rho_act_all":rho_act_all,
-    #     "rho_in_all":rho_in_all,
-    #     "t_vec_all":t_vec_all,
-    #     "mom_act_all":mom_act_all,
-    #     "mom_in_all":mom_in_all,
-    #     "energ_act_all":energ_act_all,
-    #     "energ_in_all":energ_in_all,
-    #     "dt":dt,
-    #     "N":N,
-    #     "L":L,
-    #     "dx":dx,
-    #     "x":x,
-    #     "Dx":Dx,
-    #     "Dy":Dy,
-    #     "a0":a0,
-    #     "a1":a1,
-    #     "n1":n1,
-    #     "omegas":omegas,
-    #     "tf":tf,
-    #     "a0":a0,
-    # }
-
-    os.makedirs("Data/origin", exist_ok=True)
-    np.savez("Data/origin/lattice_boltzmann.npz", rho_act_all=rho_act_all, rho_in_all=rho_in_all, t_vec_all=t_vec_all, dt=dt, x=x)
-
-
-if __name__ == '__main__':
-    
-    generate_origin_data()
