@@ -106,7 +106,7 @@ def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3
     plt.savefig(f'logs/slow_vars_koopman/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/val_loss_curves.jpg', dpi=300)
 
 
-def plot_y_corr():
+def plot_autocorr():
 
     data = np.load('Data/origin/1/data.npz')
     X = np.array(data['X'])[:, np.newaxis]
@@ -116,16 +116,22 @@ def plot_y_corr():
     data = pd.DataFrame(np.concatenate((X,Y,Z), axis=-1), columns=['X', 'Y', 'Z'])
     
     corrX, corrY, corrZ = [], [], []
-    lag_list = np.array(range(2000))
-    for lag in lag_list:
+    lag_list = np.arange(0, 600*2000, 2000)
+    from tqdm import tqdm
+    for lag in tqdm(lag_list):
         corrX.append(data['X'].autocorr(lag=lag))
         corrY.append(data['Y'].autocorr(lag=lag))
         corrZ.append(data['Z'].autocorr(lag=lag))
-    plt.figure()
-    plt.plot(lag_list*0.005, np.array(corrX), label='X')
-    plt.plot(lag_list*0.005, np.array(corrY), label='Y')
-    plt.plot(lag_list*0.005, np.array(corrZ), label='Z')
+    plt.figure(figsize=(12,8))
+    plt.plot(lag_list*5e-6, np.array(corrX), label='X')
+    plt.plot(lag_list*5e-6, np.array(corrY), label='Y')
+    plt.plot(lag_list*5e-6, np.array(corrZ), label='Z')
     plt.xlabel('time/s')
     plt.legend()
     plt.title('Autocorrelation')
     plt.savefig('corr.jpg', dpi=300)
+
+
+if __name__ == '__main__':
+    
+    plot_autocorr()
