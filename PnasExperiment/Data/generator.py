@@ -146,7 +146,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     np.savetxt(data_dir + "/data_min.txt", np.min(data, axis=(0,1)))
     np.savetxt(data_dir + "/tau.txt", [tau]) # Save the timestep
 
-    # single-sample time steps for train
+    # single-sample time steps
     if sequence_length is None:
         sequence_length = 2 if tau != 0. else 1
 
@@ -162,7 +162,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         N_TRACE = len(trace_list[item])
         data_item = data[trace_list[item]]
 
-        # select sliding window index from 2 trace
+        # select sliding window index from N trace
         idxs_timestep = []
         idxs_ic = []
         for ic in range(N_TRACE):
@@ -183,7 +183,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             if is_print: print(f'\rtau[{tau}] {item} data process_2[{bn+1}/{len(idxs_timestep)}]', end='')
 
         sequences = np.array(sequences) 
-        if is_print: print(f'tau[{tau}]', f"original {item} dataset", np.shape(sequences))
+        if is_print: print(f'tau[{tau}]', f"{item} dataset", np.shape(sequences))
 
         # keep sequences_length equal to sample_num
         if sample_num is not None:
@@ -198,7 +198,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
                 else:
                     tmp2 = np.concatenate((tmp2, sequences), axis=0)
             sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
-        if is_print: print(f'tau[{tau}]', f"processed {item} dataset", np.shape(sequences))
+        if is_print: print(f'tau[{tau}]', f"after process", np.shape(sequences))
 
         # save item dataset
         if sequence_length!=1 and sequence_length!=2:
