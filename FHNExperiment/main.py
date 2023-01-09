@@ -14,7 +14,7 @@ import models
 from Data.dataset import FHNDataset
 from Data.generator import generate_tau_dataset, generate_origin_data
 from util import set_cpu_num
-from util.plot import plot_epoch_test_log, plot_slow_ae_loss
+from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_contourf_fhn
 from util.intrinsic_dimension import eval_id_embedding
 
 
@@ -58,7 +58,7 @@ def train_time_lagged(tau, is_print=False):
         # train
         model.train()
         for input, target in train_loader:
-            input = model.scale(input)
+            input = model.scale(input) # (batchsize,1,2,101)
             target = model.scale(target)
             
             output, _ = model.forward(input.to(device))
@@ -80,7 +80,7 @@ def train_time_lagged(tau, is_print=False):
             
             model.eval()
             for input, target in val_loader:
-                input = model.scale(input)
+                input = model.scale(input) # (batchsize,1,2,101)
                 target = model.scale(target)
             
                 output, _ = model.forward(input.to(device))
@@ -165,7 +165,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             
             # train-dataset
             for batch_idx, (input, target) in enumerate(train_loader):
-                input = model.scale(input)
+                input = model.scale(input) # (batchsize,1,2,101)
                 target = model.scale(target)
                 
                 output, _ = model.forward(input.to(device))
@@ -177,7 +177,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 
             # test-dataset
             for input, target in test_loader:
-                input = model.scale(input)
+                input = model.scale(input) # (batchsize,1,2,101)
                 target = model.scale(target)
                 
                 output, embedding = model.forward(input.to(device))
@@ -192,25 +192,14 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
                 test_targets = target.cpu() if not len(test_targets) else torch.concat((test_targets, target.cpu()), axis=0)
                                 
             # test mse
-            mse_act = loss_func(test_outputs[:,0], test_targets[:,0])
-            mse_in = loss_func(test_outputs[:,1], test_targets[:,1])
+            mse_act = loss_func(test_outputs[:,0,0], test_targets[:,0,0])
+            mse_in = loss_func(test_outputs[:,0,1], test_targets[:,0,1])
         
-        # TODO: 绘制真实热力图（第一行）和预测热力图（第二行）对比，二者做差（第三行）
-        # test_plot, train_plot = [[], [], []], [[], [], []]
-        # for i in range(len(test_outputs)):
-        #     for j in range(len(test_plot)):
-        #         test_plot[j].append([test_outputs[i,0,j], test_targets[i,0,j]])
-        #         train_plot[j].append([train_outputs[i,0,j], train_targets[i,0,j]])
-        # plt.figure(figsize=(16,9))
-        # for i, item in enumerate(['test', 'train']):
-        #     for j in range(len(test_plot)):
-        #         ax = plt.subplot(2,3,j+1+3*i)
-        #         ax.set_title(item+'_'+['X','Y','Z'][j])
-        #         plt.plot(np.array(test_plot[j])[:,1], label='true')
-        #         plt.plot(np.array(test_plot[j])[:,0], label='predict')
-        # plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
-        # plt.savefig(var_log_dir+"/result.jpg", dpi=300)
-        # plt.close()
+        # plot per 5 epoch
+        if epoch % 5 == 0:
+            plot_contourf_fhn(data=test_outputs[:,0], tau=tau, path=var_log_dir+"/pred")
+            plot_contourf_fhn(data=test_targets[:,0], tau=tau, path=var_log_dir+"/true")
+            plot_contourf_fhn(data=test_targets[:,0]-test_outputs[:,0], tau=tau, path=var_log_dir+"/diff")
 
         # save embedding
         np.save(var_log_dir+'/embedding.npy', all_embeddings)
@@ -292,7 +281,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
         # train
         model.train()
         for input, target in train_loader:
-            input = model.scale(input)
+            input = model.scale(input) # (batchsize,1,2,101)
             target = model.scale(target)
             
             # slow extract
@@ -338,7 +327,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             
             model.eval()
             for input, target in val_loader:
-                input = model.scale(input)
+                input = model.scale(input) # (batchsize,1,2,101)
                 target = model.scale(target)
                 
                 # slow extract
@@ -385,76 +374,27 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             
             os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
 
-            # TODO: 把以下 XYZ 都换成 act，in
-
-            # # TODO: 把类似的plot写进for循环，压缩行数
-            # # plot slow variable
-            # plt.figure(figsize=(12,5+2*(slow_id-1)))
-            # plt.title('Val Reconstruction Curve')
-            # for id_var in range(slow_id):
-            #     for index, item in enumerate(['X', 'Y', 'Z']):
-            #         plt.subplot(slow_id, 3, index+1+3*(id_var))
-            #         plt.scatter(inputs[:, 0, index], slow_vars[:, id_var], s=5)
-            #         plt.xlabel(item)
-            #         plt.ylabel(f'U{id_var+1}')
-            # plt.subplots_adjust(wspace=0.35, hspace=0.35)
-            # plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
-            # plt.close()
+            # plot per 5 epoch
+            if epoch % 5 == 0:
+                # plot slow variable
+                for index in range(slow_vars.shape[-1]):
+                    var = slow_vars[:, index]
+                    plot_contourf_fhn(
+                        data=inputs[:,0], 
+                        tau=tau, 
+                        path=log_dir+f"/val/epoch-{epoch}/slow_var{index+1}", 
+                        y_axis_data=var,
+                        xlabel='act', 
+                        ylabel=f'U{index+1}'
+                        )
             
-            # # plot slow infomation reconstruction curve
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(inputs[:,0,j], label='all_info')
-            #     plt.plot(slow_infos[:,0,j], label='slow_info')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_info.jpg", dpi=300)
-            # plt.close()
-            
-            # # plot fast infomation curve (== origin_data - slow_info_recons)
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(inputs[:,0,j], label='all_info')
-            #     plt.plot(fast_infos[:,0,j], label='fast_info')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_info.jpg", dpi=300)
-            # plt.close()
-            
-            # # plot slow infomation prediction curve
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(targets[:,0,j], label='all_true')
-            #     plt.plot(slow_infos_next[:,0,j], label='slow_predict')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
-            # plt.close()
-            
-            # # plot fast infomation prediction curve
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(targets[:,0,j], label='all_true')
-            #     plt.plot(fast_infos_next[:,0,j], label='fast_predict')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
-            # plt.close()
-            
-            # # plot total infomation prediction curve
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(targets[:,0,j], label='all_true')
-            #     plt.plot(total_infos_next[:,0,j], label='all_predict')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
-            # plt.close()
+                # plot slow & fast infomation reconstruction curve
+                plot_contourf_fhn(data=slow_infos[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/slow_info")
+                plot_contourf_fhn(data=fast_infos[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/fast_info")
+                
+                # plot total infomation one-step prediction curve
+                plot_contourf_fhn(data=total_infos_next[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_predict")
+                plot_contourf_fhn(data=targets[:,0]-total_infos_next[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_predict_diff")
         
             # record best model
             if all_loss < best_loss:
@@ -619,8 +559,7 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
     train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
     # plot mse curve of each id
     try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
-    except: 
-        if is_print: print('error in plot')
+    except: pass
     # test evolve
     test_evolve(tau, pretrain_epoch, sample_num, slow_id, delta_t, sequence_length, is_print)
     
@@ -634,7 +573,8 @@ def data_generator_pipeline():
 def id_esitimate_pipeline(cpu_num=1):
     
     # tau_list = [0.0, 1.5, 3.0, 4.5]
-    tau_list = [1.5, 3.0, 4.5, 6.0, 7.5, 9.0, 20.0, 30.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
+    # tau_list = [1.5, 3.0, 4.5, 6.0, 7.5, 9.0, 20.0, 30.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
+    tau_list = [1.0]
     workers = []
     
     # id esitimate sub-process
@@ -682,5 +622,5 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 if __name__ == '__main__':
     
     # data_generator_pipeline()
-    id_esitimate_pipeline()
-    # slow_evolve_pipeline()
+    # id_esitimate_pipeline()
+    slow_evolve_pipeline()

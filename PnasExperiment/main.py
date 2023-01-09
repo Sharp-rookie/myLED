@@ -56,7 +56,7 @@ def train_time_lagged(tau, is_print=False):
         # train
         model.train()
         for input, target in train_loader:
-            input = model.scale(input)
+            input = model.scale(input) # (batchsize,1,1,3)
             target = model.scale(target)
             
             output, _ = model.forward(input.to(device))
@@ -161,7 +161,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             
             # train-dataset
             for batch_idx, (input, target) in enumerate(train_loader):
-                input = model.scale(input)
+                input = model.scale(input) # (batchsize,1,1,3)
                 target = model.scale(target)
                 
                 output, _ = model.forward(input.to(device))
@@ -173,7 +173,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 
             # test-dataset
             for input, target in test_loader:
-                input = model.scale(input)
+                input = model.scale(input) # (batchsize,1,1,3)
                 target = model.scale(target)
                 
                 output, embedding = model.forward(input.to(device))
@@ -188,16 +188,16 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
                 test_targets = target.cpu() if not len(test_targets) else torch.concat((test_targets, target.cpu()), axis=0)
                                 
             # test mse
-            mse_x = loss_func(test_outputs[:,0,0], test_targets[:,0,0])
-            mse_y = loss_func(test_outputs[:,0,1], test_targets[:,0,1])
-            mse_z = loss_func(test_outputs[:,0,2], test_targets[:,0,2])
+            mse_x = loss_func(test_outputs[:,0,0,0], test_targets[:,0,0,0])
+            mse_y = loss_func(test_outputs[:,0,0,1], test_targets[:,0,0,1])
+            mse_z = loss_func(test_outputs[:,0,0,2], test_targets[:,0,0,2])
         
         # plot
         test_plot, train_plot = [[], [], []], [[], [], []]
         for i in range(len(test_outputs)):
             for j in range(len(test_plot)):
-                test_plot[j].append([test_outputs[i,0,j], test_targets[i,0,j]])
-                train_plot[j].append([train_outputs[i,0,j], train_targets[i,0,j]])
+                test_plot[j].append([test_outputs[i,0,0,j], test_targets[i,0,0,j]])
+                train_plot[j].append([train_outputs[i,0,0,j], train_targets[i,0,0,j]])
         plt.figure(figsize=(16,9))
         for i, item in enumerate(['test', 'train']):
             for j in range(len(test_plot)):
@@ -287,7 +287,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
         # train
         model.train()
         for input, target in train_loader:
-            input = model.scale(input)
+            input = model.scale(input) # (batchsize,1,1,3)
             target = model.scale(target)
             
             # slow extract
@@ -333,7 +333,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             
             model.eval()
             for input, target in val_loader:
-                input = model.scale(input)
+                input = model.scale(input) # (batchsize,1,1,3)
                 target = model.scale(target)
                 
                 # slow extract
@@ -387,7 +387,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             for id_var in range(slow_id):
                 for index, item in enumerate(['X', 'Y', 'Z']):
                     plt.subplot(slow_id, 3, index+1+3*(id_var))
-                    plt.scatter(inputs[:, 0, index], slow_vars[:, id_var], s=5)
+                    plt.scatter(inputs[:,0,0,index], slow_vars[:, id_var], s=5)
                     plt.xlabel(item)
                     plt.ylabel(f'U{id_var+1}')
             plt.subplots_adjust(wspace=0.35, hspace=0.35)
@@ -399,8 +399,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(inputs[:,0,j], label='all_info')
-                plt.plot(slow_infos[:,0,j], label='slow_info')
+                plt.plot(inputs[:,0,0,j], label='all_info')
+                plt.plot(slow_infos[:,0,0,j], label='slow_info')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_info.jpg", dpi=300)
             plt.close()
@@ -410,41 +410,41 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(inputs[:,0,j], label='all_info')
-                plt.plot(fast_infos[:,0,j], label='fast_info')
+                plt.plot(inputs[:,0,0,j], label='all_info')
+                plt.plot(fast_infos[:,0,0,j], label='fast_info')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_info.jpg", dpi=300)
             plt.close()
             
-            # plot slow infomation prediction curve
+            # plot slow infomation one-step prediction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,j], label='all_true')
-                plt.plot(slow_infos_next[:,0,j], label='slow_predict')
+                plt.plot(targets[:,0,0,j], label='all_true')
+                plt.plot(slow_infos_next[:,0,0,j], label='slow_predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
             plt.close()
             
-            # plot fast infomation prediction curve
+            # plot fast infomation one-step prediction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,j], label='all_true')
-                plt.plot(fast_infos_next[:,0,j], label='fast_predict')
+                plt.plot(targets[:,0,0,j], label='all_true')
+                plt.plot(fast_infos_next[:,0,0,j], label='fast_predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
             plt.close()
             
-            # plot total infomation prediction curve
+            # plot total infomation one-step prediction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,j], label='all_true')
-                plt.plot(total_infos_next[:,0,j], label='all_predict')
+                plt.plot(targets[:,0,0,j], label='all_true')
+                plt.plot(total_infos_next[:,0,0,j], label='all_predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
             plt.close()
@@ -540,8 +540,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,j], label='true')
-                plt.plot(slow_infos_next[:,0,j], label='predict')
+                plt.plot(targets[:,0,0,j], label='true')
+                plt.plot(slow_infos_next[:,0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_slow.jpg", dpi=300)
             plt.close()
@@ -551,8 +551,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,j], label='true')
-                plt.plot(fast_infos_next[:,0,j], label='predict')
+                plt.plot(targets[:,0,0,j], label='true')
+                plt.plot(fast_infos_next[:,0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_fast.jpg", dpi=300)
             plt.close()
@@ -562,8 +562,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['X','Y','Z']):
                 ax = plt.subplot(1,3,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,j], label='true')
-                plt.plot(total_infos_next[:,0,j], label='predict')
+                plt.plot(targets[:,0,0,j], label='true')
+                plt.plot(total_infos_next[:,0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_total.jpg", dpi=300)
             plt.close()
@@ -611,8 +611,7 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
     train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
     # plot mse curve of each id
     try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
-    except: 
-        if is_print: print('error in plot')
+    except: pass
     # test evolve
     test_evolve(tau, pretrain_epoch, sample_num, slow_id, delta_t, sequence_length, is_print)
     

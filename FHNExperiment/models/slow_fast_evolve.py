@@ -8,6 +8,8 @@ class Koopman_OPT(nn.Module):
     def __init__(self, koopman_dim, delta_t):
         super(Koopman_OPT, self).__init__()
 
+        # TODO: 目前认为 koopman_dim == slow_dim*2，需要进一步研究二者的关系
+        # (batchsize, slow_dim)-->(batchsize, slow_dim)
         self.koopman_dim = koopman_dim
         self.num_eigenvalues = int(koopman_dim/2)
         self.delta_t = delta_t
@@ -49,6 +51,10 @@ class LSTM_OPT(nn.Module):
     def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num):
         super(LSTM_OPT, self).__init__()
         
+        # (batchsize,1,2,101)-->(batchsize,1,202)
+        self.flatten = nn.Flatten(start_dim=2)
+        
+        # (batchsize,1,202)-->(batchsize, hidden_dim)
         self.layer_num = layer_num
         self.hidden_dim = hidden_dim
         self.cell = nn.LSTM(
@@ -59,15 +65,20 @@ class LSTM_OPT(nn.Module):
             batch_first=True # input: (batch_size, squences, features)
             )
         
+        # (batchsize, hidden_dim)-->(batchsize, 202)
         self.fc = nn.Linear(hidden_dim, in_channels*input_1d_width)
-        self.unflatten = nn.Unflatten(-1, (in_channels, int(input_1d_width/in_channels)))
+        
+        # (batchsize, 202)-->(batchsize,1,2,101)
+        self.unflatten = nn.Unflatten(-1, (1, in_channels, input_1d_width))
     
     def forward(self, x):
         
         h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
         c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
-        _, hc  = self.cell(x, (h0, c0))
-        y = self.fc(hc[0][-1])
+        
+        x = self.flatten(x)
+        _, (h, c)  = self.cell(x, (h0, c0))
+        y = self.fc(h[-1])
         y = self.unflatten(y)
                 
         return y
@@ -78,6 +89,7 @@ class EVOLVER(nn.Module):
     def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t):
         super(EVOLVER, self).__init__()
         
+        # (batchsize,1,2,101)-->(batchsize, embed_dim)
         self.encoder_1 = nn.Sequential(
             nn.Flatten(),
             nn.Linear(in_channels*input_1d_width, 64, bias=True),
@@ -87,6 +99,7 @@ class EVOLVER(nn.Module):
             nn.Tanh(),
         )
         
+        # (batchsize, embed_dim)-->(batchsize, slow_dim)
         self.encoder_2 = nn.Sequential(
             nn.Linear(embed_dim, 64, bias=True),
             nn.Tanh(),
@@ -95,6 +108,7 @@ class EVOLVER(nn.Module):
             nn.Tanh(),
         )
         
+        # (batchsize, slow_dim)-->(batchsize,1,2,101)
         self.decoder = nn.Sequential(
             nn.Linear(slow_dim, 64, bias=True),
             nn.Tanh(),
@@ -106,7 +120,7 @@ class EVOLVER(nn.Module):
             nn.Dropout(p=0.01),
             nn.Linear(64, in_channels*input_1d_width, bias=True),
             nn.Tanh(),
-            nn.Unflatten(-1, (in_channels, input_1d_width))
+            nn.Unflatten(-1, (1, in_channels, input_1d_width))
         )
         
         self.K_opt = Koopman_OPT(slow_dim, delta_t)

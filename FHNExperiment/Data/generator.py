@@ -13,7 +13,8 @@ plt.rcParams['ytick.major.pad']='10'
 font = {'weight':'normal', 'size':16}
 plt.rc('font', **font)
 
-from .lattice_boltzmann import LBM, run_lb_fhn_ic
+from .lattice_boltzmann import run_lb_fhn_ic
+from util.plot import plot_contourf_fhn
 
 
 def plot_original_data(rho_act_all, rho_in_all, x, tf, dt, t_vec_all):
@@ -227,19 +228,4 @@ def generate_tau_dataset(tau, sample_num=None, is_print=False, sequence_length=N
         
         # plot
         if sequence_length==1 or sequence_length==2:
-            
-            for index, item in enumerate(['act', 'in']):
-                X = np.array(simdata["x"])
-                Y = np.arange(0, len(sequences))*tau
-                X, Y = np.meshgrid(X, Y)
-                Z = sequences[:, 0, index]
-                
-                fig = plt.figure()
-                ax = fig.gca()
-                mp = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("seismic"),zorder=-9)
-                ax.set_ylabel(r"$t$")
-                ax.set_xlabel(r"$x$")
-                fig.colorbar(mp)
-                plt.gca().set_rasterization_zorder(-1)
-                plt.savefig(data_dir+f"/{mode}_{item}.jpg", bbox_inches="tight", dpi=300)
-                plt.close()
+            plot_contourf_fhn(data=sequences[:, 0], tau=tau, path=data_dir+f"/{mode}")
