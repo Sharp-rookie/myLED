@@ -253,7 +253,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
     MSE_loss = nn.MSELoss()
@@ -371,11 +371,12 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
             
             val_loss.append(all_loss.detach().item())
-            
-            os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
 
             # plot per 5 epoch
             if epoch % 5 == 0:
+                
+                os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
+                
                 # plot slow variable
                 for index in range(slow_vars.shape[-1]):
                     var = slow_vars[:, index]
@@ -384,7 +385,6 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                         tau=tau, 
                         path=log_dir+f"/val/epoch-{epoch}/slow_var{index+1}", 
                         y_axis_data=var,
-                        xlabel='act', 
                         ylabel=f'U{index+1}'
                         )
             
@@ -393,6 +393,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 plot_contourf_fhn(data=fast_infos[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/fast_info")
                 
                 # plot total infomation one-step prediction curve
+                plot_contourf_fhn(data=targets[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_true")
                 plot_contourf_fhn(data=total_infos_next[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_predict")
                 plot_contourf_fhn(data=targets[:,0]-total_infos_next[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_predict_diff")
         
@@ -482,40 +483,12 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             
             os.makedirs(log_dir+f"/test/", exist_ok=True)
             
-            # TODO: 把以下 XYZ 都换成 act，in
-
-            # # plot slow infomation prediction curve
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(targets[:,0,j], label='true')
-            #     plt.plot(slow_infos_next[:,0,j], label='predict')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_slow.jpg", dpi=300)
-            # plt.close()
-            
-            # # plot fast infomation prediction curve
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(targets[:,0,j], label='true')
-            #     plt.plot(fast_infos_next[:,0,j], label='predict')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_fast.jpg", dpi=300)
-            # plt.close()
-            
-            # # plot total infomation prediction curve
-            # plt.figure(figsize=(16,5))
-            # for j, item in enumerate(['X','Y','Z']):
-            #     ax = plt.subplot(1,3,j+1)
-            #     ax.set_title(item)
-            #     plt.plot(targets[:,0,j], label='true')
-            #     plt.plot(total_infos_next[:,0,j], label='predict')
-            # plt.subplots_adjust(wspace=0.2)
-            # plt.savefig(log_dir+f"/test/pred_deltaT_{T*delta_t:.3f}_total.jpg", dpi=300)
-            # plt.close()
+            # plot slow & fast infomation prediction curve
+            plot_contourf_fhn(data=slow_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_slow_pred")
+            plot_contourf_fhn(data=fast_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_fast_pred")
+            plot_contourf_fhn(data=targets[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_total_pred")
+            plot_contourf_fhn(data=total_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_total_true")
+            plot_contourf_fhn(data=targets[:,0]-total_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_total_diff")
     
     # plot mse per T
     plt.figure()
@@ -553,7 +526,7 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
     set_cpu_num(cpu_num)
 
     sequence_length = int(tau/delta_t)
-    sample_num = 500
+    ckpt_epoch = 100
 
     # train
     train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
@@ -561,7 +534,7 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
     try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
     except: pass
     # test evolve
-    test_evolve(tau, pretrain_epoch, sample_num, slow_id, delta_t, sequence_length, is_print)
+    test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, sequence_length, is_print)
     
     
 def data_generator_pipeline():
