@@ -122,6 +122,33 @@ def plot_autocorr():
     plt.legend()
     plt.title('Autocorrelation')
     plt.savefig('corr.jpg', dpi=300)
+    
+    
+def plot_contourf_fhn(data, tau, path, y_axis_data=None, xlabel=None, ylabel=None):
+    
+    # data: (time_length, 2, 101)
+    time_length = data.shape[0]
+    x_length = data.shape[2]
+    
+    for index, item in enumerate(['act', 'in']):
+        
+        if y_axis_data is None:
+            X, Y = np.meshgrid(np.arange(x_length), np.arange(0, time_length)*tau)
+            Z = data[:, index]
+        else:
+            idx = np.argsort(y_axis_data)
+            X, Y = np.meshgrid(np.arange(x_length), y_axis_data)
+            Z = data[idx][:, index]
+        
+        fig = plt.figure()
+        ax = fig.gca()
+        mp = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("seismic"),zorder=-9)
+        ax.set_ylabel(r"$t$" if not ylabel else ylabel)
+        ax.set_xlabel(r"$x$" if not xlabel else xlabel)
+        fig.colorbar(mp)
+        plt.gca().set_rasterization_zorder(-1)
+        plt.savefig(path+f"_{item}.jpg", bbox_inches="tight", dpi=300)
+        plt.close()
 
 
 if __name__ == '__main__':

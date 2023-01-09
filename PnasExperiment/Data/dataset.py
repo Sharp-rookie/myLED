@@ -30,7 +30,7 @@ class PNASDataset(Dataset):
         input = torch.from_numpy(input).float()
         target = torch.from_numpy(target).float()
 
-        return input, target
+        return input.unsqueeze(0), target.unsqueeze(0) # (1, feature_num, feature_dim)
 
     def __len__(self):
         return len(self.data)

@@ -12,7 +12,7 @@ class FHNDataset(Dataset):
 
         # Search for txt files
         if T_max is None:
-            self.data = np.load(file_path+f'/{mode}.npz')['data'] # (N, 2, 3) or (N, 1, 3)
+            self.data = np.load(file_path+f'/{mode}.npz')['data']
         else:
             self.data = np.load(file_path+f'/{mode}_{T_max}.npz')['data']
 
@@ -30,7 +30,7 @@ class FHNDataset(Dataset):
         input = torch.from_numpy(input).float()
         target = torch.from_numpy(target).float()
 
-        return input, target
+        return input.unsqueeze(0), target.unsqueeze(0) # (1, feature_num, feature_dim)
 
     def __len__(self):
         return len(self.data)
