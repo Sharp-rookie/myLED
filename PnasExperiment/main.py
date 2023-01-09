@@ -534,9 +534,9 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             mse_slow.append(l1_fn(slow_infos_next, targets))
             mse_fast.append(l1_fn(fast_infos_next, targets))
             mse_total.append(l1_fn(total_infos_next, targets))
-            if is_print: print(f'\rTesting Koopman evolvement | tau[{tau}] | pretrain[{pretrain_epoch}] | delta_t[{delta_t}] | T[{T}/{T_max}] | total_mse={mse_total[-1]:.5f}     ', end='')
+            if is_print: print(f'\rTesting slow & fast evolve | tau[{tau}] | pretrain[{pretrain_epoch}] | delta_t[{delta_t}] | T[{T}/{T_max}] | total_mse={mse_total[-1]:.5f}     ', end='')
             
-            os.makedirs(log_dir+f"/test/", exist_ok=True)
+            os.makedirs(log_dir+f"/test/deltaT_{T*delta_t:.3f}/", exist_ok=True)
 
             # plot slow infomation prediction curve
             plt.figure(figsize=(16,5))
@@ -546,7 +546,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
                 plt.plot(targets[:,0,0,j], label='true')
                 plt.plot(slow_infos_next[:,0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}_slow.jpg", dpi=300)
+            plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/slow_pred.jpg", dpi=300)
             plt.close()
             
             # plot fast infomation prediction curve
@@ -557,7 +557,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
                 plt.plot(targets[:,0,0,j], label='true')
                 plt.plot(fast_infos_next[:,0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}_fast.jpg", dpi=300)
+            plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/fast_pred.jpg", dpi=300)
             plt.close()
             
             # plot total infomation prediction curve
@@ -568,7 +568,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
                 plt.plot(targets[:,0,0,j], label='true')
                 plt.plot(total_infos_next[:,0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}_total.jpg", dpi=300)
+            plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/total.jpg", dpi=300)
             plt.close()
     
     # plot mse per T

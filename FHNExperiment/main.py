@@ -14,7 +14,7 @@ import models
 from Data.dataset import FHNDataset
 from Data.generator import generate_tau_dataset, generate_origin_data
 from util import set_cpu_num
-from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_contourf_fhn
+from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_contourf_fhn_slow_fast, plot_contourf_fhn_pred
 from util.intrinsic_dimension import eval_id_embedding
 
 
@@ -197,9 +197,13 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
         
         # plot per 5 epoch
         if epoch % 5 == 0:
-            plot_contourf_fhn(data=test_outputs[:,0], tau=tau, path=var_log_dir+"/pred")
-            plot_contourf_fhn(data=test_targets[:,0], tau=tau, path=var_log_dir+"/true")
-            plot_contourf_fhn(data=test_targets[:,0]-test_outputs[:,0], tau=tau, path=var_log_dir+"/diff")
+            plot_contourf_fhn_pred(
+                    pred=test_outputs[:,0],
+                    true=test_targets[:,0],
+                    diff=test_targets[:,0]-test_outputs[:,0],
+                    tau=tau,
+                    path=var_log_dir+f"/evolve"
+                )
 
         # save embedding
         np.save(var_log_dir+'/embedding.npy', all_embeddings)
@@ -377,25 +381,47 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
                 
-                # plot slow variable
-                for index in range(slow_vars.shape[-1]):
+                # plot 3D slow variable
+                var_num = slow_vars.shape[-1]
+                fig = plt.figure(figsize=(16,1+6*var_num))
+                for index in range(var_num):
                     var = slow_vars[:, index]
-                    plot_contourf_fhn(
-                        data=inputs[:,0], 
-                        tau=tau, 
-                        path=log_dir+f"/val/epoch-{epoch}/slow_var{index+1}", 
-                        y_axis_data=var,
-                        ylabel=f'U{index+1}'
-                        )
+                    
+                    for item_i, item in enumerate(['act', 'in']):
+                        X, Y, Z = [], [], []
+                        for x_i, x in enumerate(np.linspace(1, 20, inputs.shape[-1])):
+                            for y_i, y in enumerate(var):
+                                z = inputs[y_i, 0, item_i, x_i]
+                                X.append(x)
+                                Y.append(y)
+                                Z.append(z)
+                        
+                        loc = [0.05+0.5*item_i, 0.95-(0.9/var_num)*(index+1), 0.4, (0.85/var_num)] # left, bottom, width, height
+                        ax = plt.axes(loc, projection='3d')
+                        pic = ax.scatter(X, Y, Z, s=5, c=Z, cmap=plt.get_cmap("coolwarm")) # s=size, cmap=color map
+                        # fig.colorbar(pic) # color bar
+                        ax.set_xlabel('x', labelpad=15)
+                        ax.set_ylabel(f'U{index+1}', labelpad=15)
+                        ax.set_zlabel(item, labelpad=15)
+                fig.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable", dpi=400)
+                plt.close()
             
                 # plot slow & fast infomation reconstruction curve
-                plot_contourf_fhn(data=slow_infos[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/slow_info")
-                plot_contourf_fhn(data=fast_infos[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/fast_info")
+                plot_contourf_fhn_slow_fast(
+                    slow=slow_infos[:,0],
+                    fast=fast_infos[:,0],
+                    tau=tau,
+                    path=log_dir+f"/val/epoch-{epoch}/slow_fast_info"
+                )
                 
                 # plot total infomation one-step prediction curve
-                plot_contourf_fhn(data=targets[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_true")
-                plot_contourf_fhn(data=total_infos_next[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_predict")
-                plot_contourf_fhn(data=targets[:,0]-total_infos_next[:,0], tau=tau, path=log_dir+f"/val/epoch-{epoch}/all_predict_diff")
+                plot_contourf_fhn_pred(
+                    pred=total_infos_next[:,0],
+                    true=targets[:,0],
+                    diff=targets[:,0]-total_infos_next[:,0],
+                    tau=delta_t,
+                    path=log_dir+f"/val/epoch-{epoch}/evolve"
+                )
         
             # record best model
             if all_loss < best_loss:
@@ -479,16 +505,24 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             mse_slow.append(l1_fn(slow_infos_next, targets))
             mse_fast.append(l1_fn(fast_infos_next, targets))
             mse_total.append(l1_fn(total_infos_next, targets))
-            if is_print: print(f'\rTesting Koopman evolvement | tau[{tau}] | pretrain[{pretrain_epoch}] | delta_t[{delta_t}] | T[{T}/{T_max}] | total_mse={mse_total[-1]:.5f}     ', end='')
+            if is_print: print(f'\rTesting slow & fast evolve | tau[{tau}] | pretrain[{pretrain_epoch}] | delta_t[{delta_t}] | T[{T}/{T_max}] | total_mse={mse_total[-1]:.5f}     ', end='')
             
-            os.makedirs(log_dir+f"/test/", exist_ok=True)
+            os.makedirs(log_dir+f"/test/deltaT_{T*delta_t:.3f}/", exist_ok=True)
             
-            # plot slow & fast infomation prediction curve
-            plot_contourf_fhn(data=slow_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_slow_pred")
-            plot_contourf_fhn(data=fast_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_fast_pred")
-            plot_contourf_fhn(data=targets[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_total_pred")
-            plot_contourf_fhn(data=total_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_total_true")
-            plot_contourf_fhn(data=targets[:,0]-total_infos_next[:,0], tau=delta_t, path=log_dir+f"/test/deltaT_{T*delta_t:.3f}_total_diff")
+            # plot slow & fast & total infomation prediction curve
+            plot_contourf_fhn_slow_fast(
+                    slow=slow_infos_next[:,0],
+                    fast=fast_infos_next[:,0],
+                    tau=delta_t,
+                    path=log_dir+f"/test/deltaT_{T*delta_t:.3f}/slow_fast_pred"
+                )
+            plot_contourf_fhn_pred(
+                    pred=total_infos_next[:,0],
+                    true=targets[:,0],
+                    diff=targets[:,0]-total_infos_next[:,0],
+                    tau=delta_t,
+                    path=log_dir+f"/test/deltaT_{T*delta_t:.3f}/evolve"
+                )
     
     # plot mse per T
     plt.figure()
@@ -546,8 +580,7 @@ def data_generator_pipeline():
 def id_esitimate_pipeline(cpu_num=1):
     
     # tau_list = [0.0, 1.5, 3.0, 4.5]
-    # tau_list = [1.5, 3.0, 4.5, 6.0, 7.5, 9.0, 20.0, 30.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
-    tau_list = [1.0]
+    tau_list = np.arange(1, 100, 20)
     workers = []
     
     # id esitimate sub-process
@@ -594,6 +627,6 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 
 if __name__ == '__main__':
     
-    # data_generator_pipeline()
-    # id_esitimate_pipeline()
-    slow_evolve_pipeline()
+    data_generator_pipeline()
+    id_esitimate_pipeline()
+    # slow_evolve_pipeline()
