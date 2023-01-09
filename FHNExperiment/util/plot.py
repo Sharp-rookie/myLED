@@ -1,4 +1,4 @@
-import os
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -98,7 +98,7 @@ def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3
     plt.savefig(f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/val_loss_curves.jpg', dpi=300)
 
 
-def plot_autocorr():
+def plot_pnas_autocorr():
 
     data = np.load('Data/origin/1/data.npz')
     X = np.array(data['X'])[:, np.newaxis]
@@ -109,7 +109,6 @@ def plot_autocorr():
     
     corrX, corrY, corrZ = [], [], []
     lag_list = np.arange(0, 600*2000, 2000)
-    from tqdm import tqdm
     for lag in tqdm(lag_list):
         corrX.append(data['X'].autocorr(lag=lag))
         corrY.append(data['Y'].autocorr(lag=lag))
@@ -122,35 +121,118 @@ def plot_autocorr():
     plt.legend()
     plt.title('Autocorrelation')
     plt.savefig('corr.jpg', dpi=300)
+
+
+def plot_fhn_autocorr():
+
+    data = np.load('../Data/origin/lattice_boltzmann.npz')
+    rho_act_all = np.array(data["rho_act_all"])[0]
+    rho_in_all = np.array(data["rho_in_all"])[0]
+
+    data_1 = pd.DataFrame(rho_act_all, columns=[f'x_{x}' for x in range(rho_act_all.shape[-1])])
+    data_2 = pd.DataFrame(rho_in_all, columns=[f'x_{x}' for x in range(rho_act_all.shape[-1])])
     
+    plt.figure(figsize=(12,6))
+    for item_i, pack in enumerate(zip(['act', 'in'], [data_1,data_2])):
+        
+        item, data = pack[0], pack[1]
+        
+        X, T, Corr = [], [], []
+        lag_list = np.arange(0, rho_act_all.shape[0], 1000)
+        for lag in tqdm(lag_list):
+            for x in range(rho_act_all.shape[-1]):
+                X.append(x)
+                T.append(lag*0.001)
+                Corr.append(data[f'x_{x}'].autocorr(lag=lag))
+        
+        loc = [0.05+0.5*item_i, 0.05, 0.4, 0.9] # left, bottom, width, height
+        ax = plt.axes(loc, projection='3d')
+        pic = ax.scatter(X, T, Corr, s=5, c=Corr, cmap=plt.get_cmap("coolwarm")) # s=size, cmap=color map
+        ax.set_xlabel('x', labelpad=15)
+        ax.set_ylabel(f't', labelpad=15)
+        ax.set_zlabel('corr', labelpad=15)
+        ax.set_title(item)
+    plt.savefig('corr.jpg', dpi=300)
+    plt.close()
+    np.savez('corr.npz', X=X, T=T, Corr=Corr)
+
     
-def plot_contourf_fhn(data, tau, path, y_axis_data=None, xlabel=None, ylabel=None):
+def plot_contourf_fhn(data, tau, path):
+    """画一张热力图"""
     
     # data: (time_length, 2, 101)
     time_length = data.shape[0]
     x_length = data.shape[2]
     
+    fig = plt.figure(figsize=(12,6))
     for index, item in enumerate(['act', 'in']):
         
-        if y_axis_data is None:
-            X, Y = np.meshgrid(np.arange(x_length), np.arange(0, time_length)*tau)
-            Z = data[:, index]
-        else:
-            idx = np.argsort(y_axis_data)
-            X, Y = np.meshgrid(np.arange(x_length), y_axis_data)
-            Z = data[idx][:, index]
+        X, Y = np.meshgrid(np.arange(x_length), np.arange(0, time_length)*tau)
+        Z = data[:, index]
         
-        fig = plt.figure()
-        ax = fig.gca()
-        mp = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("seismic"),zorder=-9)
-        ax.set_ylabel(r"$t$" if not ylabel else ylabel)
-        ax.set_xlabel(r"$x$" if not xlabel else xlabel)
-        fig.colorbar(mp)
+        loc = [0.05+0.5*index, 0.05, 0.4, 0.95] # left, bottom, width, height
+        ax = plt.axes(loc)
+        pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
+        ax.set_ylabel(r"$t$")
+        ax.set_xlabel(r"$x$")
+        ax.set_title(item)
+        fig.colorbar(pic)
         plt.gca().set_rasterization_zorder(-1)
-        plt.savefig(path+f"_{item}.jpg", bbox_inches="tight", dpi=300)
-        plt.close()
+    
+    plt.savefig(path+f".jpg", bbox_inches="tight", dpi=300)
+    plt.close()
+   
+    
+def plot_contourf_fhn_pred(pred, true, diff, tau, path):
+    """一次把pred、true、diff的热力图画在一张图里"""
+    
+    fig = plt.figure(figsize=(16,15))
+    for index, data in enumerate([true, pred, diff]):        
+        for item_i, item in enumerate(['act', 'in']):
+            
+            time_length = data.shape[0]
+            x_length = data.shape[2]
+            X, Y = np.meshgrid(np.arange(x_length), np.arange(0, time_length)*tau)
+            Z = data[:, item_i]
+            
+            loc = [0.05+0.5*item_i, 1.0-0.3*(index+1), 0.4, 0.2] # left, bottom, width, height
+            ax = plt.axes(loc)
+            pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
+            ax.set_ylabel(r"$t$")
+            ax.set_xlabel(r"$x$")
+            ax.set_title(['true','pred','diff'][index]+' | '+item)
+            fig.colorbar(pic)
+            plt.gca().set_rasterization_zorder(-1)
+    
+    fig.savefig(path+".jpg", dpi=300)
+    plt.close()
+    
+    
+def plot_contourf_fhn_slow_fast(slow, fast, tau, path):
+    """一次把快、慢数据的热力图画在一张图里"""
+    
+    fig = plt.figure(figsize=(16,10))
+    for index, data in enumerate([slow, fast]):        
+        for item_i, item in enumerate(['act', 'in']):
+            
+            time_length = data.shape[0]
+            x_length = data.shape[2]
+            X, Y = np.meshgrid(np.arange(x_length), np.arange(0, time_length)*tau)
+            Z = data[:, item_i]
+            
+            loc = [0.05+0.5*item_i, 1.0-0.45*(index+1), 0.4, 0.35] # left, bottom, width, height
+            ax = plt.axes(loc)
+            pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
+            ax.set_ylabel(r"$t$")
+            ax.set_xlabel(r"$x$")
+            ax.set_title(['slow','fast'][index]+' | '+item)
+            fig.colorbar(pic)
+            plt.gca().set_rasterization_zorder(-1)
+    
+    fig.savefig(path+".jpg", dpi=300)
+    plt.close()
 
 
 if __name__ == '__main__':
     
-    plot_autocorr()
+    plot_fhn_autocorr()

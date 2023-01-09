@@ -106,7 +106,7 @@ def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3
     plt.savefig(f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/delta_t{delta_t}/val_loss_curves.jpg', dpi=300)
 
 
-def plot_autocorr():
+def plot_pnas_autocorr():
 
     data = np.load('Data/origin/1/data.npz')
     X = np.array(data['X'])[:, np.newaxis]
@@ -134,4 +134,4 @@ def plot_autocorr():
 
 if __name__ == '__main__':
     
-    plot_autocorr()
+    plot_pnas_autocorr()
