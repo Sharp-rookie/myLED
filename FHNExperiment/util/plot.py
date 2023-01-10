@@ -129,21 +129,22 @@ def plot_fhn_autocorr():
     rho_act_all = np.array(data["rho_act_all"])[0]
     rho_in_all = np.array(data["rho_in_all"])[0]
 
-    data_1 = pd.DataFrame(rho_act_all, columns=[f'x_{x}' for x in range(rho_act_all.shape[-1])])
-    data_2 = pd.DataFrame(rho_in_all, columns=[f'x_{x}' for x in range(rho_act_all.shape[-1])])
+    data_1 = pd.DataFrame(rho_act_all, columns=[f'x_{i}' for i in range(rho_act_all.shape[-1])])
+    data_2 = pd.DataFrame(rho_in_all, columns=[f'x_{i}' for i in range(rho_act_all.shape[-1])])
     
     plt.figure(figsize=(12,6))
-    for item_i, pack in enumerate(zip(['act', 'in'], [data_1,data_2])):
+    for item_i, pack in enumerate(zip(['act', 'in'], [data_1, data_2])):
         
         item, data = pack[0], pack[1]
         
         X, T, Corr = [], [], []
         lag_list = np.arange(0, rho_act_all.shape[0], 1000)
         for lag in tqdm(lag_list):
-            for x in range(rho_act_all.shape[-1]):
+            # for i, x in enumerate(np.linspace(0, 20, rho_act_all.shape[-1])):
+            for i, x in enumerate(np.linspace(0, 20, 20)):
                 X.append(x)
                 T.append(lag*0.001)
-                Corr.append(data[f'x_{x}'].autocorr(lag=lag))
+                Corr.append(data[f'x_{i}'].autocorr(lag=lag))
         
         loc = [0.05+0.5*item_i, 0.05, 0.4, 0.9] # left, bottom, width, height
         ax = plt.axes(loc, projection='3d')
@@ -152,9 +153,11 @@ def plot_fhn_autocorr():
         ax.set_ylabel(f't', labelpad=15)
         ax.set_zlabel('corr', labelpad=15)
         ax.set_title(item)
+        
+        np.savez(item+'_corr.npz', X=X, T=T, Corr=Corr)
+        
     plt.savefig('corr.jpg', dpi=300)
     plt.close()
-    np.savez('corr.npz', X=X, T=T, Corr=Corr)
 
     
 def plot_contourf_fhn(data, tau, path):

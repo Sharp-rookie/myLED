@@ -460,7 +460,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
     mse_slow, mse_fast, mse_total = [], [], []
     l1_fn = nn.L1Loss()
     
-    for T in range(1, T_max):
+    for T in range(1, T_max, 5):
         # dataset
         test_dataset = FHNDataset(data_filepath, 'test', T=T, T_max=T_max)
         test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
@@ -574,13 +574,14 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
 def data_generator_pipeline():
     
     # generate original data
-    generate_origin_data(tf=451, dt=0.001)
+    total_t = 2001
+    generate_origin_data(tf=total_t, dt=0.001)
     
     
 def id_esitimate_pipeline(cpu_num=1):
     
     # tau_list = [0.0, 1.5, 3.0, 4.5]
-    tau_list = np.arange(1, 100, 20)
+    tau_list = np.arange(1., 100+2., 10.0)
     workers = []
     
     # id esitimate sub-process

@@ -128,11 +128,11 @@ def generate_origin_data(tf=451, dt=0.001):
         mom_in_all.append(mom_in)
         energ_act_all.append(energ_act)
         energ_in_all.append(energ_in)
-    
-    plot_original_data(rho_act_all, rho_in_all, x, tf, dt, t_vec_all)
 
     os.makedirs("Data/origin", exist_ok=True)
-    np.savez("Data/origin/lattice_boltzmann.npz", rho_act_all=rho_act_all, rho_in_all=rho_in_all, t_vec_all=t_vec_all, dt=dt, x=x)
+    np.savez("Data/origin/lattice_boltzmann.npz", rho_act_all=rho_act_all, rho_in_all=rho_in_all, t_vec_all=t_vec_all, dt=dt, x=x, tf=tf)
+    
+    plot_original_data(rho_act_all, rho_in_all, x, tf, dt, t_vec_all)
 
 
 def generate_tau_dataset(tau, sample_num=None, is_print=False, sequence_length=None):
@@ -177,6 +177,8 @@ def generate_tau_dataset(tau, sample_num=None, is_print=False, sequence_length=N
     for mode in ['train','val','test']:
         
         # if os.path.exists(data_dir+f'/{mode}.npz'): continue
+        if sequence_length is not None and os.path.exists(f"Data/data/tau_{tau}/{mode}_{sequence_length}.npz"): continue
+        elif sequence_length is None and os.path.exists(f"Data/data/tau_{tau}/{mode}.npz"): continue
         
         # select trace num
         N_TRACE = len(trace_list[mode])
