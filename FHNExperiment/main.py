@@ -574,7 +574,7 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
 def data_generator_pipeline():
     
     # generate original data
-    total_t = 2001
+    total_t = 451
     generate_origin_data(tf=total_t, dt=0.001)
     
     
@@ -629,5 +629,5 @@ def slow_evolve_pipeline(delta_t=0.01, cpu_num=1):
 if __name__ == '__main__':
     
     data_generator_pipeline()
-    id_esitimate_pipeline()
+    # id_esitimate_pipeline()
     # slow_evolve_pipeline()
