@@ -13,16 +13,15 @@ plt.rcParams['ytick.major.pad']='10'
 font = {'weight':'normal', 'size':16}
 plt.rc('font', **font)
 
-from .lattice_boltzmann import run_lb_fhn_ic
-from util.plot import plot_contourf_fhn
+from lattice_boltzmann import run_lb_fhn_ic
+# from util.plot import plot_contourf_fhn
 
 
 def plot_original_data(rho_act_all, rho_in_all, x, tf, dt, t_vec_all):
 
-    labels = ["Test", "Train", "Train", "Train", "Val", "Val"]
     fig, (ax1, ax2) = plt.subplots(1,2,figsize=(15,5))
     for ic in range(np.shape(rho_act_all)[0]):
-        ax1.plot(x, rho_act_all[ic,0,:], label="trace{:}".format(labels[ic]), linewidth=2)
+        ax1.plot(x, rho_act_all[ic,0,:], label=f"ic[{ic}]", linewidth=2)
 
     ax1.set_ylabel(r"$u(x,t=0)$")
     ax1.set_xlabel(r"$x$")
@@ -30,7 +29,7 @@ def plot_original_data(rho_act_all, rho_in_all, x, tf, dt, t_vec_all):
     ax1.set_title("Activator")
 
     for ic in range(np.shape(rho_in_all)[0]):
-        ax2.plot(x, rho_in_all[ic,0,:], label="trace{:}".format(labels[ic]), linewidth=2)
+        ax2.plot(x, rho_in_all[ic,0,:], label=f"ic[{ic}]", linewidth=2)
 
     ax2.set_ylabel(r"$v(x,t=0)$")
     ax2.set_xlabel(r"$x$")
@@ -78,7 +77,7 @@ def plot_original_data(rho_act_all, rho_in_all, x, tf, dt, t_vec_all):
             # add a color bar which maps values to colors.
             fig.colorbar(surf, orientation="horizontal")
             ax.invert_xaxis()
-            ax.view_init(elev=34., azim=-48.)
+            ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
             plt.savefig("Data/origin/figures/{:}/surface_{:}.jpg".format(ic, item), dpi=300)
             plt.close()
 
@@ -132,7 +131,102 @@ def generate_origin_data(tf=451, dt=0.001):
     os.makedirs("Data/origin", exist_ok=True)
     np.savez("Data/origin/lattice_boltzmann.npz", rho_act_all=rho_act_all, rho_in_all=rho_in_all, t_vec_all=t_vec_all, dt=dt, x=x, tf=tf)
     
-    plot_original_data(rho_act_all, rho_in_all, x, tf, dt, t_vec_all)
+    plot_original_data(np.array(rho_act_all), np.array(rho_in_all), np.array(x), tf, dt, np.array(t_vec_all))
+    
+    
+def analysis_noise_data(tf=451, dt=0.001):
+
+    file_name = "y00"
+
+    rho_act_all = []
+    rho_in_all = []
+        
+    # load inital-condition file
+    rho_act_0 = np.loadtxt(f"Data/ICs/{file_name}u.txt", delimiter="\n")
+    rho_in_0 = np.loadtxt(f"Data/ICs/{file_name}v.txt", delimiter="\n")
+    x = np.loadtxt("Data/ICs/y0x.txt", delimiter="\n")
+        
+    for f_id in range(2):
+        
+        if f_id != 0:
+            rho_act_0 += np.random.normal(0, 0.1, len(x))
+            rho_in_0 += np.random.normal(0, 0.1, len(x))
+        
+        # simulate by LBM
+        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, 2, rho_act_0, rho_in_0, tf, dt)
+
+        # record
+        rho_act_all.append(rho_act)
+        rho_in_all.append(rho_in)
+    
+    # diff
+    rho_act_all.append(rho_act_all[1]-rho_act_all[0])
+    rho_in_all.append(rho_in_all[1]-rho_in_all[0])
+    
+    rho_act_all = np.array(rho_act_all)
+    rho_in_all = np.array(rho_in_all)
+    
+    # plot
+    fig, (ax1, ax2) = plt.subplots(1,2,figsize=(15,6))
+    for ic in range(len(rho_act_all)-1):
+        ax1.plot(x, rho_act_all[ic,0,:], label=f"ic[{ic}]", linewidth=2)
+    ax1.set_ylabel(r"$u(x,t=0)$")
+    ax1.set_xlabel(r"$x$")
+    ax1.set_xlim([np.min(x), np.max(x)])
+    ax1.set_title("Activator")
+
+    for ic in range(len(rho_in_all)-1):
+        ax2.plot(x, rho_in_all[ic,0,:], label=f"ic[{ic}]", linewidth=2)
+    ax2.set_ylabel(r"$v(x,t=0)$")
+    ax2.set_xlabel(r"$x$")
+    ax2.legend(loc="upper left", bbox_to_anchor=(1.05, 1), borderaxespad=0.)
+    ax2.set_title("Inhibitor")
+    ax2.set_xlim([np.min(x), np.max(x)])
+    plt.tight_layout()
+    os.makedirs("Data/analyss/", exist_ok=True)
+    plt.savefig("Data/analyss/initial_conditions.jpg", bbox_inches="tight", dpi=300)
+    plt.close()
+
+    for ic in tqdm(range(len(rho_act_all))):
+
+        rho_act = rho_act_all[ic]
+        rho_in = rho_in_all[ic]
+                
+        os.makedirs(f"Data/analyss/{ic}/", exist_ok=True)
+        
+        for index, item in enumerate(['act', 'in']):
+            N_end = int(tf / dt)
+            X = x
+            Y = t_vec[:N_end]
+            X, Y = np.meshgrid(X, Y)
+            Z = rho_act[:N_end] if index==0 else rho_in[:N_end]
+            
+            # Picture 1
+            fig = plt.figure(figsize=(12,10))
+            ax = fig.gca(projection='3d')
+            # plot the surface.
+            surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm, rasterized=True)
+            ax.set_xlabel(r"$x$", labelpad=20)
+            ax.set_ylabel(r"$t$", labelpad=20)
+            ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+            ax.set_zlabel(r"$u(x,t)$" if index==0 else r"$v(x,t)$", rotation=0, labelpad=20)
+            ax.set_zlim(-1.5, 1.5)
+            # fig.colorbar(surf, orientation="horizontal")
+            ax.invert_xaxis()
+            ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
+            plt.savefig("Data/analyss/{:}/surface_{:}.jpg".format(ic, item), dpi=300)
+            plt.close()
+
+            # Picture 2
+            fig = plt.figure()
+            ax = fig.gca()
+            mp = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("seismic"),zorder=-9)
+            ax.set_ylabel(r"$t$")
+            ax.set_xlabel(r"$x$")
+            fig.colorbar(mp)
+            plt.gca().set_rasterization_zorder(-1)
+            plt.savefig("Data/analyss/{:}/contourf_{:}.jpg".format(ic, item), bbox_inches="tight", dpi=300)
+            plt.close()
 
 
 def generate_tau_dataset(tau, sample_num=None, is_print=False, sequence_length=None):

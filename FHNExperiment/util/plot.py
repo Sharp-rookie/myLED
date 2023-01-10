@@ -152,6 +152,7 @@ def plot_fhn_autocorr():
         ax.set_xlabel('x', labelpad=15)
         ax.set_ylabel(f't', labelpad=15)
         ax.set_zlabel('corr', labelpad=15)
+        # ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
         ax.set_title(item)
         
         np.savez(item+'_corr.npz', X=X, T=T, Corr=Corr)
@@ -203,6 +204,7 @@ def plot_contourf_fhn_pred(pred, true, diff, tau, path):
             pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
             ax.set_ylabel(r"$t$")
             ax.set_xlabel(r"$x$")
+            # ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
             ax.set_title(['true','pred','diff'][index]+' | '+item)
             fig.colorbar(pic)
             plt.gca().set_rasterization_zorder(-1)
@@ -228,6 +230,7 @@ def plot_contourf_fhn_slow_fast(slow, fast, tau, path):
             pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
             ax.set_ylabel(r"$t$")
             ax.set_xlabel(r"$x$")
+            # ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
             ax.set_title(['slow','fast'][index]+' | '+item)
             fig.colorbar(pic)
             plt.gca().set_rasterization_zorder(-1)
