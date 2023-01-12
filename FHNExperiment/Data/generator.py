@@ -148,12 +148,18 @@ def analysis_noise_data(tf=451, dt=0.001):
         
     for f_id in range(2):
         
-        if f_id != 0:
-            rho_act_0 += np.random.normal(0, 0.1, len(x))
-            rho_in_0 += np.random.normal(0, 0.1, len(x))
+        # # intinal noise
+        # if f_id != 0:
+        #     rho_act_0 += np.random.normal(0, 0.1, len(x))
+        #     rho_in_0 += np.random.normal(0, 0.1, len(x))
         
         # simulate by LBM
         rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, 2, rho_act_0, rho_in_0, tf, dt)
+
+        # global noise
+        if f_id != 0:
+            rho_act += np.random.normal(0, 0.1, rho_act.shape)
+            rho_in += np.random.normal(0, 0.1, rho_in.shape)
 
         # record
         rho_act_all.append(rho_act)
@@ -183,16 +189,18 @@ def analysis_noise_data(tf=451, dt=0.001):
     ax2.set_title("Inhibitor")
     ax2.set_xlim([np.min(x), np.max(x)])
     plt.tight_layout()
-    os.makedirs("Data/analyss/", exist_ok=True)
-    plt.savefig("Data/analyss/initial_conditions.jpg", bbox_inches="tight", dpi=300)
+    os.makedirs("Data/analysis/", exist_ok=True)
+    plt.savefig("Data/analysis/initial_conditions.jpg", bbox_inches="tight", dpi=300)
     plt.close()
+    
+    np.savez("Data/analysis/lattice_boltzmann.npz", rho_act_all=rho_act_all, rho_in_all=rho_in_all, t_vec_all=t_vec, dt=dt, x=x, tf=tf)
 
     for ic in tqdm(range(len(rho_act_all))):
 
         rho_act = rho_act_all[ic]
         rho_in = rho_in_all[ic]
                 
-        os.makedirs(f"Data/analyss/{ic}/", exist_ok=True)
+        os.makedirs(f"Data/analysis/{ic}/", exist_ok=True)
         
         for index, item in enumerate(['act', 'in']):
             N_end = int(tf / dt)
@@ -214,7 +222,7 @@ def analysis_noise_data(tf=451, dt=0.001):
             # fig.colorbar(surf, orientation="horizontal")
             ax.invert_xaxis()
             ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
-            plt.savefig("Data/analyss/{:}/surface_{:}.jpg".format(ic, item), dpi=300)
+            plt.savefig("Data/analysis/{:}/surface_{:}.jpg".format(ic, item), dpi=300)
             plt.close()
 
             # Picture 2
@@ -225,8 +233,9 @@ def analysis_noise_data(tf=451, dt=0.001):
             ax.set_xlabel(r"$x$")
             fig.colorbar(mp)
             plt.gca().set_rasterization_zorder(-1)
-            plt.savefig("Data/analyss/{:}/contourf_{:}.jpg".format(ic, item), bbox_inches="tight", dpi=300)
+            plt.savefig("Data/analysis/{:}/contourf_{:}.jpg".format(ic, item), bbox_inches="tight", dpi=300)
             plt.close()
+analysis_noise_data(tf=231)
 
 
 def generate_tau_dataset(tau, sample_num=None, is_print=False, sequence_length=None):

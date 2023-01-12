@@ -123,25 +123,32 @@ def plot_pnas_autocorr():
     plt.savefig('corr.jpg', dpi=300)
 
 
-def plot_fhn_autocorr():
+def plot_fhn_autocorr(path):
 
-    data = np.load('../Data/origin/lattice_boltzmann.npz')
-    rho_act_all = np.array(data["rho_act_all"])[0]
-    rho_in_all = np.array(data["rho_in_all"])[0]
+    mode = 1
+    data = np.load(path)
+    rho_act_all = np.array(data["rho_act_all"])[mode]
+    rho_in_all = np.array(data["rho_in_all"])[mode]
+    data_x = np.array(data["x"])
 
-    data_1 = pd.DataFrame(rho_act_all, columns=[f'x_{i}' for i in range(rho_act_all.shape[-1])])
-    data_2 = pd.DataFrame(rho_in_all, columns=[f'x_{i}' for i in range(rho_act_all.shape[-1])])
+    data_1 = pd.DataFrame(rho_act_all, columns=[f'x_{i}' for i in range(len(data_x))])
+    data_2 = pd.DataFrame(rho_in_all, columns=[f'x_{i}' for i in range(len(data_x))])
     
     plt.figure(figsize=(12,6))
     for item_i, pack in enumerate(zip(['act', 'in'], [data_1, data_2])):
         
         item, data = pack[0], pack[1]
         
+        # try: 
+        #     data = np.load(item+f'_corr{mode}.npz')
+        #     X = np.array(data["X"])
+        #     T = np.array(data["T"])
+        #     Corr = np.array(data["Corr"])
+        # except:
         X, T, Corr = [], [], []
-        lag_list = np.arange(0, rho_act_all.shape[0], 1000)
+        lag_list = np.arange(1, rho_act_all.shape[0], 1000)
         for lag in tqdm(lag_list):
-            # for i, x in enumerate(np.linspace(0, 20, rho_act_all.shape[-1])):
-            for i, x in enumerate(np.linspace(0, 20, 20)):
+            for i, x in enumerate(data_x):
                 X.append(x)
                 T.append(lag*0.001)
                 Corr.append(data[f'x_{i}'].autocorr(lag=lag))
@@ -152,12 +159,13 @@ def plot_fhn_autocorr():
         ax.set_xlabel('x', labelpad=15)
         ax.set_ylabel(f't', labelpad=15)
         ax.set_zlabel('corr', labelpad=15)
-        # ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
+        ax.invert_xaxis()
+        ax.view_init(elev=0., azim=0.) # view direction: elve=vertical angle ,azim=horizontal angle
         ax.set_title(item)
         
-        np.savez(item+'_corr.npz', X=X, T=T, Corr=Corr)
+        np.savez(item+f'_corr{mode}.npz', X=X, T=T, Corr=Corr)
         
-    plt.savefig('corr.jpg', dpi=300)
+    plt.savefig(f'corr{mode}.jpg', dpi=300)
     plt.close()
 
     
@@ -179,6 +187,8 @@ def plot_contourf_fhn(data, tau, path):
         pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
         ax.set_ylabel(r"$t$")
         ax.set_xlabel(r"$x$")
+        # ax.invert_xaxis()
+        # ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
         ax.set_title(item)
         fig.colorbar(pic)
         plt.gca().set_rasterization_zorder(-1)
@@ -204,6 +214,7 @@ def plot_contourf_fhn_pred(pred, true, diff, tau, path):
             pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
             ax.set_ylabel(r"$t$")
             ax.set_xlabel(r"$x$")
+            # ax.invert_xaxis()
             # ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
             ax.set_title(['true','pred','diff'][index]+' | '+item)
             fig.colorbar(pic)
@@ -230,6 +241,7 @@ def plot_contourf_fhn_slow_fast(slow, fast, tau, path):
             pic = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("coolwarm"), zorder=-9)
             ax.set_ylabel(r"$t$")
             ax.set_xlabel(r"$x$")
+            # ax.invert_xaxis()
             # ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
             ax.set_title(['slow','fast'][index]+' | '+item)
             fig.colorbar(pic)
@@ -241,4 +253,4 @@ def plot_contourf_fhn_slow_fast(slow, fast, tau, path):
 
 if __name__ == '__main__':
     
-    plot_fhn_autocorr()
+    plot_fhn_autocorr('Data/analysis/lattice_boltzmann.npz')
