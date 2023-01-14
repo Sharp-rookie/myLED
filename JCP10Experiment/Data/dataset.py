@@ -3,7 +3,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
-class JCP12Dataset(Dataset):
+class PNASDataset(Dataset):
 
     def __init__(self, file_path, mode='train', T=None, T_max=None):
         super().__init__()
@@ -12,7 +12,7 @@ class JCP12Dataset(Dataset):
 
         # Search for txt files
         if T_max is None:
-            self.data = np.load(file_path+f'/{mode}.npz')['data'] # (N, 2, 1, 4) or (N, 1, 1, 4)
+            self.data = np.load(file_path+f'/{mode}.npz')['data'] # (N, 2, 1, 3) or (N, 1, 1, 3)
         else:
             self.data = np.load(file_path+f'/{mode}_{T_max}.npz')['data']
 

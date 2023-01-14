@@ -7,7 +7,7 @@ class TIME_LAGGED_AE(nn.Module):
     def __init__(self, in_channels, input_1d_width, embed_dim):
         super(TIME_LAGGED_AE, self).__init__()
                 
-        # (batchsize,1,1,4)-->(batchsize, embed_dim)
+        # (batchsize,1,1,3)-->(batchsize, embed_dim)
         self.encoder = nn.Sequential(
             nn.Flatten(),
             nn.Linear(in_channels*input_1d_width, 64, bias=True),
@@ -17,7 +17,7 @@ class TIME_LAGGED_AE(nn.Module):
             nn.Tanh(),
         )
         
-        # (batchsize, embed_dim)-->(batchsize,1,1,4)
+        # (batchsize, embed_dim)-->(batchsize,1,1,3)
         self.decoder = nn.Sequential(
             nn.Linear(embed_dim, 64, bias=True),
             nn.Tanh(),

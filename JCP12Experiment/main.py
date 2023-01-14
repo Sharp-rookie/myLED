@@ -37,16 +37,16 @@ def train_time_lagged(tau, is_print=False):
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
 
     # dataset
     train_dataset = JCP12Dataset(data_filepath, 'train')
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
     val_dataset = JCP12Dataset(data_filepath, 'val')
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
     losses = []
@@ -118,7 +118,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     
     # testing params
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     loss_func = nn.MSELoss()
     
     # init model
@@ -130,9 +130,9 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 
     # dataset
     train_dataset = JCP12Dataset(data_filepath, 'train')
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     test_dataset = JCP12Dataset(data_filepath, 'test')
-    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+    test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
 
     # testing pipeline
     fp = open(log_dir+'/test/log.txt', 'a')
@@ -191,7 +191,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             mse_c1 = loss_func(test_outputs[:,0,0,0], test_targets[:,0,0,0])
             mse_c2 = loss_func(test_outputs[:,0,0,1], test_targets[:,0,0,1])
             mse_c3 = loss_func(test_outputs[:,0,0,2], test_targets[:,0,0,2])
-            mse_c4 = loss_func(test_outputs[:,0,0,2], test_targets[:,0,0,3])
+            mse_c4 = loss_func(test_outputs[:,0,0,3], test_targets[:,0,0,3])
         
         # plot
         test_plot, train_plot = [[], [], [], []], [[], [], [], []]
@@ -201,11 +201,12 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
                 train_plot[j].append([train_outputs[i,0,0,j], train_targets[i,0,0,j]])
         plt.figure(figsize=(16,9))
         for i, item in enumerate(['test', 'train']):
+            plot_data = test_plot if i == 0 else train_plot
             for j in range(4):
-                ax = plt.subplot(2,4,j+1+3*i)
+                ax = plt.subplot(2,4,j+1+4*i)
                 ax.set_title(item+'_'+['c1','c2','c3','c4'][j])
-                plt.plot(np.array(test_plot[j])[:,1], label='true')
-                plt.plot(np.array(test_plot[j])[:,0], label='predict')
+                plt.plot(np.array(plot_data[j])[:int(5/tau),1], label='true')
+                plt.plot(np.array(plot_data[j])[:int(5/tau),0], label='predict')
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
         plt.savefig(var_log_dir+"/result.jpg", dpi=300)
         plt.close()
@@ -220,15 +221,17 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             dims = np.load(var_log_dir+f'/id_{method}.npy')
             return np.mean(dims)
         LB_id = cal_id_embedding(tau, epoch, 'MLE')
-        MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
-        MADA_id = cal_id_embedding(tau, epoch, 'MADA')
-        PCA_id = cal_id_embedding(tau, epoch, 'PCA')
+        # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
+        # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
+        # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
-        fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        # fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{0},{0},{0}\n")
         fp.flush()
 
-        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
         
         if checkpoint_filepath is None: break
         
@@ -274,9 +277,9 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
     
     # dataset
     train_dataset = JCP12Dataset(data_filepath, 'train')
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
     val_dataset = JCP12Dataset(data_filepath, 'val')
-    val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+    val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
     losses = []
@@ -403,8 +406,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(inputs[:,0,0,j], label='all_info')
-                    plt.plot(slow_infos[:,0,0,j], label='slow_info')
+                    plt.plot(inputs[:int(5/delta_t),0,0,j], label='all_info')
+                    plt.plot(slow_infos[:int(5/delta_t),0,0,j], label='slow_info')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_info.jpg", dpi=300)
                 plt.close()
@@ -414,8 +417,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(inputs[:,0,0,j], label='all_info')
-                    plt.plot(fast_infos[:,0,0,j], label='fast_info')
+                    plt.plot(inputs[:int(5/delta_t),0,0,j], label='all_info')
+                    plt.plot(fast_infos[:int(5/delta_t),0,0,j], label='fast_info')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_info.jpg", dpi=300)
                 plt.close()
@@ -425,8 +428,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:,0,0,j], label='all_true')
-                    plt.plot(slow_infos_next[:,0,0,j], label='slow_predict')
+                    plt.plot(targets[:int(5/delta_t),0,0,j], label='all_true')
+                    plt.plot(slow_infos_next[:int(5/delta_t),0,0,j], label='slow_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
                 plt.close()
@@ -436,8 +439,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:,0,0,j], label='all_true')
-                    plt.plot(fast_infos_next[:,0,0,j], label='fast_predict')
+                    plt.plot(targets[:int(5/delta_t),0,0,j], label='all_true')
+                    plt.plot(fast_infos_next[:int(5/delta_t),0,0,j], label='fast_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
                 plt.close()
@@ -447,8 +450,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:,0,0,j], label='all_true')
-                    plt.plot(total_infos_next[:,0,0,j], label='all_predict')
+                    plt.plot(targets[:int(5/delta_t),0,0,j], label='all_true')
+                    plt.plot(total_infos_next[:int(5/delta_t),0,0,j], label='all_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
                 plt.close()
@@ -493,7 +496,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
     for T in range(1, T_max):
         # dataset
         test_dataset = JCP12Dataset(data_filepath, 'test', T=T, T_max=T_max)
-        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
+        test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
         
         # testing pipeline        
         with torch.no_grad():
@@ -544,8 +547,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                 ax = plt.subplot(1,4,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,0,j], label='true')
-                plt.plot(slow_infos_next[:,0,0,j], label='predict')
+                plt.plot(targets[:int(5/delta_t),0,0,j], label='true')
+                plt.plot(slow_infos_next[:int(5/delta_t),0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/slow_pred.jpg", dpi=300)
             plt.close()
@@ -555,8 +558,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                 ax = plt.subplot(1,4,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,0,j], label='true')
-                plt.plot(fast_infos_next[:,0,0,j], label='predict')
+                plt.plot(targets[:int(5/delta_t),0,0,j], label='true')
+                plt.plot(fast_infos_next[:int(5/delta_t),0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/fast_pred.jpg", dpi=300)
             plt.close()
@@ -566,8 +569,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                 ax = plt.subplot(1,4,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:,0,0,j], label='true')
-                plt.plot(total_infos_next[:,0,0,j], label='predict')
+                plt.plot(targets[:int(5/delta_t),0,0,j], label='true')
+                plt.plot(total_infos_next[:int(5/delta_t),0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/total.jpg", dpi=300)
             plt.close()
@@ -588,17 +591,17 @@ def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=Fals
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
     
-    sample_num = 50
+    sample_num = None
 
     # generate dataset
     generate_dataset(trace_num, tau, sample_num, is_print=is_print)
     # train
     train_time_lagged(tau, is_print)
     # test and calculating ID
-    test_and_save_embeddings_of_time_lagged(tau, None, is_print)
+    # test_and_save_embeddings_of_time_lagged(tau, None, is_print)
     test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}", is_print)
     # plot id of each epoch
-    plot_epoch_test_log(tau, max_epoch=50+1)
+    plot_epoch_test_log(tau, max_epoch=100+1)
 
 
 def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, is_print=False, id_list=[1,2,3,4]):
@@ -627,7 +630,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.0, 0.01, 0.1]
+    tau_list = [0.01,0.05,0.1,0.5,1.0,1.5,2.0]
     workers = []
     
     # id esitimate sub-process
@@ -648,7 +651,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, delta_t=0.01, cpu_num=1):
     workers = []
     
     # generate dataset sub-process
-    sample_num = 50
+    sample_num =None
     generate_dataset(trace_num, delta_t, sample_num, is_print=True, sequence_length=None)
     for tau in tau_list:
         sequence_length = int(tau/delta_t)
@@ -676,6 +679,6 @@ if __name__ == '__main__':
     
     trace_num = 1000
     
-    data_generator_pipeline(trace_num=trace_num, total_t=5)
+    data_generator_pipeline(trace_num=trace_num, total_t=10)
     id_esitimate_pipeline(trace_num=trace_num)
-    slow_evolve_pipeline(trace_num=trace_num)
+    # slow_evolve_pipeline(trace_num=trace_num)
