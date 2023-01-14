@@ -36,7 +36,9 @@ def generate_original_data(trace_num, total_t=5, dt=0.001):
         # plt.savefig(f'Data/origin/jcp12_{trace_id}.jpg', dpi=300)
         
         return sol
-        
+    
+    if os.path.exists('Data/origin/origin.npz'): return
+    
     os.makedirs('Data/origin', exist_ok=True)
     
     trace = []
@@ -44,7 +46,7 @@ def generate_original_data(trace_num, total_t=5, dt=0.001):
         sol = solve_1_trace(trace_id, total_t, dt)
         trace.append(sol)
     
-    np.savez('Data/origin/origin.npz', trace=trace, dt=dt, total_t=total_t)
+    np.savez('Data/origin/origin.npz', trace=trace, dt=dt, T=total_t)
 
     print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
     
@@ -59,13 +61,14 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     # load original data
     if is_print: print('loading original trace data:')
     tmp = np.load(f"Data/origin/origin.npz")
-    data = np.array(tmp['trace']) # (trace_num, time_length, feature_num)
+    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
+    point_num = int(tmp['T'] / tau) - 1
 
     # subsampling
     dt = tmp['dt']
     subsampling = int(tau/dt) if tau!=0. else 1
     data = data[:, ::subsampling]
-    if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, feature_num)')
+    if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information
     data_dir = f"Data/data/tau_{tau}"
@@ -89,7 +92,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
         
-        # if os.path.exists(data_dir+f'/{item}.npz'): continue
+        if os.path.exists(data_dir+f'/{item}.npz'): continue
         
         # select trace num
         N_TRACE = len(trace_list[item])
@@ -143,9 +146,9 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         if sequence_length==1 or sequence_length==2:
             plt.figure(figsize=(16,10))
             plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-            plt.plot(sequences[:,0,0], label='c1')
-            plt.plot(sequences[:,0,1], label='c2')
-            plt.plot(sequences[:,0,2], label='c3')
-            plt.plot(sequences[:,0,3], label='c4')
+            plt.plot(sequences[:point_num,0,0,0], label='c1')
+            plt.plot(sequences[:point_num,0,0,1], label='c2')
+            plt.plot(sequences[:point_num,0,0,2], label='c3')
+            plt.plot(sequences[:point_num,0,0,3], label='c4')
             plt.legend()
             plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
