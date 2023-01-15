@@ -321,7 +321,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             for unit in input_units:
                 unit = model.scale(unit) # (batchsize,1,1,4)
                 with torch.no_grad():
-                    slow_var, _ = model.extract(input.to(device))
+                    slow_var, _ = model.extract(unit.to(device))
                     slow_info = model.recover(slow_var)
                     fast_units_target.append(unit-slow_info)
             fast_units_pred = torch.concat(fast_units_pred, dim=0)
@@ -349,6 +349,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             fast_infos = []
             fast_infos_next = []
             total_infos_next = []
+            embeds = []
+            embed_from_infos = []
             
             model.eval()
             for input, target, input_units in val_loader:
@@ -380,6 +382,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 fast_infos.append(fast_info.cpu())
                 fast_infos_next.append(fast_info_next.cpu())
                 total_infos_next.append(total_info_next.cpu())
+                embeds.append(embed.cpu())
+                embed_from_infos.append(embed_from_info.cpu())
             
             # trans to tensor
             inputs = torch.concat(inputs, axis=0)
@@ -390,11 +394,13 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             fast_infos = torch.concat(fast_infos, axis=0)
             fast_infos_next = torch.concat(fast_infos_next, axis=0)
             total_infos_next = torch.concat(total_infos_next, axis=0)
+            embeds = torch.concat(embeds, axis=0)
+            embed_from_infos = torch.concat(embed_from_infos, axis=0)
             
             # cal loss
-            adiabatic_loss = L1_loss(embed, embed_from_info)
-            slow_reconstruct_loss = MSE_loss(slow_info, input)
-            evolve_loss = MSE_loss(total_info_next, target)
+            adiabatic_loss = L1_loss(embeds, embed_from_infos)
+            slow_reconstruct_loss = MSE_loss(slow_infos, inputs)
+            evolve_loss = MSE_loss(total_infos_next, targets)
             all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.05*adiabatic_loss
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
             
@@ -615,7 +621,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     set_cpu_num(cpu_num)
 
     delta_t = tau / n
-    ckpt_epoch = 100
+    ckpt_epoch = 150
 
     # train
     train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=is_print)
@@ -683,4 +689,4 @@ if __name__ == '__main__':
     
     data_generator_pipeline(trace_num=trace_num, total_t=5)
     # id_esitimate_pipeline(trace_num=trace_num)
-    slow_evolve_pipeline(trace_num=trace_num)
+    slow_evolve_pipeline(trace_num=trace_num, n=30)

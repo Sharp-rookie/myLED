@@ -83,9 +83,9 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     if sequence_length is None:
         sequence_length = 2 if tau != 0. else 1
     
-    #######################
+    ##################################
     # Create [train,val,test] dataset
-    #######################
+    ##################################
     train_num = int(0.8*trace_num)
     val_num = int(0.1*trace_num)
     test_num = int(0.1*trace_num)
