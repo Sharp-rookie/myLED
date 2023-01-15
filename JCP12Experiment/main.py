@@ -263,7 +263,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
     MSE_loss = nn.MSELoss()
@@ -386,6 +386,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
             if epoch % 5 == 0:
                 
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
+                
+                period_num = 5
 
                 # TODO: 把类似的plot写进for循环，压缩行数
                 # plot slow variable
@@ -406,8 +408,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(inputs[:int(5/delta_t),0,0,j], label='all_info')
-                    plt.plot(slow_infos[:int(5/delta_t),0,0,j], label='slow_info')
+                    plt.plot(inputs[:period_num*int(5/delta_t),0,0,j], label='all_info')
+                    plt.plot(slow_infos[:period_num*int(5/delta_t),0,0,j], label='slow_info')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_info.jpg", dpi=300)
                 plt.close()
@@ -417,8 +419,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(inputs[:int(5/delta_t),0,0,j], label='all_info')
-                    plt.plot(fast_infos[:int(5/delta_t),0,0,j], label='fast_info')
+                    plt.plot(inputs[:period_num*int(5/delta_t),0,0,j], label='all_info')
+                    plt.plot(fast_infos[:period_num*int(5/delta_t),0,0,j], label='fast_info')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_info.jpg", dpi=300)
                 plt.close()
@@ -428,8 +430,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:int(5/delta_t),0,0,j], label='all_true')
-                    plt.plot(slow_infos_next[:int(5/delta_t),0,0,j], label='slow_predict')
+                    plt.plot(targets[:period_num*int(5/delta_t),0,0,j], label='all_true')
+                    plt.plot(slow_infos_next[:period_num*int(5/delta_t),0,0,j], label='slow_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
                 plt.close()
@@ -439,8 +441,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:int(5/delta_t),0,0,j], label='all_true')
-                    plt.plot(fast_infos_next[:int(5/delta_t),0,0,j], label='fast_predict')
+                    plt.plot(targets[:period_num*int(5/delta_t),0,0,j], label='all_true')
+                    plt.plot(fast_infos_next[:period_num*int(5/delta_t),0,0,j], label='fast_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
                 plt.close()
@@ -450,8 +452,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_prin
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:int(5/delta_t),0,0,j], label='all_true')
-                    plt.plot(total_infos_next[:int(5/delta_t),0,0,j], label='all_predict')
+                    plt.plot(targets[:period_num*int(5/delta_t),0,0,j], label='all_true')
+                    plt.plot(total_infos_next[:period_num*int(5/delta_t),0,0,j], label='all_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
                 plt.close()
@@ -541,14 +543,16 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             if is_print: print(f'\rTesting slow & fast evolve | tau[{tau}] | pretrain[{pretrain_epoch}] | delta_t[{delta_t}] | T[{T}/{T_max}] | total_mse={mse_total[-1]:.5f}     ', end='')
             
             os.makedirs(log_dir+f"/test/deltaT_{T*delta_t:.3f}/", exist_ok=True)
+            
+            period_num = 5
 
             # plot slow infomation prediction curve
             plt.figure(figsize=(16,5))
             for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                 ax = plt.subplot(1,4,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:int(5/delta_t),0,0,j], label='true')
-                plt.plot(slow_infos_next[:int(5/delta_t),0,0,j], label='predict')
+                plt.plot(targets[:period_num*int(5/delta_t),0,0,j], label='true')
+                plt.plot(slow_infos_next[:period_num*int(5/delta_t),0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/slow_pred.jpg", dpi=300)
             plt.close()
@@ -558,8 +562,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                 ax = plt.subplot(1,4,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:int(5/delta_t),0,0,j], label='true')
-                plt.plot(fast_infos_next[:int(5/delta_t),0,0,j], label='predict')
+                plt.plot(targets[:period_num*int(5/delta_t),0,0,j], label='true')
+                plt.plot(fast_infos_next[:period_num*int(5/delta_t),0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/fast_pred.jpg", dpi=300)
             plt.close()
@@ -569,8 +573,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, T_max, is_pri
             for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                 ax = plt.subplot(1,4,j+1)
                 ax.set_title(item)
-                plt.plot(targets[:int(5/delta_t),0,0,j], label='true')
-                plt.plot(total_infos_next[:int(5/delta_t),0,0,j], label='predict')
+                plt.plot(targets[:period_num*int(5/delta_t),0,0,j], label='true')
+                plt.plot(total_infos_next[:period_num*int(5/delta_t),0,0,j], label='predict')
             plt.subplots_adjust(wspace=0.2)
             plt.savefig(log_dir+f"/test/deltaT_{T*delta_t:.3f}/total.jpg", dpi=300)
             plt.close()
@@ -611,7 +615,7 @@ def worker_2(tau, pretrain_epoch, slow_id, delta_t, random_seed=729, cpu_num=1, 
     set_cpu_num(cpu_num)
 
     sequence_length = int(tau/delta_t)
-    ckpt_epoch = 50
+    ckpt_epoch = 100
 
     # train
     train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, is_print=is_print)
@@ -630,7 +634,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.01,0.05,0.1,0.5,1.0,1.5,2.0]
+    tau_list = [0.01,0.05,0.1,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,2.0]
     workers = []
     
     # id esitimate sub-process
@@ -644,10 +648,10 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     print('ID Esitimate Over!')
 
 
-def slow_evolve_pipeline(trace_num=256+32+32, delta_t=0.01, cpu_num=1):
+def slow_evolve_pipeline(trace_num=256+32+32, delta_t=0.05, cpu_num=1):
     
-    tau_list = [0.01, 0.1]
-    id_list = [2, 4, 6]
+    tau_list = [1.3, 1.4, 1.5]
+    id_list = [2, 4]
     workers = []
     
     # generate dataset sub-process
@@ -664,7 +668,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, delta_t=0.01, cpu_num=1):
     
     # slow evolve sub-process
     for tau in tau_list:
-        for pretrain_epoch in [5, 30]:
+        for pretrain_epoch in [30, 80]:
             for slow_id in id_list:
                 is_print = True if len(workers)==0 else False
                 workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, delta_t, 729, cpu_num, is_print, id_list), daemon=True))
@@ -677,8 +681,8 @@ def slow_evolve_pipeline(trace_num=256+32+32, delta_t=0.01, cpu_num=1):
 
 if __name__ == '__main__':
     
-    trace_num = 1000
+    trace_num = 5000
     
-    data_generator_pipeline(trace_num=trace_num, total_t=10)
-    id_esitimate_pipeline(trace_num=trace_num)
-    # slow_evolve_pipeline(trace_num=trace_num)
+    data_generator_pipeline(trace_num=trace_num, total_t=5)
+    # id_esitimate_pipeline(trace_num=trace_num)
+    slow_evolve_pipeline(trace_num=trace_num)

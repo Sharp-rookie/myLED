@@ -23,7 +23,7 @@ def generate_original_data(trace_num, total_t=5, dt=0.001):
         
         seed_everything(trace_id)
         
-        y0 = [np.random.uniform(-10,10) for _ in range(4)]
+        y0 = [np.random.uniform(-3,3) for _ in range(4)]
         t  =np.arange(0, total_t, dt)
         sol = odeint(system_4d, y0, t)
 
@@ -57,7 +57,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         return
     elif sequence_length is None and os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
         return
-
+    
     # load original data
     if is_print: print('loading original trace data:')
     tmp = np.load(f"Data/origin/origin.npz")
@@ -82,7 +82,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     # single-sample time steps
     if sequence_length is None:
         sequence_length = 2 if tau != 0. else 1
-
+    
     #######################
     # Create [train,val,test] dataset
     #######################
@@ -91,9 +91,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     test_num = int(0.1*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
-        
-        if os.path.exists(data_dir+f'/{item}.npz'): continue
-        
+                
         # select trace num
         N_TRACE = len(trace_list[item])
         data_item = data[trace_list[item]]

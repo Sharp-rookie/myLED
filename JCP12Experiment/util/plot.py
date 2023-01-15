@@ -143,7 +143,7 @@ def plot_jcp12_autocorr():
 
     simdata = np.load('Data/origin/origin.npz')
     
-    trace_num = 50
+    trace_num = 100
     corrC1, corrC2, corrC3, corrC4 = [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)]
     for trace_id in range(trace_num):
         tmp = np.array(simdata['trace'])[trace_id]
@@ -154,7 +154,7 @@ def plot_jcp12_autocorr():
 
         data = pd.DataFrame(np.concatenate((c1,c2,c3,c4), axis=-1), columns=['c1','c2','c3','c4'])
         
-        lag_list = np.arange(0, 10*1000)
+        lag_list = np.arange(0, 5*1000)
         for lag in tqdm(lag_list):
             corrC1[trace_id].append(data['c1'].autocorr(lag=lag))
             corrC2[trace_id].append(data['c2'].autocorr(lag=lag))
