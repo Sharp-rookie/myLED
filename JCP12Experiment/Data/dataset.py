@@ -20,7 +20,7 @@ class JCP12Dataset(Dataset):
     def __getitem__(self, index):
 
         trace = self.data[index]
-
+        
         input = trace[0]
         if self.length is None:
             target = trace[0] if len(trace)==1 else trace[1]
@@ -37,3 +37,22 @@ class JCP12Dataset(Dataset):
 
     def __len__(self):
         return len(self.data)
+    
+#     def plot(self):
+        
+#         inputs = []
+#         targets = []
+#         for i in range(self.__len__()):
+#             input, target, _ = self.__getitem__(i)
+#             inputs.append(input[0,0,2])
+#             targets.append(target[0,0,2])
+#         import matplotlib.pyplot as plt
+#         plt.figure()
+#         plt.plot(inputs[:100], label='input')
+#         plt.plot(targets[:100], label='target')
+#         plt.legend()
+#         plt.savefig('data.jpg', dpi=300)
+
+# data_path = 'Data/data/tau_' + str(0.15)
+# j = JCP12Dataset(data_path, 'val', length=10)
+# j.plot()
