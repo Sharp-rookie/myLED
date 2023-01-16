@@ -33,7 +33,7 @@ class JCP12Dataset(Dataset):
         if self.length is None:
             return input.unsqueeze(0), target.unsqueeze(0)
         else:
-            return input.unsqueeze(0), target.unsqueeze(0), [torch.from_numpy(trace[i]).float().unsqueeze(0) for i in range(1,self.length-1)] 
+            return input.unsqueeze(0), target.unsqueeze(0), [torch.from_numpy(trace[i]).float().unsqueeze(0) for i in range(self.length)] 
 
     def __len__(self):
         return len(self.data)
