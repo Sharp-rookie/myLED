@@ -282,62 +282,72 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
-    losses = []
     train_loss = []
     val_loss = []
     best_loss = 1.
     for epoch in range(1, max_epoch+1):
         
+        losses = [[],[],[],[]]
+        
         # train
         model.train()
-        for input, target, input_units in train_loader:
+        for input, target, internl_units in train_loader:
             input = model.scale(input) # (batchsize,1,1,4)
             target = model.scale(target)
             
+            ###############
             # slow extract
+            ###############
             slow_var, embed = model.extract(input.to(device))
             slow_info = model.recover(slow_var)
             _, embed_from_info = model.extract(slow_info)
             
-            # slow evolve
-            slow_var_next = model.koopman_evolve(slow_var, tau=torch.tensor([tau], device=device))
-            slow_info_next = model.recover(slow_var_next)
-            
-            # fast evolve
-            fast_info = input - slow_info.detach() # detach() to avoid the gradiant of fast evolver impact the slow evolver
-            fast_info_next, fast_units_pred = model.lstm_evolve(fast_info, T=n)
-            
-            # total evolve
-            total_info_next = slow_info_next + fast_info_next.detach()
-            
-            # slow loss
             adiabatic_loss = L1_loss(embed, embed_from_info)
             slow_reconstruct_loss = MSE_loss(slow_info, input)
-            slow_evolve_loss = MSE_loss(total_info_next, target)
-            slow_loss = 0.5*slow_reconstruct_loss + 0.5*slow_evolve_loss + 0.05*adiabatic_loss
             
-            # fast loss
-            fast_units_target = []
-            for unit in input_units:
-                unit = model.scale(unit) # (batchsize,1,1,4)
-                with torch.no_grad():
-                    slow_var, _ = model.extract(unit.to(device))
-                    slow_info = model.recover(slow_var)
-                    fast_units_target.append(unit-slow_info)
-            fast_units_pred = torch.concat(fast_units_pred, dim=0)
-            fast_units_target = torch.concat(fast_units_target, dim=0)
-            fast_loss = MSE_loss(fast_units_pred, fast_units_target)
+            ################
+            # n-step evolve
+            ################
+            slow_evolve_loss, fast_evolve_loss = 0, 0
+            for i in range(1, len(internl_units)):
+                
+                # extract slow var and recover to slow info
+                cur_unit = internl_units[i] # t+i
+                last_unit = internl_units[i-1] # t
+                cur_unit_slow_var, _ = model.extract(cur_unit.to(device))
+                cur_unit_slow_info = model.recover(cur_unit_slow_var)
+                last_unit_slow_var, _ = model.extract(last_unit.to(device))
+                last_unit_slow_info = model.recover(last_unit_slow_var)
+                
+                # slow evolve
+                t = delta_t * (i + 1) # delta_t between 0 and t+i
+                unit_slow_var_pred, _ = model.koopman_evolve(slow_var.detach(), tau=torch.tensor([t], device=device), T=1) # 0 ——> t+i
+                unit_slow_info_pred = model.recover(unit_slow_var_pred)
+                
+                # fast evolve
+                last_unit_fast_info = last_unit - last_unit_slow_info
+                cur_unit_fast_info = cur_unit - cur_unit_slow_info
+                unit_fast_info_pred, _ = model.lstm_evolve(last_unit_fast_info, T=1) # t ——> t+i
+                
+                # evolve loss
+                slow_evolve_loss += 0.5*MSE_loss(unit_slow_var_pred, cur_unit_slow_var) + 0.5*MSE_loss(unit_slow_info_pred, cur_unit_slow_info)
+                fast_evolve_loss += MSE_loss(unit_fast_info_pred, cur_unit_fast_info)
             
-            # all loss
-            all_loss = slow_loss + fast_loss
-            
+            ###########
+            # optimize
+            ###########
+            all_loss = (slow_reconstruct_loss + 0.05*adiabatic_loss) + (slow_evolve_loss + fast_evolve_loss) / n
             optimizer.zero_grad()
             all_loss.backward()
             optimizer.step()
             
-            losses.append(all_loss.detach().item())
+            # record loss
+            losses[0].append(adiabatic_loss.detach().item())
+            losses[1].append(slow_reconstruct_loss.detach().item())
+            losses[2].append(slow_evolve_loss.detach().item())
+            losses[3].append(fast_evolve_loss.detach().item())
             
-        train_loss.append(np.mean(losses))
+        train_loss.append([np.mean(losses[0]), np.mean(losses[1]), np.mean(losses[2]), np.mean(losses[3])])
         
         # validate
         with torch.no_grad():
@@ -353,7 +363,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             embed_from_infos = []
             
             model.eval()
-            for input, target, input_units in val_loader:
+            for input, target, _ in val_loader:
                 input = model.scale(input) # (batchsize,1,1,4)
                 target = model.scale(target)
                 
@@ -363,7 +373,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 _, embed_from_info = model.extract(slow_info)
                 
                 # slow evolve
-                slow_var_next = model.koopman_evolve(slow_var, tau=torch.tensor([tau], device=device))
+                slow_var_next, _ = model.koopman_evolve(slow_var, tau=torch.tensor([tau], device=device), T=1)
                 slow_info_next = model.recover(slow_var_next)
                 
                 # fast evolve
@@ -491,12 +501,14 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     torch.save(best_model, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
     if is_print: print(f'\nsave best model at {log_dir}/checkpoints/epoch-{epoch}.ckpt (val best_loss={best_loss})')
     
-    # TODO: 分别画出每种loss曲线
     # plot loss curve
+    train_loss = np.array(train_loss)
     plt.figure()
-    plt.plot(train_loss)
+    for i, item in enumerate(['adiabatic','slow_reconstruct','slow_evolve','fast_evolve']):
+        plt.plot(train_loss[:, i], label=item)
     plt.xlabel('epoch')
-    plt.title('Train MSELoss Curve')
+    plt.legend()
+    plt.title('Training Loss Curve')
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
@@ -656,8 +668,8 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
 
 def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
     
-    tau_list = [1.3, 1.4, 1.5]
-    id_list = [2, 4]
+    tau_list = [1.5]
+    id_list = [2, 4, 6]
     workers = []
     
     # generate dataset sub-process
@@ -672,7 +684,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
     
     # slow evolve sub-process
     for tau in tau_list:
-        for pretrain_epoch in [30, 80]:
+        for pretrain_epoch in [80]:
             for slow_id in id_list:
                 is_print = True if len(workers)==0 else False
                 workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, n, 729, cpu_num, is_print, id_list), daemon=True))
@@ -689,4 +701,4 @@ if __name__ == '__main__':
     
     data_generator_pipeline(trace_num=trace_num, total_t=5)
     # id_esitimate_pipeline(trace_num=trace_num)
-    slow_evolve_pipeline(trace_num=trace_num, n=30)
+    slow_evolve_pipeline(trace_num=trace_num, n=10)

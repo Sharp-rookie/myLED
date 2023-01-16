@@ -26,17 +26,13 @@ class Koopman_OPT(nn.Module):
             nn.Linear(64, self.koopman_dim)
         )
 
-    def forward(self, x, tau):
-        # (batchsize, slow_dim)-->(batchsize, slow_dim)
+    def forward(self, tau):
 
         # K: (koopman_dim, koopman_dim), K = V * Lambda * V^-1
         V, Lambda = self.V(tau), self.Lambda(tau)
         K = torch.mm(torch.mm(V, torch.diag(Lambda)), torch.inverse(V))
 
-        # y = K * x
-        y = torch.matmul(K, x.unsqueeze(-1)).squeeze()
-
-        return y
+        return K
     
 
 class LSTM_OPT(nn.Module):
@@ -133,9 +129,14 @@ class EVOLVER(nn.Module):
         x = self.decoder(x)
         return x
 
-    def koopman_evolve(self, x, tau=1.):
-        y = self.K_opt(x, tau)
-        return y
+    def koopman_evolve(self, x, tau=1., T=1):
+        
+        K = self.K_opt(tau)
+        y = [torch.matmul(K, x.unsqueeze(-1)).squeeze()]
+        for _ in range(1, T-1): 
+            y.append(torch.matmul(K, y[-1].unsqueeze(-1)).squeeze())
+        
+        return y[-1], y[:-1]
     
     def lstm_evolve(self, x, T=1):
         
