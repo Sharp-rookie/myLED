@@ -155,9 +155,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     #######################
     trace_list = {'train':range(256), 'val':range(256,288), 'test':range(288,320)}
     for item in ['train','val','test']:
-        
-        # if os.path.exists(data_dir+f'/{item}.npz'): continue
-        
+                
         # select trace num
         N_TRACE = len(trace_list[item])
         data_item = data[trace_list[item]]
