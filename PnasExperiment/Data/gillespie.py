@@ -53,8 +53,7 @@ class System: # 封装的类，代表多个化学反应构成的系统
 
         if steps is not None: # 按照固定步数仿真
             for i in tqdm(range(steps)):
-                A = np.array([rec.propensity(self.n[-1])
-                            for rec in self.reactions]) # 算每个反应的倾向函数
+                A = np.array([rec.propensity(self.n[-1]) for rec in self.reactions]) # 算每个反应的倾向函数
                 A0 = A.sum()
                 A /= A0 # 归一化得到概率分布
                 t0 = -np.log(np.random.random())/A0 # 按概率选择下一个反应发生的间隔
@@ -64,11 +63,6 @@ class System: # 封装的类，代表多个化学反应构成的系统
         else: # 按照固定总时长仿真
             total_t = 10 if total_t is None else total_t
             while self.t[-1] < total_t:
-
-                # if int(np.floor(self.t[-1]))/1>=self.noise_t: # 每1s给Z加一次噪声
-                #     self.noise_t += 1
-                #     self.n[-1][-1] = 5000
-
                 A = np.array([rec.propensity(self.n[-1]) for rec in self.reactions]) # 算每个反应的倾向函数
                 A0 = A.sum()
                 A /= A0 # 归一化得到概率分布

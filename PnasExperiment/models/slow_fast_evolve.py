@@ -75,7 +75,7 @@ class LSTM_OPT(nn.Module):
 
 class EVOLVER(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, delta_t):
+    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim):
         super(EVOLVER, self).__init__()
         
         # (batchsize,1,1,3)-->(batchsize, embed_dim)
@@ -112,8 +112,7 @@ class EVOLVER(nn.Module):
             nn.Unflatten(-1, (1, in_channels, input_1d_width))
         )
         
-        self.K_opt = Koopman_OPT(slow_dim, delta_t)
-        self.delta_t = delta_t
+        self.K_opt = Koopman_OPT(slow_dim)
         
         self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2)
 
@@ -133,9 +132,9 @@ class EVOLVER(nn.Module):
     def koopman_evolve(self, x, tau=1., T=1):
         
         K = self.K_opt(tau)
-        y = [torch.matmul(K, x.unsqueeze(-1)).squeeze()]
+        y = [torch.matmul(K, x.unsqueeze(-1)).squeeze(-1)]
         for _ in range(1, T-1): 
-            y.append(torch.matmul(K, y[-1].unsqueeze(-1)).squeeze())
+            y.append(torch.matmul(K, y[-1].unsqueeze(-1)).squeeze(-1))
         
         return y[-1], y[:-1]
     
