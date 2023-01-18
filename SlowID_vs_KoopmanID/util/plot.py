@@ -5,7 +5,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 
-def plot_epoch_test_log(tau, max_epoch):
+def plot_epoch_test_log(tau, koopman_dim, max_epoch):
 
     class MSE():
         def __init__(self, tau):
@@ -19,7 +19,7 @@ def plot_epoch_test_log(tau, max_epoch):
             self.MADA_id = [[] for _ in range(max_epoch)]
             self.PCA_id = [[] for _ in range(max_epoch)]
 
-    fp = open(f'logs/time-lagged/tau_{tau}/test/log.txt', 'r')
+    fp = open(f'logs/time-lagged/k_{koopman_dim}/tau_{tau}/test/log.txt', 'r')
     items = []
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
@@ -98,7 +98,7 @@ def plot_epoch_test_log(tau, max_epoch):
         plt.plot(range(max_epoch), mse_c4_list, label='c4')
         # plt.ylim((0., 1.05*max(np.max(mse_c1_list), np.max(mse_c2_list), np.max(mse_c3_list))))
         plt.legend()
-        plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.jpg', dpi=300)
+        plt.savefig(f'logs/time-lagged/k_{koopman_dim}/tau_{int(tau)}/ID_per_epoch.jpg', dpi=300)
         plt.close()
         
         

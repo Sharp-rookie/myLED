@@ -423,7 +423,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 period_num = 5*int(5/delta_t)
 
                 # TODO: 把类似的plot写进for循环，压缩行数
-                # plot slow variable
+                # plot slow variable vs input
                 plt.figure(figsize=(16,5+2*(slow_id-1)))
                 plt.title('Val Reconstruction Curve')
                 for id_var in range(slow_id):
@@ -432,6 +432,20 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                         plt.scatter(inputs[:,0,0,index], slow_vars[:, id_var], s=5)
                         plt.xlabel(item)
                         plt.ylabel(f'U{id_var+1}')
+                plt.subplots_adjust(wspace=0.35, hspace=0.35)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.jpg", dpi=300)
+                plt.close()
+                
+                # plot slow variable
+                plt.figure(figsize=(12,5+2*(slow_id-1)))
+                plt.title('Slow variable Curve')
+                for id_var in range(slow_id):
+                    plt.subplot(slow_id, 1, 1+id_var)
+                    plt.plot(inputs[:period_num,0,0,0], label='c1')
+                    plt.plot(inputs[:period_num,0,0,1], label='c2')
+                    plt.plot(slow_vars[:period_num, id_var], label=f'U{id_var+1}')
+                    plt.xlabel(item)
+                plt.legend()
                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
                 plt.close()
@@ -512,7 +526,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
 
-def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, is_print=False):
+def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False):
         
     # prepare
     device = torch.device('cpu')
@@ -554,7 +568,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, is_print=Fals
             
             # fast evolve
             fast_info = input - slow_info
-            fast_info_next, _ = model.lstm_evolve(fast_info, T=1)
+            fast_info_next, _ = model.lstm_evolve(fast_info, T=n)
             
             # total evolve
             total_info_next = slow_info_next + fast_info_next
@@ -564,14 +578,14 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, is_print=Fals
             fast_infos_next.append(fast_info_next.cpu())
             total_infos_next.append(total_info_next.cpu())
         
-        targets = torch.concat(targets, axis=0)
-        slow_infos_next = torch.concat(slow_infos_next, axis=0)
-        fast_infos_next = torch.concat(fast_infos_next, axis=0)
-        total_infos_next = torch.concat(total_infos_next, axis=0)
+        targets = model.descale(torch.concat(targets, axis=0))
+        slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0))
+        fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0))
+        total_infos_next = model.descale(torch.concat(total_infos_next, axis=0))
                 
         os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
         
-        period_num = 5*int(5/delta_t)
+        period_num = 30*int(5/delta_t)
 
         # plot slow infomation prediction curve
         plt.figure(figsize=(16,5))
@@ -605,6 +619,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, is_print=Fals
         plt.subplots_adjust(wspace=0.2)
         plt.savefig(log_dir+f"/test/{delta_t}/total.jpg", dpi=300)
         plt.close()
+    
+    return nn.MSELoss()(total_infos_next, targets).item(), nn.L1Loss()(total_infos_next, targets).item()
         
     
 def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=False):
@@ -632,18 +648,19 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    delta_t = round(tau/n, 3)
     ckpt_epoch = 150
 
     # train
-    train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=is_print)
+    train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print)
     # plot mse curve of each id
     try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
     except: pass
     # test evolve
     for i in range(1, n+1):
-        delta_t = round(tau/i, 3)
-        test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, is_print)
+        delta_t = round(tau/n*i, 3)
+        mse, mae = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print)
+        with open('evolve_test.txt','a') as f:
+            f.writelines(f'{delta_t}, {mse}, {mae}\n')
     
     
 def data_generator_pipeline(trace_num=256+32+32, total_t=9):
@@ -671,7 +688,7 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
 def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
     
     tau_list = [1.5]
-    id_list = [2, 4, 6]
+    id_list = [2]
     workers = []
     
     # generate dataset sub-process
@@ -682,7 +699,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
         workers[-1].start()
         # dataset for testing
         for i in range(1, n+1):
-            delta_t = round(tau/i, 3)
+            delta_t = round(tau/n*i, 3)
             workers.append(Process(target=generate_dataset, args=(trace_num, delta_t, sample_num, False), daemon=True))
             workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
