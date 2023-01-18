@@ -1,77 +1,131 @@
 import os
+import torch
+from torch import nn
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from scipy.integrate import odeint
-from pytorch_lightning import seed_everything
 import warnings;warnings.simplefilter('ignore')
 
-
-def system_4d(y0, t, para=(0.025,3)):
-    epsilon, omega =  para
-    c1, c2, c3, c4 = y0
-    dc1 = -c1
-    dc2 = -2 * c2
-    dc3 = -(c3-np.sin(omega*c1)*np.sin(omega*c2))/epsilon - c1*omega*np.cos(omega*c1)*np.sin(omega*c2) - c2*omega*np.cos(omega*c2)*np.sin(omega*c1)
-    dc4 = -(c4-1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2))))/epsilon - c1*omega*np.exp(-omega*c1)/((1+np.exp(-omega*c2))*((1+np.exp(-omega*c1))**2)) - c2*omega*np.exp(-omega*c2)/((1+np.exp(-omega*c1))*((1+np.exp(-omega*c2))**2))
-    return [dc1, dc2, dc3, dc4]
+from scipy.stats import special_ortho_group
 
 
-def generate_original_data(trace_num, total_t=5, dt=0.001):
+class Koopman_System(nn.Module):
     
-    def solve_1_trace(trace_id=0, total_t=5, dt=0.001):
+    def __init__(self, in_channels, input_1d_width, koopman_dim, tau_0=1):
+        super(Koopman_System, self).__init__()
         
-        seed_everything(trace_id)
+        assert in_channels*input_1d_width >= koopman_dim and koopman_dim > 1
         
-        y0 = [np.random.uniform(-3,3) for _ in range(4)]
-        t  =np.arange(0, total_t, dt)
-        sol = odeint(system_4d, y0, t)
-
-        # plt.figure()
-        # plt.plot(t, sol[:,0], label='c1')
-        # plt.plot(t, sol[:,1], label='c2')
-        # plt.plot(t, sol[:,2], label='c3')
-        # plt.plot(t, sol[:,3], label='c4')
-        # plt.legend()
-        # plt.savefig(f'Data/origin/jcp12_{trace_id}.jpg', dpi=300)
+        self.t = tau_0
+        self.in_channels = in_channels
+        self.input_1d_width = input_1d_width
         
-        return sol
+        # observation matrix 'D'
+        self.D = torch.from_numpy(special_ortho_group.rvs(koopman_dim)).float()
+        for _ in range(in_channels*input_1d_width-koopman_dim):
+            self.D = torch.concat([self.D, 2*(torch.rand(1,koopman_dim)-0.5)], dim=0)
+        
+        # K matrix
+        Lambda = -torch.rand(koopman_dim).sort().values
+        Lambda = Lambda / 10 # 强制接近0，全为慢变量
+        self.K_opt = torch.diag(torch.exp(tau_0 * Lambda))
+        
+        # record
+        with open(f'Data/origin/k_{koopman_dim}/koopman_param.txt', 'w') as f:
+            f.writelines(str(self.D.numpy()) + '\n')
+            f.writelines(str(Lambda.numpy()) + '\n')
+            f.writelines(str(self.K_opt.numpy()) + '\n')
     
-    if os.path.exists('Data/origin/origin.npz'): return
+    def k_evol(self, var):
+        return torch.matmul(self.K_opt, var.unsqueeze(-1)).squeeze(-1)
     
-    os.makedirs('Data/origin', exist_ok=True)
-    
-    trace = []
-    for trace_id in tqdm(range(1, trace_num+1)):
-        sol = solve_1_trace(trace_id, total_t, dt)
-        trace.append(sol)
-    
-    np.savez('Data/origin/origin.npz', trace=trace, dt=dt, T=total_t)
+    def obs(self, var):
+        obs = torch.matmul(self.D, var.unsqueeze(-1)).squeeze(-1) # (batchsize, koopman_dim) --> (batchsize, in_channels * input_1d_width)
+        obs = obs.view(-1, self.in_channels, self.input_1d_width).unsqueeze(1) # (batchsize, in_channels * input_1d_width) --> (batchsize, 1, in_channels, input_1d_width)
+        return obs
 
-    print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
-    
-    
-def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
-    if sequence_length is not None and os.path.exists(f"Data/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/test_{sequence_length}.npz"):
+def generate_original_data(trace_num, time_step=100, observation_dim=4, koopman_dim=2):
+    
+    def init_weights(m):
+        if isinstance(m, torch.nn.Linear):
+            m.weight.data.normal_(0, 1)
+            m.bias.data.fill_(0.01)
+    
+    if os.path.exists(f'Data/origin/k_{koopman_dim}/origin.npz'): 
         return
-    elif sequence_length is None and os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
+    else:
+        os.makedirs(f'Data/origin/k_{koopman_dim}/', exist_ok=True)
+    
+    # params
+    scale = 10
+    
+    # models
+    system = Koopman_System(in_channels=1, input_1d_width=observation_dim, koopman_dim=koopman_dim).apply(init_weights)
+
+    # generate koopman system observation traces
+    trace_var = []
+    trace_obs = []
+    with torch.no_grad():
+        for _ in tqdm(range(trace_num)):
+            
+            var = scale * (2*(torch.rand(1, koopman_dim)-0.5)) # random generate a koopman variable
+            koopman_var_series = [var]
+            koopman_obs_series = [system.obs(var)] # record its representation in observation space
+
+            for _ in range(1, time_step+1):
+                next_var = system.k_evol(var) # evolve in koopman space
+                next_obs = system.obs(next_var) # recover to observation space
+                koopman_var_series.append(next_var)
+                koopman_obs_series.append(next_obs)
+                var = next_var
+            
+            trace_var.append(torch.concat(koopman_var_series, dim=0).squeeze(0).numpy())    
+            trace_obs.append(torch.concat(koopman_obs_series, dim=1).squeeze(0).numpy())
+    
+    # plot koopman evolving trace
+    for i, tr in enumerate(trace_obs[:2]):
+        plt.figure(figsize=(16,16))
+        for j in range(observation_dim):
+            plt.subplot(observation_dim,1,j+1)
+            plt.plot(tr[:,0,j])
+        plt.subplots_adjust(hspace=0.3)
+        plt.savefig(f'Data/origin/k_{koopman_dim}/trace_obs_{i+1}.jpg', dpi=300)
+        plt.close()
+    for i, tr in enumerate(trace_var[:2]):
+        plt.figure(figsize=(16,16))
+        for j in range(koopman_dim):
+            plt.subplot(koopman_dim,1,j+1)
+            plt.plot(tr[:,j])
+        plt.subplots_adjust(hspace=0.3)
+        plt.savefig(f'Data/origin/k_{koopman_dim}/trace_var_{i+1}.jpg', dpi=300)
+        plt.close()
+    
+    # save
+    np.savez(f'Data/origin/k_{koopman_dim}/origin.npz', trace_var=trace_var, trace_obs=trace_obs, time_step=time_step)
+    print(f'save origin data form seed 1 to {trace_num} at Data/origin/k_{koopman_dim}/')
+    
+    
+def generate_dataset(trace_num, koopman_dim, tau, sample_num=None, is_print=False, sequence_length=None):
+
+    if sequence_length is not None and os.path.exists(f"Data/data/k_{koopman_dim}/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/data/k_{koopman_dim}/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/data/k_{koopman_dim}/tau_{tau}/test_{sequence_length}.npz"):
+        return
+    elif sequence_length is None and os.path.exists(f"Data/data/k_{koopman_dim}/tau_{tau}/train.npz") and os.path.exists(f"Data/data/k_{koopman_dim}/tau_{tau}/val.npz") and os.path.exists(f"Data/data/k_{koopman_dim}/tau_{tau}/test.npz"):
         return
     
     # load original data
     if is_print: print('loading original trace data:')
-    tmp = np.load(f"Data/origin/origin.npz")
-    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
-    point_num = int(tmp['T'] / tau) - 1
+    tmp = np.load(f"Data/origin/k_{koopman_dim}/origin.npz")
+    data = np.array(tmp['trace_obs'])[:trace_num] # (trace_num, time_length, channel, feature_num)
 
     # subsampling
-    dt = tmp['dt']
-    subsampling = int(tau/dt) if tau!=0. else 1
+    subsampling = tau if tau!=0 else 1
     data = data[:, ::subsampling]
+    point_num = int(tmp['time_step'] / subsampling) - 1
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information
-    data_dir = f"Data/data/tau_{tau}"
+    data_dir = f"Data/data/k_{koopman_dim}/tau_{tau}"
     os.makedirs(data_dir, exist_ok=True)
     np.savetxt(data_dir + "/data_mean.txt", np.mean(data, axis=(0,1)))
     np.savetxt(data_dir + "/data_std.txt", np.std(data, axis=(0,1)))
