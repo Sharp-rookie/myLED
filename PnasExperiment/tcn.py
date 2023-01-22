@@ -3,54 +3,94 @@ import os
 import numpy as np
 import torch
 from torch import nn
+from torch.nn.utils import weight_norm
 import matplotlib.pyplot as plt
 from pytorch_lightning import seed_everything
 
-from Data.dataset import PNASDataset
+from Data.dataset import PNASDataset4TCN
 from Data.generator import generate_dataset
 
 
-class LSTM(nn.Module):
-    
-    def __init__(self, in_channels, input_1d_width, hidden_dim=64, layer_num=2):
-        super(LSTM, self).__init__()
-        
-        # (batchsize,1,1,3)-->(batchsize,1,3)
-        self.flatten = nn.Flatten(start_dim=2)
-        
-        # (batchsize,1,3)-->(batchsize, hidden_dim)
-        self.layer_num = layer_num
-        self.hidden_dim = hidden_dim
-        self.cell = nn.LSTM(
-            input_size=in_channels*input_1d_width, 
-            hidden_size=hidden_dim, 
-            num_layers=layer_num, 
-            dropout=0.01, 
-            batch_first=True # input: (batch_size, squences, features)
-            )
-        
-        # (batchsize, hidden_dim)-->(batchsize, 3)
-        self.fc = nn.Linear(hidden_dim, in_channels*input_1d_width)
-        
-        # (batchsize, 3)-->(batchsize,1,1,3)
-        self.unflatten = nn.Unflatten(-1, (1, in_channels, input_1d_width))
+class Chomp1d(nn.Module):
+    def __init__(self, chomp_size):
+        super(Chomp1d, self).__init__()
+        self.chomp_size = chomp_size
 
+    def forward(self, x):
+        return x[:, :, :-self.chomp_size].contiguous()
+
+class TemporalBlock(nn.Module):
+    def __init__(self, n_inputs, n_outputs, kernel_size, stride, dilation, padding, dropout=0.2):
+        super(TemporalBlock, self).__init__()
+        self.conv1 = weight_norm(nn.Conv1d(n_inputs, n_outputs, kernel_size,
+                                           stride=stride, padding=padding, dilation=dilation))
+        self.chomp1 = Chomp1d(padding)
+        self.relu1 = nn.ReLU()
+        self.dropout1 = nn.Dropout(dropout)
+
+        self.conv2 = weight_norm(nn.Conv1d(n_outputs, n_outputs, kernel_size,
+                                           stride=stride, padding=padding, dilation=dilation))
+        self.chomp2 = Chomp1d(padding)
+        self.relu2 = nn.ReLU()
+        self.dropout2 = nn.Dropout(dropout)
+
+        self.net = nn.Sequential(self.conv1, self.chomp1, self.relu1, self.dropout1,
+                                 self.conv2, self.chomp2, self.relu2, self.dropout2)
+        self.downsample = nn.Conv1d(n_inputs, n_outputs, 1) if n_inputs != n_outputs else None
+        self.relu = nn.ReLU()
+        self.init_weights()
+
+    def init_weights(self):
+        self.conv1.weight.data.normal_(0, 0.01)
+        self.conv2.weight.data.normal_(0, 0.01)
+        if self.downsample is not None:
+            self.downsample.weight.data.normal_(0, 0.01)
+
+    def forward(self, x):
+        out = self.net(x)
+        res = x if self.downsample is None else self.downsample(x)
+        return self.relu(out + res)
+
+class TemporalConvNet(nn.Module):
+    def __init__(self, num_inputs, num_channels, kernel_size=2, dropout=0.2):
+        super(TemporalConvNet, self).__init__()
+        layers = []
+        num_levels = len(num_channels)
+        for i in range(num_levels):
+            dilation_size = 2 ** i
+            in_channels = num_inputs if i == 0 else num_channels[i-1]
+            out_channels = num_channels[i]
+            layers += [TemporalBlock(in_channels, out_channels, kernel_size, stride=1, dilation=dilation_size,
+                                     padding=(kernel_size-1) * dilation_size, dropout=dropout)]
+
+        self.network = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.network(x)
+
+class TCN(nn.Module):
+    def __init__(self, input_size, output_size, num_channels, kernel_size, dropout):
+        super(TCN, self).__init__()
+        self.tcn = TemporalConvNet(input_size, num_channels, kernel_size, dropout=dropout)
+        self.linear = nn.Linear(num_channels[-1], output_size)
+        self.tanh = nn.Tanh()
+        
         # scale inside the model
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
         self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
-    
+
     def forward(self, x):
-        
-        h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
-        c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
-        
-        x = self.flatten(x)
-        _, (h, c)  = self.cell(x, (h0, c0))
-        y = self.fc(h[-1])
-        y = self.unflatten(y)
-        
-        return y
+        # x needs to have dimension (N, C, L) in order to be passed into CNN
+        output = self.tcn(x.transpose(1, 2)).transpose(1, 2)
+        output = self.linear(output).double()
+        return self.tanh(output)
     
+        # (batchsize,sequence_length,1,3)-->(batchsize,sequence_length,3)
+        
+        # (batchsize,sequence_length,3)-->(batchsize,3,sequence_length)
+        
+        # (batchsize,sequence_length,3)-->(batchsize,sequence_length,1,3)
+        
     def scale(self, x):
         return (x-self.min) / (self.max-self.min+1e-6)
     
@@ -58,7 +98,7 @@ class LSTM(nn.Module):
         return x * (self.max-self.min+1e-6) + self.min
 
 
-def train(tau, delta_t, is_print=False):
+def train(tau, delta_t, sequence_length, is_print=False):
         
     # prepare
     device = torch.device('cpu')
@@ -81,9 +121,9 @@ def train(tau, delta_t, is_print=False):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = PNASDataset(data_filepath, 'train')
+    train_dataset = PNASDataset4TCN(data_filepath, 'train', length=sequence_length)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = PNASDataset(data_filepath, 'val')
+    val_dataset = PNASDataset4TCN(data_filepath, 'val', length=sequence_length)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
@@ -174,7 +214,7 @@ def train(tau, delta_t, is_print=False):
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     
 
-def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
+def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False):
         
     # prepare
     device = torch.device('cpu')
@@ -190,7 +230,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
     model = model.to(device)
     
     # dataset
-    test_dataset = PNASDataset(data_filepath, 'test')
+    test_dataset = PNASDataset4TCN(data_filepath, 'test', length=sequence_length+n)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # testing pipeline        
@@ -237,17 +277,20 @@ def main(trace_num, tau, n, is_print=False):
     seed_everything(729)
     
     sample_num = None
+    
+    # TODO: 需要为TCN写一个getitem输出是sequence_length的dataset类，因为TCN输入必须是sequence，和我们的模型、LSTM的单样本输入不同
+    # 因此，TCN的train可以和lstm的相似，仅训练单步；但是test时的外推，dataset和LSTM的不一样，需要是delta_t==tau/n，sequence_length=(n+外推时长/delta_t)
 
     # train
-    generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
+    generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
     train(tau, round(tau/n,3), is_print=is_print)
     
     # test evolve
     ckpt_epoch = 50
     for i in range(1, n+1):
         delta_t = round(tau/n*i, 3)
-        generate_dataset(trace_num, delta_t, sample_num, False)
-        mse, mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print)
+        generate_dataset(trace_num, delta_t, sample_num, False, n+i)
+        mse, mae = test_evolve(tau, ckpt_epoch, delta_t, i, sequence_length, is_print)
         with open('lstm_evolve_test.txt','a') as f:
             f.writelines(f'{delta_t}, {mse}, {mae}\n')
 
@@ -255,5 +298,6 @@ def main(trace_num, tau, n, is_print=False):
 if __name__ == '__main__':
     
     trace_num = 128 + 16 + 16
+    sequence_length = 10
     
-    main(trace_num=trace_num, tau=4.5, n=10, is_print=True)
+    main(trace_num=trace_num, tau=4.5, n=sequence_length, is_print=True)

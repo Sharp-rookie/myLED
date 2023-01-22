@@ -37,3 +37,28 @@ class PNASDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
+    
+
+class PNASDataset4TCN(Dataset):
+
+    def __init__(self, file_path, mode='train', length=None):
+        super().__init__()
+        
+        self.length = length
+        self.data = np.load(file_path+f'/{mode}_{length}.npz')['data'] # (trace_num, sequence_length, 1, 3)
+
+    # 0 --> 1
+    def __getitem__(self, index):
+
+        trace = self.data[index]
+
+        input = trace[:self.length-1]
+        target = trace[self.length-1]
+
+        input = torch.from_numpy(input).float() # (1, channel, feature_dim)
+        target = torch.from_numpy(target).float()
+
+        return input.unsqueeze(0), target.unsqueeze(0)
+
+    def __len__(self):
+        return len(self.data)
