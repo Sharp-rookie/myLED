@@ -14,19 +14,28 @@ class Koopman_System(nn.Module):
     def __init__(self, in_channels, input_1d_width, koopman_dim, tau_0=1):
         super(Koopman_System, self).__init__()
         
-        assert in_channels*input_1d_width >= koopman_dim and koopman_dim > 1
+        assert in_channels*input_1d_width >= koopman_dim
         
         self.t = tau_0
         self.in_channels = in_channels
         self.input_1d_width = input_1d_width
         
         # observation matrix 'D'
-        self.D = torch.from_numpy(special_ortho_group.rvs(koopman_dim)).float()
-        for _ in range(in_channels*input_1d_width-koopman_dim):
-            self.D = torch.concat([self.D, 2*(torch.rand(1,koopman_dim)-0.5)], dim=0)
+        if koopman_dim > 1:
+            self.D = torch.from_numpy(special_ortho_group.rvs(koopman_dim)).float()
+            self.D = torch.concat([self.D, 2*(torch.rand(in_channels*input_1d_width-koopman_dim, koopman_dim)-0.5)], dim=0)
+        else:
+            self.D = 2*(torch.rand(in_channels*input_1d_width, koopman_dim)-0.5)
+        # self.D = torch.diag(torch.rand(koopman_dim))
+        # repeat = int(np.floor(in_channels*input_1d_width/koopman_dim)) - 1
+        # mod = (in_channels*input_1d_width)%koopman_dim
+        # for _ in range(repeat):
+        #     self.D = torch.concat([self.D, torch.diag(torch.rand(koopman_dim))], dim=0)
+        # self.D = torch.concat([self.D, torch.diag(torch.rand(koopman_dim))[:mod]], dim=0)
         
         # K matrix
         Lambda = -torch.rand(koopman_dim).sort().values
+        # Lambda = Lambda / Lambda.min().abs_()
         Lambda = Lambda / 10 # 强制接近0，全为慢变量
         self.K_opt = torch.diag(torch.exp(tau_0 * Lambda))
         

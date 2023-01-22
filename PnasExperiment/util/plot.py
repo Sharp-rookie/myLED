@@ -132,6 +132,39 @@ def plot_pnas_autocorr():
     plt.savefig('corr.jpg', dpi=300)
 
 
+def plot_evolve():
+    
+    our = open('evolve_test.txt', 'r')
+    lstm = open('lstm_evolve_test.txt', 'r')
+    
+    our_data = []
+    lstm_data = []
+    for i, data in enumerate([our, lstm]):
+        for line in data.readlines():
+            tau = float(line.split(',')[0])
+            mse = float(line.split(',')[1])
+            mae = float(line.split(',')[2])
+            
+            if i==0:
+                our_data.append([tau,mse,mae])
+            else:
+                lstm_data.append([tau,mse,mae])
+    
+    our_data = np.array(our_data)
+    lstm_data = np.array(lstm_data)
+    
+    plt.figure(figsize=(16,16))
+    for i, item in enumerate(['mse', 'mae']):
+        ax = plt.subplot(2,1,i+1)
+        ax.plot(our_data[:,0], our_data[:,i+1], label='our')
+        ax.plot(lstm_data[:,0], lstm_data[:,i+1], label='lstm')
+        ax.set_title(item)
+        ax.set_xlabel('t / s')
+        ax.legend()
+    plt.savefig('evolve_test.jpg', dpi=300)
+
+
 if __name__ == '__main__':
     
-    plot_pnas_autocorr()
+    # plot_pnas_autocorr()
+    plot_evolve()

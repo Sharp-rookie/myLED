@@ -506,9 +506,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 plt.close()
         
             # record best model
-            if all_loss < best_loss:
-                best_loss = all_loss
-                best_model = model.state_dict()
+            best_loss = all_loss
+            best_model = model.state_dict()
 
     # save model
     torch.save(best_model, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
@@ -648,7 +647,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    ckpt_epoch = 150
+    ckpt_epoch = 135
 
     # train
     train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print)

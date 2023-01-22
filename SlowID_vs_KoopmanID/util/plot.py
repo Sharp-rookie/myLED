@@ -19,8 +19,9 @@ def plot_epoch_test_log(tau, koopman_dim, max_epoch):
             self.MADA_id = [[] for _ in range(max_epoch)]
             self.PCA_id = [[] for _ in range(max_epoch)]
 
-    fp = open(f'logs/time-lagged/k_{koopman_dim}/tau_{tau}/test/log.txt', 'r')
     items = []
+    
+    fp = open(f'logs/time-lagged/k_{koopman_dim}/tau_{tau}/test_log.txt', 'r')
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
         seed = int(line[:-1].split(',')[1])
@@ -179,4 +180,9 @@ def plot_jcp12_autocorr():
 
 if __name__ == '__main__':
     
-    plot_jcp12_autocorr()
+    # plot_jcp12_autocorr()
+    
+    tau_list = [0,5,10,15,20,25]
+    for tau in tau_list:
+        for koopman_dim in [2,4,6,8]:
+            plot_epoch_test_log(tau, koopman_dim, 200+1)
