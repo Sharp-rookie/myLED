@@ -36,7 +36,7 @@ def train_time_lagged(tau, is_print=False):
     
     # training params
     lr = 0.001
-    batch_size = 128
+    batch_size = 32
     max_epoch = 100
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -117,7 +117,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     os.makedirs(log_dir+'/test', exist_ok=True)
     
     # testing params
-    batch_size = 128
+    batch_size = 32
     max_epoch = 100
     loss_func = nn.MSELoss()
     
@@ -259,7 +259,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     
     # training params
     lr = 0.001
-    batch_size = 128
+    batch_size = 32
     max_epoch = 100
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
@@ -530,7 +530,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}'
 
     # load model
-    batch_size = 128
+    batch_size = 32
     model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
@@ -666,8 +666,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    # tau_list = [1.0, 1.5, 2.0, 2.5, 3.0, 4.5, 6.0]
-    tau_list = [3.0, 4.5, 6.0]
+    tau_list = [1.0, 1.5, 2.0, 2.5, 3.0, 4.5, 6.0] # Warning: Cache Overstack
     workers = []
     
     # id esitimate sub-process
@@ -695,7 +694,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
         workers[-1].start()
         # dataset for testing
         for i in range(1, n+1):
-            print(f'\rprocessing testing dataset [{i}/{n}]', end='')
+            print(f'processing testing dataset [{i}/{n}]')
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, False)
             # workers.append(Process(target=generate_dataset, args=(trace_num, delta_t, sample_num, False), daemon=True))

@@ -37,7 +37,7 @@ def train_time_lagged(tau, is_print=False, observation_dim=4, koopman_dim=2, ran
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 200
+    max_epoch = 300
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
@@ -88,7 +88,7 @@ def train_time_lagged(tau, is_print=False, observation_dim=4, koopman_dim=2, ran
             targets = torch.concat(targets, axis=0)
             outputs = torch.concat(outputs, axis=0)
             mse = loss_func(outputs, targets)
-            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE={mse:.5f}', end='')
+            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE={mse:.6f}', end='')
         
         # save each epoch model
         model.train()
@@ -118,7 +118,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     
     # testing params
     batch_size = 128
-    max_epoch = 200
+    max_epoch = 300
     loss_func = nn.MSELoss()
     
     # init model
@@ -230,7 +230,8 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
         fp.write(f"{tau},{random_seed},{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
         fp.flush()
 
-        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        mse = loss_func(test_outputs, test_targets)
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE={mse:.6f} | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
         # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
         
         if checkpoint_filepath is None: break
@@ -239,7 +240,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     if is_print: print()
         
     
-def worker_1(tau, koopman_dim=2, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=False, observation_dim=4):
+def de(tau, koopman_dim=2, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=False, observation_dim=4):
     
     time.sleep(0.1)
     seed_everything(random_seed)
@@ -255,7 +256,7 @@ def worker_1(tau, koopman_dim=2, trace_num=256+32+32, random_seed=729, cpu_num=1
     # test_and_save_embeddings_of_time_lagged(tau, None, is_print)
     test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/k_{koopman_dim}/tau_{tau}/seed_{random_seed}", is_print, observation_dim, koopman_dim, random_seed)
     # plot id of each epoch
-    plot_epoch_test_log(tau, koopman_dim, max_epoch=200+1)
+    plot_epoch_test_log(tau, koopman_dim, max_epoch=300+1)
 
     
 def data_generator_pipeline(trace_num=256+32+32, time_step=100, observation_dim=4, koopman_dim=2):
