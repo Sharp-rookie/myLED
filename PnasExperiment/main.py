@@ -37,7 +37,7 @@ def train_time_lagged(tau, is_print=False):
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
@@ -118,7 +118,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     
     # testing params
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     loss_func = nn.MSELoss()
     
     # init model
@@ -260,7 +260,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
     MSE_loss = nn.MSELoss()
@@ -580,8 +580,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         
         os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
         
-        sample_num = 50
-        period_num = sample_num
+        period_num = 50
 
         # plot slow infomation prediction curve
         plt.figure(figsize=(16,5))
@@ -625,17 +624,17 @@ def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=Fals
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
     
-    sample_num = 50
+    sample_num = None
 
     # generate dataset
     generate_dataset(trace_num, tau, sample_num, is_print=is_print)
     # train
-    # train_time_lagged(tau, is_print)
+    train_time_lagged(tau, is_print)
     # test and calculating ID
     # test_and_save_embeddings_of_time_lagged(tau, None, is_print)
     test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}", is_print)
     # plot id of each epoch
-    plot_epoch_test_log(tau, max_epoch=50+1)
+    plot_epoch_test_log(tau, max_epoch=100+1)
 
 
 def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_print=False, id_list=[1,2,3,4]):
@@ -647,10 +646,10 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     ckpt_epoch = 50
 
     # train
-    # train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print)
-    # # plot mse curve of each id
-    # try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
-    # except: pass
+    train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print)
+    # plot mse curve of each id
+    try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
+    except: pass
     # test evolve
     for i in range(1, n+1):
         delta_t = round(tau/n*i, 3)
@@ -667,7 +666,8 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [1.5, 3.0, 4.5]
+    # tau_list = [1.0, 1.5, 2.0, 2.5, 3.0, 4.5, 6.0]
+    tau_list = [3.0, 4.5, 6.0]
     workers = []
     
     # id esitimate sub-process
@@ -688,7 +688,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
     workers = []
     
     # generate dataset sub-process
-    sample_num = 50
+    sample_num = None
     for tau in tau_list:
         # dataset for training
         workers.append(Process(target=generate_dataset, args=(trace_num, round(tau/n,3), sample_num, True, n), daemon=True))
@@ -719,6 +719,8 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
 
 if __name__ == '__main__':
     
-    # data_generator_pipeline()
-    # id_esitimate_pipeline()
-    slow_evolve_pipeline(n=10)
+    trace_num = 128 + 16 + 16
+    
+    data_generator_pipeline(trace_num, total_t=27)
+    id_esitimate_pipeline(trace_num=trace_num)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10)

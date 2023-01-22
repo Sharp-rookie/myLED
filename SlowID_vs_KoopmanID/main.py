@@ -14,16 +14,16 @@ import models
 from Data.dataset import JCP12Dataset
 from Data.generator import generate_dataset, generate_original_data
 from util import set_cpu_num
-from util.plot import plot_epoch_test_log, plot_slow_ae_loss
+from util.plot import plot_epoch_test_log
 from util.intrinsic_dimension import eval_id_embedding
 
 
-def train_time_lagged(tau, is_print=False, observation_dim=4, koopman_dim=2):
+def train_time_lagged(tau, is_print=False, observation_dim=4, koopman_dim=2, random_seed=729):
     
     # prepare
     device = torch.device('cpu')
     data_filepath = f'Data/data/k_{koopman_dim}/tau_' + str(tau)
-    log_dir = f'logs/time-lagged/k_{koopman_dim}/tau_' + str(tau)
+    log_dir = f'logs/time-lagged/k_{koopman_dim}/tau_' + str(tau) + f'/seed_{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
     
@@ -108,12 +108,12 @@ def train_time_lagged(tau, is_print=False, observation_dim=4, koopman_dim=2):
     if is_print: print()
     
 
-def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False, observation_dim=4, koopman_dim=2):
+def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False, observation_dim=4, koopman_dim=2, random_seed=729):
     
     # prepare
     device = torch.device('cpu')
     data_filepath = f'Data/data/k_{koopman_dim}/tau_' + str(tau)
-    log_dir = f'logs/time-lagged/k_{koopman_dim}/tau_' + str(tau)
+    log_dir = f'logs/time-lagged/k_{koopman_dim}/tau_' + str(tau) + f'/seed_{random_seed}'
     os.makedirs(log_dir+'/test', exist_ok=True)
     
     # testing params
@@ -135,7 +135,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
 
     # testing pipeline
-    fp = open(log_dir+'/test/log.txt', 'a')
+    fp = open(f'logs/time-lagged/k_{koopman_dim}/tau_{tau}/test_log.txt', 'a')
     for ep in range(max_epoch):
         
         # load weight file
@@ -216,22 +216,22 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
         
         # calculae ID
         def cal_id_embedding(tau, epoch, method='MLE', is_print=False):
-            var_log_dir = f'logs/time-lagged/k_{koopman_dim}/tau_{tau}/test/epoch-{epoch}'
+            var_log_dir = f'logs/time-lagged/k_{koopman_dim}/tau_{tau}/seed_{random_seed}/test/epoch-{epoch}'
             eval_id_embedding(var_log_dir, method=method, is_print=is_print, max_point=100)
             dims = np.load(var_log_dir+f'/id_{method}.npy')
             return np.mean(dims)
         LB_id = cal_id_embedding(tau, epoch, 'MLE')
-        # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
-        # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
-        # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
+        MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
+        MADA_id = cal_id_embedding(tau, epoch, 'MADA')
+        PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
-        # fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
-        fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{0},{0},{0}\n")
+        # fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id},{koopman_dim}\n")
+        fp.write(f"{tau},{random_seed},{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
         fp.flush()
 
-        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
-        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
         
         if checkpoint_filepath is None: break
         
@@ -250,10 +250,10 @@ def worker_1(tau, koopman_dim=2, trace_num=256+32+32, random_seed=729, cpu_num=1
     # generate dataset
     generate_dataset(trace_num, koopman_dim, tau, sample_num, is_print=is_print)
     # train
-    train_time_lagged(tau, is_print, observation_dim, koopman_dim)
+    train_time_lagged(tau, is_print, observation_dim, koopman_dim, random_seed)
     # test and calculating ID
     # test_and_save_embeddings_of_time_lagged(tau, None, is_print)
-    test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/k_{koopman_dim}/tau_{tau}", is_print, observation_dim, koopman_dim)
+    test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/k_{koopman_dim}/tau_{tau}/seed_{random_seed}", is_print, observation_dim, koopman_dim, random_seed)
     # plot id of each epoch
     plot_epoch_test_log(tau, koopman_dim, max_epoch=200+1)
 
@@ -268,14 +268,15 @@ def data_generator_pipeline(trace_num=256+32+32, time_step=100, observation_dim=
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32, observation_dim=4, koopman_dim=2):
     
-    tau_list = [0,5,10,20]
+    tau_list = [0,5,10,15,20,25]
     workers = []
     
     # id esitimate sub-process
-    for tau in tau_list:
-        is_print = True if len(workers)==0 else False
-        workers.append(Process(target=worker_1, args=(tau, koopman_dim, trace_num, 729, cpu_num, is_print, observation_dim), daemon=True))
-        workers[-1].start()
+    for random_seed in [1,2,3,4,5,6,7,8,9,10]:
+        for tau in tau_list:
+            is_print = True if len(workers)==0 else False
+            workers.append(Process(target=worker_1, args=(tau, koopman_dim, trace_num, random_seed, cpu_num, is_print, observation_dim), daemon=True))
+            workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
         pass
     
@@ -285,9 +286,9 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32, observation_dim=4, koo
 if __name__ == '__main__':
     
     trace_num = 1000
-    time_step = 200
+    time_step = 100
     observation_dim = 16
     
-    for koopman_dim in [2,3,4,5,6,7,8]:
+    for koopman_dim in [2,4,6,8]:
         data_generator_pipeline(trace_num=trace_num, time_step=time_step, observation_dim=observation_dim, koopman_dim=koopman_dim)
         id_esitimate_pipeline(trace_num=trace_num, observation_dim=observation_dim, koopman_dim=koopman_dim)

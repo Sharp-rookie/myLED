@@ -1,6 +1,5 @@
 from torch import nn
 from .time_lagged import TIME_LAGGED_AE
-from .slow_fast_evolve import EVOLVER
 
 
 def weights_normal_init(m):
