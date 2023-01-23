@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch
 from torch import nn
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from pytorch_lightning import seed_everything
 
@@ -180,6 +181,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}'
+    os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
     batch_size = 32
@@ -212,11 +214,8 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
         
         targets = model.descale(torch.concat(targets, axis=0))
         outputs = model.descale(torch.concat(outputs, axis=0))
-        
-        os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
-        
-        sample_num = 50
-        period_num = sample_num
+                
+        period_num = 50
         
         # plot total infomation prediction curve
         plt.figure(figsize=(16,5))
@@ -229,31 +228,40 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
         plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
         plt.close()
     
-    return nn.MSELoss()(outputs, targets).item(), nn.L1Loss()(outputs, targets).item()
+    # metrics
+    pred = outputs.detach().cpu().numpy()
+    true = targets.detach().cpu().numpy()
+    MSE = np.mean((pred - true) ** 2)
+    RMSE = np.sqrt(MSE)
+    MAE = np.mean(np.abs(pred - true))
+    MAPE = np.mean(np.abs((pred - true) / true))
+    
+    return MSE, RMSE, MAE, MAPE
 
 
-def main(trace_num, tau, n, is_print=False):
+def main(trace_num, tau, n, is_print=False, long_test=False):
     
     seed_everything(729)
     
     sample_num = None
 
-    # train
-    generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
-    train(tau, round(tau/n,3), is_print=is_print)
-    
-    # test evolve
-    ckpt_epoch = 50
-    for i in range(1, n+1):
-        delta_t = round(tau/n*i, 3)
-        generate_dataset(trace_num, delta_t, sample_num, False)
-        mse, mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print)
-        with open('lstm_evolve_test.txt','a') as f:
-            f.writelines(f'{delta_t}, {mse}, {mae}\n')
+    if not long_test:
+        # train
+        generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
+        train(tau, round(tau/n,3), is_print=is_print)
+    else:
+        # test evolve
+        ckpt_epoch = 50
+        for i in tqdm(range(1, 5*n+1)):
+            delta_t = round(tau/n*i, 3)
+            generate_dataset(trace_num, delta_t, sample_num, False)
+            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print)
+            with open(f'lstm_evolve_test_{tau}.txt','a') as f:
+                f.writelines(f'{delta_t}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
 
 
 if __name__ == '__main__':
     
     trace_num = 128 + 16 + 16
     
-    main(trace_num=trace_num, tau=4.5, n=10, is_print=True)
+    main(trace_num=trace_num, tau=2.5, n=10, is_print=True, long_test=True)

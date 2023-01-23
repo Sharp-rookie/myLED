@@ -614,8 +614,16 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         plt.subplots_adjust(wspace=0.2)
         plt.savefig(log_dir+f"/test/{delta_t}/total.jpg", dpi=300)
         plt.close()
+
+    # metrics
+    pred = total_infos_next.detach().cpu().numpy()
+    true = targets.detach().cpu().numpy()
+    MSE = np.mean((pred - true) ** 2)
+    RMSE = np.sqrt(MSE)
+    MAE = np.mean(np.abs(pred - true))
+    MAPE = np.mean(np.abs((pred - true) / true))
     
-    return nn.MSELoss()(total_infos_next, targets).item(), nn.L1Loss()(total_infos_next, targets).item()
+    return MSE, RMSE, MAE, MAPE
         
     
 def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=False):
@@ -637,25 +645,27 @@ def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=Fals
     plot_epoch_test_log(tau, max_epoch=100+1)
 
 
-def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_print=False, id_list=[1,2,3,4]):
+def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_print=False, id_list=[1,2,3,4], long_test=False):
     
     time.sleep(0.1)
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    ckpt_epoch = 50
+    ckpt_epoch = 100
 
-    # train
-    train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print)
-    # plot mse curve of each id
-    try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
-    except: pass
-    # test evolve
-    for i in range(1, n+1):
-        delta_t = round(tau/n*i, 3)
-        mse, mae = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print)
-        with open(f'evolve_test.txt','a') as f:
-            f.writelines(f'{delta_t}, {mse}, {mae}\n')
+    if not long_test:
+        # train
+        train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print)
+        # plot mse curve of each id
+        try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
+        except: pass
+    else:
+        # test evolve
+        for i in tqdm(range(1, 5*n+1)):
+            delta_t = round(tau/n*i, 3)
+            MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print)
+            with open(f'evolve_test_{tau}.txt','a') as f:
+                f.writelines(f'{delta_t}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
     
     
 def data_generator_pipeline(trace_num=256+32+32, total_t=9):
@@ -680,9 +690,9 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     print('ID Esitimate Over!')
 
 
-def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
+def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
-    tau_list = [4.5]
+    tau_list = [2.5]
     id_list = [1]
     workers = []
     
@@ -690,11 +700,13 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
     sample_num = None
     for tau in tau_list:
         # dataset for training
-        workers.append(Process(target=generate_dataset, args=(trace_num, round(tau/n,3), sample_num, True, n), daemon=True))
-        workers[-1].start()
+        if not long_test:
+            workers.append(Process(target=generate_dataset, args=(trace_num, round(tau/n,3), sample_num, True, n), daemon=True))
+            workers[-1].start()
+        
         # dataset for testing
-        for i in range(1, n+1):
-            print(f'processing testing dataset [{i}/{n}]')
+        for i in range(1, 5*n+1):
+            print(f'processing testing dataset [{i}/{5*n}]')
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, False)
             # workers.append(Process(target=generate_dataset, args=(trace_num, delta_t, sample_num, False), daemon=True))
@@ -705,10 +717,10 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1):
     
     # slow evolve sub-process
     for tau in tau_list:
-        for pretrain_epoch in [10]:
+        for pretrain_epoch in [30]:
             for slow_id in id_list:
                 is_print = True if len(workers)==0 else False
-                workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, n, 729, cpu_num, is_print, id_list), daemon=True))
+                workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, n, 729, cpu_num, is_print, id_list, long_test), daemon=True))
                 workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
         pass
@@ -721,5 +733,8 @@ if __name__ == '__main__':
     trace_num = 128 + 16 + 16
     
     data_generator_pipeline(trace_num, total_t=27)
-    id_esitimate_pipeline(trace_num=trace_num)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10)
+    
+    # id_esitimate_pipeline(trace_num=trace_num)
+    
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
