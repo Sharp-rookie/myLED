@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.nn.utils import weight_norm
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 from pytorch_lightning import seed_everything
 
 from Data.dataset import PNASDataset4TCN
@@ -76,20 +77,22 @@ class TCN(nn.Module):
         self.tanh = nn.Tanh()
         
         # scale inside the model
-        self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
-        self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
+        self.register_buffer('min', torch.zeros(1, input_size, dtype=torch.float32))
+        self.register_buffer('max', torch.ones(1, input_size, dtype=torch.float32))
 
     def forward(self, x):
-        # x needs to have dimension (N, C, L) in order to be passed into CNN
-        output = self.tcn(x.transpose(1, 2)).transpose(1, 2)
-        output = self.linear(output).double()
-        return self.tanh(output)
-    
         # (batchsize,sequence_length,1,3)-->(batchsize,sequence_length,3)
+        x = nn.Flatten(start_dim=-2)(x)
         
         # (batchsize,sequence_length,3)-->(batchsize,3,sequence_length)
+        x = x.transpose(2,1).contiguous()
         
         # (batchsize,sequence_length,3)-->(batchsize,sequence_length,1,3)
+        y = self.tcn(x).transpose(2,1).contiguous()
+        y = self.tanh(self.linear(y))
+        y = y.unsqueeze(-2)
+        
+        return y
         
     def scale(self, x):
         return (x-self.min) / (self.max-self.min+1e-6)
@@ -103,12 +106,12 @@ def train(tau, delta_t, sequence_length, is_print=False):
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/lstm/tau_{tau}'
+    log_dir = f'logs/tcn/tau_{tau}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = LSTM(in_channels=1, input_1d_width=3)
+    model = TCN(input_size=3, output_size=3, num_channels=[32,16,8], kernel_size=3, dropout=0.1)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
     
@@ -121,9 +124,9 @@ def train(tau, delta_t, sequence_length, is_print=False):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = PNASDataset4TCN(data_filepath, 'train', length=sequence_length)
+    train_dataset = PNASDataset4TCN(data_filepath, 'train', length=sequence_length, sequence_length=sequence_length)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = PNASDataset4TCN(data_filepath, 'val', length=sequence_length)
+    val_dataset = PNASDataset4TCN(data_filepath, 'val', length=sequence_length, sequence_length=sequence_length)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
@@ -219,18 +222,19 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False):
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/lstm/tau_{tau}'
+    log_dir = f'logs/tcn/tau_{tau}'
+    os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
     batch_size = 32
-    model = LSTM(in_channels=1, input_1d_width=3)
+    model = TCN(input_size=3, output_size=3, num_channels=[32,16,8], kernel_size=3, dropout=0.1)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
     model = model.to(device)
     
     # dataset
-    test_dataset = PNASDataset4TCN(data_filepath, 'test', length=sequence_length+n)
+    test_dataset = PNASDataset4TCN(data_filepath, 'test', length=sequence_length+n, sequence_length=sequence_length)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # testing pipeline        
@@ -245,18 +249,16 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False):
 
             output = model(input)
             for _ in range(1, n):
-                output = model(output)
+                input = torch.concat([input[:,1:], output[:,0].unsqueeze(1)], dim=1)
+                output = model(input)
 
             targets.append(target.cpu())
             outputs.append(output.cpu())
         
         targets = model.descale(torch.concat(targets, axis=0))
         outputs = model.descale(torch.concat(outputs, axis=0))
-        
-        os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
-        
-        sample_num = 50
-        period_num = sample_num
+
+        period_num = 50
         
         # plot total infomation prediction curve
         plt.figure(figsize=(16,5))
@@ -269,10 +271,18 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False):
         plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
         plt.close()
     
-    return nn.MSELoss()(outputs, targets).item(), nn.L1Loss()(outputs, targets).item()
+    # metrics
+    pred = outputs.detach().cpu().numpy()
+    true = targets.detach().cpu().numpy()
+    MSE = np.mean((pred - true) ** 2)
+    RMSE = np.sqrt(MSE)
+    MAE = np.mean(np.abs(pred - true))
+    MAPE = np.mean(np.abs((pred - true) / true))
+    
+    return MSE, RMSE, MAE, MAPE
 
 
-def main(trace_num, tau, n, is_print=False):
+def main(trace_num, tau, n, is_print=False, long_test=False):
     
     seed_everything(729)
     
@@ -281,18 +291,18 @@ def main(trace_num, tau, n, is_print=False):
     # TODO: 需要为TCN写一个getitem输出是sequence_length的dataset类，因为TCN输入必须是sequence，和我们的模型、LSTM的单样本输入不同
     # 因此，TCN的train可以和lstm的相似，仅训练单步；但是test时的外推，dataset和LSTM的不一样，需要是delta_t==tau/n，sequence_length=(n+外推时长/delta_t)
 
-    # train
-    generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
-    train(tau, round(tau/n,3), is_print=is_print)
-    
-    # test evolve
-    ckpt_epoch = 50
-    for i in range(1, n+1):
-        delta_t = round(tau/n*i, 3)
-        generate_dataset(trace_num, delta_t, sample_num, False, n+i)
-        mse, mae = test_evolve(tau, ckpt_epoch, delta_t, i, sequence_length, is_print)
-        with open('lstm_evolve_test.txt','a') as f:
-            f.writelines(f'{delta_t}, {mse}, {mae}\n')
+    if not long_test:
+        # train
+        generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
+        train(tau, round(tau/n,3), n, is_print=is_print)
+    else:
+        # test evolve
+        ckpt_epoch = 50
+        for i in tqdm(range(1, 5*n+1)):
+            generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n+i)
+            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, round(tau/n, 3), i, n, is_print)
+            with open(f'tcn_evolve_test_{tau}.txt','a') as f:
+                f.writelines(f'{round(tau/n*i, 3)}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
 
 
 if __name__ == '__main__':
@@ -300,4 +310,5 @@ if __name__ == '__main__':
     trace_num = 128 + 16 + 16
     sequence_length = 10
     
-    main(trace_num=trace_num, tau=4.5, n=sequence_length, is_print=True)
+    # main(trace_num=trace_num, tau=2.5, n=sequence_length, is_print=True, long_test=False)
+    main(trace_num=trace_num, tau=2.5, n=sequence_length, is_print=True, long_test=True)

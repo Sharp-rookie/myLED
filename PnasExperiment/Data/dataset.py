@@ -41,10 +41,11 @@ class PNASDataset(Dataset):
 
 class PNASDataset4TCN(Dataset):
 
-    def __init__(self, file_path, mode='train', length=None):
+    def __init__(self, file_path, mode='train', length=None, sequence_length=None):
         super().__init__()
         
-        self.length = length
+        assert length >= sequence_length
+        self.sequence_length = sequence_length
         self.data = np.load(file_path+f'/{mode}_{length}.npz')['data'] # (trace_num, sequence_length, 1, 3)
 
     # 0 --> 1
@@ -52,13 +53,13 @@ class PNASDataset4TCN(Dataset):
 
         trace = self.data[index]
 
-        input = trace[:self.length-1]
-        target = trace[self.length-1]
+        input = trace[:self.sequence_length-1]
+        target = trace[-1]
 
-        input = torch.from_numpy(input).float() # (1, channel, feature_dim)
-        target = torch.from_numpy(target).float()
+        input = torch.from_numpy(input).float() # (sequence_length, channel, feature_dim)
+        target = torch.from_numpy(target).float().unsqueeze(0) # (1, channel, feature_dim)
 
-        return input.unsqueeze(0), target.unsqueeze(0)
+        return input, target
 
     def __len__(self):
         return len(self.data)
