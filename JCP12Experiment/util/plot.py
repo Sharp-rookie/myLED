@@ -177,39 +177,48 @@ def plot_jcp12_autocorr():
     plt.savefig('corr.jpg', dpi=300)
     
     
-def plot_evolve():
+def plot_evolve(tau):
     
-    our = open('evolve_test.txt', 'r')
-    lstm = open('lstm_evolve_test.txt', 'r')
+    our = open(f'evolve_test_{tau}.txt', 'r')
+    lstm = open(f'lstm_evolve_test_{tau}.txt', 'r')
+    tcn = open(f'tcn_evolve_test_{tau}.txt', 'r')
     
-    our_data = []
-    lstm_data = []
-    for i, data in enumerate([our, lstm]):
+    our_data = [[] for seed in range(9)]
+    lstm_data = [[] for seed in range(10)]
+    tcn_data = [[] for seed in range(10)]
+    for i, data in enumerate([our, lstm, tcn]):
         for line in data.readlines():
             tau = float(line.split(',')[0])
-            mse = float(line.split(',')[1])
-            mae = float(line.split(',')[2])
+            seed = int(line.split(',')[1])
+            mse = float(line.split(',')[2])
+            rmse = float(line.split(',')[3])
+            mae = float(line.split(',')[4])
+            mape = float(line.split(',')[5])
             
             if i==0:
-                our_data.append([tau,mse,mae])
-            else:
-                lstm_data.append([tau,mse,mae])
+                our_data[seed-1].append([tau,mse,rmse,mae,mape])
+            elif i==1:
+                lstm_data[seed-1].append([tau,mse,rmse,mae,mape])
+            elif i==2:
+                tcn_data[seed-1].append([tau,mse,rmse,mae,mape])
     
-    our_data = np.array(our_data)
-    lstm_data = np.array(lstm_data)
+    our_data = np.mean(np.array(our_data), axis=0)
+    lstm_data = np.mean(np.array(lstm_data), axis=0)
+    tcn_data = np.mean(np.array(tcn_data), axis=0)
     
     plt.figure(figsize=(16,16))
-    for i, item in enumerate(['mse', 'mae']):
-        ax = plt.subplot(2,1,i+1)
+    for i, item in enumerate(['mse', 'rmse', 'mae', 'mape']):
+        ax = plt.subplot(2,2,i+1)
         ax.plot(our_data[:,0], our_data[:,i+1], label='our')
         ax.plot(lstm_data[:,0], lstm_data[:,i+1], label='lstm')
+        ax.plot(tcn_data[:,0], tcn_data[:,i+1], label='tcn')
         ax.set_title(item)
         ax.set_xlabel('t / s')
         ax.legend()
-    plt.savefig('evolve_test.jpg', dpi=300)
+    plt.savefig(f'evolve_test_{tau}.jpg', dpi=300)
 
 
 if __name__ == '__main__':
     
     # plot_jcp12_autocorr()
-    plot_evolve()
+    plot_evolve(1.5)

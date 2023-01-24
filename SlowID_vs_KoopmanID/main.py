@@ -35,9 +35,9 @@ def train_time_lagged(tau, is_print=False, observation_dim=4, koopman_dim=2, ran
     model.to(device)
     
     # training params
-    lr = 0.001
+    lr = 0.005
     batch_size = 128
-    max_epoch = 300
+    max_epoch = 100
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
@@ -118,7 +118,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     
     # testing params
     batch_size = 128
-    max_epoch = 300
+    max_epoch = 100
     loss_func = nn.MSELoss()
     
     # init model
@@ -240,7 +240,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     if is_print: print()
         
     
-def de(tau, koopman_dim=2, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=False, observation_dim=4):
+def worker_1(tau, koopman_dim=2, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=False, observation_dim=4):
     
     time.sleep(0.1)
     seed_everything(random_seed)
@@ -256,7 +256,7 @@ def de(tau, koopman_dim=2, trace_num=256+32+32, random_seed=729, cpu_num=1, is_p
     # test_and_save_embeddings_of_time_lagged(tau, None, is_print)
     test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/k_{koopman_dim}/tau_{tau}/seed_{random_seed}", is_print, observation_dim, koopman_dim, random_seed)
     # plot id of each epoch
-    plot_epoch_test_log(tau, koopman_dim, max_epoch=300+1)
+    plot_epoch_test_log(tau, koopman_dim, max_epoch=100+1)
 
     
 def data_generator_pipeline(trace_num=256+32+32, time_step=100, observation_dim=4, koopman_dim=2):
@@ -289,7 +289,8 @@ if __name__ == '__main__':
     trace_num = 1000
     time_step = 100
     observation_dim = 16
-    
+
     for koopman_dim in [2,4,6,8]:
+        observation_dim = koopman_dim
         data_generator_pipeline(trace_num=trace_num, time_step=time_step, observation_dim=observation_dim, koopman_dim=koopman_dim)
         id_esitimate_pipeline(trace_num=trace_num, observation_dim=observation_dim, koopman_dim=koopman_dim)

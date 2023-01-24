@@ -17,7 +17,7 @@ def system_4d(y0, t, para=(0.025,3)):
     return [dc1, dc2, dc3, dc4]
 
 
-def generate_original_data(trace_num, total_t=5, dt=0.001):
+def generate_original_data(trace_num, total_t=5, dt=0.0001):
     
     def solve_1_trace(trace_id=0, total_t=5, dt=0.001):
         
@@ -62,7 +62,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     if is_print: print('loading original trace data:')
     tmp = np.load(f"Data/origin/origin.npz")
     data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
-    point_num = int(tmp['T'] / tau) - 1
+    point_num = int(tmp['T'] / tau) - 1 if sample_num is None else sample_num
 
     # subsampling
     dt = tmp['dt']

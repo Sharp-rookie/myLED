@@ -236,12 +236,12 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     if is_print: print()
     
     
-def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False):
+def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}'
+    log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
@@ -280,7 +280,6 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training pipeline
     train_loss = []
     val_loss = []
-    best_loss = 1.
     for epoch in range(1, max_epoch+1):
         
         losses = [[],[],[],[]]
@@ -500,15 +499,9 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
                 plt.close()
-        
-            # record best model
-            if all_loss < best_loss:
-                best_loss = all_loss
-                best_model = model.state_dict()
-
-    # save model
-    torch.save(best_model, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
-    if is_print: print(f'\nsave best model at {log_dir}/checkpoints/epoch-{epoch}.ckpt (val best_loss={best_loss})')
+                
+                # save model
+                torch.save(model.state_dict(), log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
     
     # plot loss curve
     train_loss = np.array(train_loss)
@@ -522,12 +515,12 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
 
-def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False):
+def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}'
+    log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
 
     # load model
     batch_size = 32
@@ -573,10 +566,14 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
             fast_infos_next.append(fast_info_next.cpu())
             total_infos_next.append(total_info_next.cpu())
         
-        targets = model.descale(torch.concat(targets, axis=0))
-        slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0))
-        fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0))
-        total_infos_next = model.descale(torch.concat(total_infos_next, axis=0))
+        # targets = model.descale(torch.concat(targets, axis=0))
+        # slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0))
+        # fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0))
+        # total_infos_next = model.descale(torch.concat(total_infos_next, axis=0))
+        targets = torch.concat(targets, axis=0)
+        slow_infos_next = torch.concat(slow_infos_next, axis=0)
+        fast_infos_next = torch.concat(fast_infos_next, axis=0)
+        total_infos_next = torch.concat(total_infos_next, axis=0)
         
         os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
         
@@ -655,7 +652,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
 
     if not long_test:
         # train
-        train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print)
+        train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print, random_seed=random_seed)
         # plot mse curve of each id
         try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
         except: pass
@@ -663,9 +660,9 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
         # test evolve
         for i in tqdm(range(1, 5*n+1)):
             delta_t = round(tau/n*i, 3)
-            MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print)
+            MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
             with open(f'evolve_test_{tau}.txt','a') as f:
-                f.writelines(f'{delta_t}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
+                f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
     
     
 def data_generator_pipeline(trace_num=256+32+32, total_t=9):
@@ -699,8 +696,8 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     # generate dataset sub-process
     sample_num = None
     for tau in tau_list:
-        # dataset for training
         if not long_test:
+            # dataset for training
             workers.append(Process(target=generate_dataset, args=(trace_num, round(tau/n,3), sample_num, True, n), daemon=True))
             workers[-1].start()
         
@@ -719,9 +716,10 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     for tau in tau_list:
         for pretrain_epoch in [30]:
             for slow_id in id_list:
-                is_print = True if len(workers)==0 else False
-                workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, n, 729, cpu_num, is_print, id_list, long_test), daemon=True))
-                workers[-1].start()
+                for random_seed in range(1,10+1):
+                    is_print = True if len(workers)==0 else False
+                    workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, n, random_seed, cpu_num, is_print, id_list, long_test), daemon=True))
+                    workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
         pass
     
@@ -736,5 +734,5 @@ if __name__ == '__main__':
     
     # id_esitimate_pipeline(trace_num=trace_num)
     
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
     slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)

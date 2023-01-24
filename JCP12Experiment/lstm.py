@@ -3,12 +3,14 @@ import os
 import numpy as np
 import torch
 from torch import nn
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from pytorch_lightning import seed_everything
 
 from Data.dataset import JCP12Dataset
-    
-    
+from Data.generator import generate_dataset
+
+
 class LSTM(nn.Module):
     
     def __init__(self, in_channels, input_1d_width, hidden_dim=64, layer_num=2):
@@ -57,12 +59,12 @@ class LSTM(nn.Module):
         return x * (self.max-self.min+1e-6) + self.min
 
 
-def train(tau, delta_t, is_print=False):
+def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/lstm/tau_{tau}'
+    log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
@@ -173,12 +175,13 @@ def train(tau, delta_t, is_print=False):
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     
 
-def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
+def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/lstm/tau_{tau}'
+    log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
+    os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
     batch_size = 128
@@ -209,13 +212,12 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
             targets.append(target.cpu())
             outputs.append(output.cpu())
         
-        targets = model.descale(torch.concat(targets, axis=0))
-        outputs = model.descale(torch.concat(outputs, axis=0))
-        
-        os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
-        
-        sample_num = 50
-        period_num = sample_num
+        # targets = model.descale(torch.concat(targets, axis=0))
+        # outputs = model.descale(torch.concat(outputs, axis=0))
+        targets = torch.concat(targets, axis=0)
+        outputs = torch.concat(outputs, axis=0)
+                
+        period_num = 50
         
         # plot total infomation prediction curve
         plt.figure(figsize=(16,4))
@@ -228,25 +230,42 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
         plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
         plt.close()
     
-    return nn.MSELoss()(outputs, targets).item(), nn.L1Loss()(outputs, targets).item()
+    # metrics
+    pred = outputs.detach().cpu().numpy()
+    true = targets.detach().cpu().numpy()
+    MSE = np.mean((pred - true) ** 2)
+    RMSE = np.sqrt(MSE)
+    MAE = np.mean(np.abs(pred - true))
+    MAPE = np.mean(np.abs((pred - true) / true))
+    
+    return MSE, RMSE, MAE, MAPE
 
 
-def main(tau, n, is_print=False):
+def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
     seed_everything(729)
+    
+    sample_num = 100
 
-    ckpt_epoch = 50
-
-    # train
-    train(tau, round(tau/n,3), is_print=is_print)
-    # test evolve
-    for i in range(1, n+1):
-        delta_t = round(tau/n*i, 3)
-        mse, mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print)
-        with open('lstm_evolve_test.txt','a') as f:
-            f.writelines(f'{delta_t}, {mse}, {mae}\n')
+    if not long_test:
+        # train
+        generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
+        train(tau, round(tau/n,3), is_print=is_print, random_seed=random_seed)
+    else:
+        # test evolve
+        ckpt_epoch = 50
+        for i in tqdm(range(1, 5*n+1)):
+            delta_t = round(tau/n*i, 3)
+            generate_dataset(trace_num, delta_t, sample_num, False)
+            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
+            with open(f'lstm_evolve_test_{tau}.txt','a') as f:
+                f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
 
 
 if __name__ == '__main__':
     
-    main(tau=1.5, n=10, is_print=True)
+    trace_num = 1000
+    
+    for seed in range(1,10+1):
+        main(trace_num=trace_num, tau=0.8, n=10, is_print=True, long_test=False, random_seed=seed)
+        main(trace_num=trace_num, tau=0.8, n=10, is_print=True, long_test=True, random_seed=seed)
