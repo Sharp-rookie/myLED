@@ -105,7 +105,7 @@ class TCN(nn.Module):
 def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -115,6 +115,7 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
     model = TCN(input_size=3, output_size=3, num_channels=[32,16,8], kernel_size=3, dropout=0.1)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
+    model = model.to(device)
     
     # training params
     lr = 0.001
@@ -141,8 +142,8 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
         model.train()
         for input, target in train_loader:
             
-            input = model.scale(input).to(device) # (batchsize,1,1,3)
-            target = model.scale(target).to(device)
+            input = model.scale(input.to(device)) # (batchsize,1,1,3)
+            target = model.scale(target.to(device))
             
             output = model(input)
             loss = MSE_loss(output, target)
@@ -164,8 +165,8 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
             model.eval()
             for input, target in val_loader:
                 
-                input = model.scale(input).to(device) # (batchsize,1,1,3)
-                target = model.scale(target).to(device)
+                input = model.scale(input.to(device)) # (batchsize,1,1,3)
+                target = model.scale(target.to(device))
                 
                 output = model(input)
 
@@ -221,7 +222,7 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -307,7 +308,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
 
 if __name__ == '__main__':
     
-    trace_num = 128 + 16 + 16
+    trace_num = 200
     
     workers = []
     
@@ -331,3 +332,5 @@ if __name__ == '__main__':
     while any([sub.exitcode==None for sub in workers]):
         pass
     workers = []
+    
+    torch.cuda.empty_cache()
