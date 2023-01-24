@@ -101,7 +101,91 @@ def plot_epoch_test_log(tau, koopman_dim, max_epoch):
         plt.legend()
         plt.savefig(f'logs/time-lagged/k_{koopman_dim}/tau_{int(tau)}/ID_per_epoch.jpg', dpi=300)
         plt.close()
-        
+
+
+def plot_experiment_result(max_epoch):
+    
+    class TRACE():
+        def __init__(self, K, tau):
+            self.K = K
+            self.tau = tau
+            self.LB_id = []
+            self.MiND_id = []
+            self.MADA_id = []
+            self.PCA_id = []
+
+    items = []
+    tau_list = [2,4,6,8]
+    
+    for K in tau_list:
+        for tau in [0,5,10,15,20,25]:
+            fp = open(f'logs/time-lagged/k_{K}/tau_{tau}/test_log.txt', 'r')
+            for line in fp.readlines():
+                data = line[:-1].split(',')
+                tau = float(data[0])
+                epoch = int(data[6])
+                LB_id = float(data[7])
+                MiND_id = float(data[8])
+                MADA_id = float(data[9])
+                PCA_id = float(data[10])
+            
+            if epoch != max_epoch: continue
+            
+            find = False
+            for M in items:
+                if M.tau == tau and M.K == K:
+                    M.LB_id.append(LB_id)
+                    M.MiND_id.append(MiND_id)
+                    M.MADA_id.append(MADA_id)
+                    M.PCA_id.append(PCA_id)
+                    find = True
+            if not find:
+                M = TRACE(K, tau)
+                M.LB_id.append(LB_id)
+                M.MiND_id.append(MiND_id)
+                M.MADA_id.append(MADA_id)
+                M.PCA_id.append(PCA_id)
+                items.append(M)
+            fp.close()
+    
+    plt.figure(figsize=(16,4))
+    for K in tau_list:
+        tau_list = np.array([0,5,10,15,20,25])
+        tau_id = []
+        for tau in tau_list:
+            for M in items:
+                if M.tau == tau and M.K == K:
+                    LB_id = round(np.mean(M.LB_id))
+                    MiND_id = round(np.mean(M.MiND_id))
+                    MADA_id = round(np.mean(M.MADA_id))
+                    PCA_id = round(np.mean(M.PCA_id))
+            tau_id.append([LB_id, MiND_id, MADA_id, PCA_id])
+        tau_id = np.array(tau_id)
+        for i, item in enumerate(['LB','MiND','MADA','PCA']):
+            ax = plt.subplot(1,4,i+1)
+            ax.plot(tau_list, tau_id[:,i], label=f'K_dim[{K}]')
+            ax.set_title(item)
+            ax.legend()
+            plt.ylim(0,10)
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig('result.jpg', dpi=300)
+    
+    plt.figure(figsize=(16,4))
+    for K in tau_list:
+        tau_list = np.array([0,5,10,15,20,25])
+        tau_id = []
+        for tau in tau_list:
+            for M in items:
+                if M.tau == tau and M.K == K:
+                    LB_id = round(np.mean(M.LB_id))
+                    MiND_id = round(np.mean(M.MiND_id))
+                    MADA_id = round(np.mean(M.MADA_id))
+                    PCA_id = round(np.mean(M.PCA_id))
+            tau_id.append(np.mean([LB_id, MiND_id, MADA_id]))
+        tau_id = np.array(tau_id)
+        plt.plot(tau_list, tau_id, label=f'K_dim[{K}]')
+    plt.savefig('result_mean.jpg', dpi=300)
+
         
 def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3,4]):
     
@@ -182,7 +266,9 @@ if __name__ == '__main__':
     
     # plot_jcp12_autocorr()
     
-    tau_list = [0,5,10,15,20,25]
-    for tau in tau_list:
-        for koopman_dim in [2,4,6,8]:
-            plot_epoch_test_log(tau, koopman_dim, 200+1)
+    # tau_list = [0,5,10,15,20,25]
+    # for tau in tau_list:
+    #     for koopman_dim in [2,4,6,8]:
+    #         plot_epoch_test_log(tau, koopman_dim, 200+1)
+    
+    plot_experiment_result(300)

@@ -59,12 +59,12 @@ class LSTM(nn.Module):
         return x * (self.max-self.min+1e-6) + self.min
 
 
-def train(tau, delta_t, is_print=False):
+def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/lstm/tau_{tau}'
+    log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
@@ -175,12 +175,12 @@ def train(tau, delta_t, is_print=False):
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     
 
-def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
+def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/lstm/tau_{tau}'
+    log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
@@ -212,8 +212,10 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
             targets.append(target.cpu())
             outputs.append(output.cpu())
         
-        targets = model.descale(torch.concat(targets, axis=0))
-        outputs = model.descale(torch.concat(outputs, axis=0))
+        # targets = model.descale(torch.concat(targets, axis=0))
+        # outputs = model.descale(torch.concat(outputs, axis=0))
+        targets = torch.concat(targets, axis=0)
+        outputs = torch.concat(outputs, axis=0)
                 
         period_num = 50
         
@@ -239,29 +241,31 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False):
     return MSE, RMSE, MAE, MAPE
 
 
-def main(trace_num, tau, n, is_print=False, long_test=False):
+def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
-    seed_everything(729)
+    seed_everything(random_seed)
     
     sample_num = None
 
     if not long_test:
         # train
         generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
-        train(tau, round(tau/n,3), is_print=is_print)
+        train(tau, round(tau/n,3), is_print=is_print, random_seed=random_seed)
     else:
         # test evolve
         ckpt_epoch = 50
         for i in tqdm(range(1, 5*n+1)):
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, False)
-            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print)
+            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
             with open(f'lstm_evolve_test_{tau}.txt','a') as f:
-                f.writelines(f'{delta_t}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
+                f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
 
 
 if __name__ == '__main__':
     
     trace_num = 128 + 16 + 16
     
-    main(trace_num=trace_num, tau=2.5, n=10, is_print=True, long_test=True)
+    for seed in range(1,10+1):
+        main(trace_num=trace_num, tau=2.5, n=10, is_print=True, long_test=False, random_seed=seed)
+        main(trace_num=trace_num, tau=2.5, n=10, is_print=True, long_test=True, random_seed=seed)

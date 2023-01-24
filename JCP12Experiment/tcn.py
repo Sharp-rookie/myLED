@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from pytorch_lightning import seed_everything
 
-from Data.dataset import PNASDataset4TCN
+from Data.dataset import JCP12Dataset4TCN
 from Data.generator import generate_dataset
 
 
@@ -111,22 +111,22 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = TCN(input_size=3, output_size=3, num_channels=[32,16,8], kernel_size=3, dropout=0.1)
+    model = TCN(input_size=4, output_size=4, num_channels=[32,16,8], kernel_size=3, dropout=0.1)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
     
     # training params
     lr = 0.001
-    batch_size = 32
+    batch_size = 128
     max_epoch = 5
     weight_decay = 0.001
     MSE_loss = nn.MSELoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = PNASDataset4TCN(data_filepath, 'train', length=sequence_length, sequence_length=sequence_length)
+    train_dataset = JCP12Dataset4TCN(data_filepath, 'train', length=sequence_length, sequence_length=sequence_length)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = PNASDataset4TCN(data_filepath, 'val', length=sequence_length, sequence_length=sequence_length)
+    val_dataset = JCP12Dataset4TCN(data_filepath, 'val', length=sequence_length, sequence_length=sequence_length)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
@@ -163,7 +163,7 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
             model.eval()
             for input, target in val_loader:
                 
-                input = model.scale(input).to(device) # (batchsize,1,1,3)
+                input = model.scale(input).to(device) # (batchsize,1,1,4)
                 target = model.scale(target).to(device)
                 
                 output = model(input)
@@ -188,9 +188,9 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
                 period_num = 5*int(9/delta_t)
                 
                 # plot total infomation one-step prediction curve
-                plt.figure(figsize=(16,5))
-                for j, item in enumerate(['X','Y','Z']):
-                    ax = plt.subplot(1,3,j+1)
+                plt.figure(figsize=(16,4))
+                for j, item in enumerate(['c1','c2','c3', 'c4']):
+                    ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
                     plt.plot(targets[:period_num,0,0,j], label='true')
                     plt.plot(outputs[:period_num,0,0,j], label='predict')
@@ -226,15 +226,15 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, ra
     os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
-    batch_size = 32
-    model = TCN(input_size=3, output_size=3, num_channels=[32,16,8], kernel_size=3, dropout=0.1)
+    batch_size = 128
+    model = TCN(input_size=4, output_size=4, num_channels=[32,16,8], kernel_size=3, dropout=0.1)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
     model = model.to(device)
     
     # dataset
-    test_dataset = PNASDataset4TCN(data_filepath, 'test', length=sequence_length+n, sequence_length=sequence_length)
+    test_dataset = JCP12Dataset4TCN(data_filepath, 'test', length=sequence_length+n, sequence_length=sequence_length)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # testing pipeline        
@@ -260,12 +260,12 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, ra
         targets = torch.concat(targets, axis=0)
         outputs = torch.concat(outputs, axis=0)
 
-        period_num = 50
+        period_num = 100
         
         # plot total infomation prediction curve
-        plt.figure(figsize=(16,5))
-        for j, item in enumerate(['X','Y','Z']):
-            ax = plt.subplot(1,3,j+1)
+        plt.figure(figsize=(16,4))
+        for j, item in enumerate(['c1','c2','c3', 'c4']):
+            ax = plt.subplot(1,4,j+1)
             ax.set_title(item)
             plt.plot(targets[:period_num,0,0,j], label='true')
             plt.plot(outputs[:period_num,0,0,j], label='predict')
@@ -288,7 +288,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
     seed_everything(random_seed)
     
-    sample_num = None
+    sample_num = 100
     
     if not long_test:
         # train
@@ -297,7 +297,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 5
-        for i in tqdm(range(1, 13*n+1)):
+        for i in tqdm(range(1, 5*n+1)):
             generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n+i)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, round(tau/n, 3), i, n, is_print, random_seed)
             with open(f'tcn_evolve_test_{tau}.txt','a') as f:
@@ -306,9 +306,9 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
 
 if __name__ == '__main__':
     
-    trace_num = 128 + 16 + 16
+    trace_num = 1000
     sequence_length = 10
     
     for seed in range(1,10+1):
-        main(trace_num=trace_num, tau=1.0, n=4, is_print=True, long_test=False, random_seed=seed)
-        main(trace_num=trace_num, tau=1.0, n=4, is_print=True, long_test=True, random_seed=seed)
+        main(trace_num=trace_num, tau=0.32, n=4, is_print=True, long_test=False, random_seed=seed)
+        main(trace_num=trace_num, tau=0.32, n=4, is_print=True, long_test=True, random_seed=seed)
