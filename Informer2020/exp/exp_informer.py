@@ -1,4 +1,4 @@
-from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred
+from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred, Dataset_JCP_hour
 from exp.exp_basic import Exp_Basic
 from models.model import Informer, InformerStack
 
@@ -61,6 +61,7 @@ class Exp_Informer(Exp_Basic):
         args = self.args
 
         data_dict = {
+            'JCP_0.08':Dataset_JCP_hour,
             'ETTh1':Dataset_ETT_hour,
             'ETTh2':Dataset_ETT_hour,
             'ETTm1':Dataset_ETT_minute,

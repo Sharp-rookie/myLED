@@ -41,10 +41,10 @@ class LSTM(nn.Module):
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
         self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
     
-    def forward(self, x):
+    def forward(self, x, device=torch.device('cpu')):
         
-        h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
-        c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
+        h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=device)
+        c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=device)
         
         x = self.flatten(x)
         _, (h, c)  = self.cell(x, (h0, c0))
@@ -63,7 +63,7 @@ class LSTM(nn.Module):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -73,6 +73,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     model = LSTM(in_channels=1, input_1d_width=4)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
+    model.to(device)
     
     # training params
     lr = 0.001
@@ -99,10 +100,10 @@ def train(tau, delta_t, is_print=False, random_seed=729):
         model.train()
         for input, target in train_loader:
             
-            input = model.scale(input).to(device) # (batchsize,1,1,3)
-            target = model.scale(target).to(device)
+            input = model.scale(input.to(device)) # (batchsize,1,1,3)
+            target = model.scale(target.to(device))
             
-            output = model(input)
+            output = model(input, device)
             loss = MSE_loss(output, target)
             
             optimizer.zero_grad()
@@ -122,10 +123,10 @@ def train(tau, delta_t, is_print=False, random_seed=729):
             model.eval()
             for input, target in val_loader:
                 
-                input = model.scale(input).to(device) # (batchsize,1,1,4)
-                target = model.scale(target).to(device)
+                input = model.scale(input.to(device)) # (batchsize,1,1,4)
+                target = model.scale(target.to(device))
                 
-                output = model(input)
+                output = model(input, device)
 
                 # record results
                 outputs.append(output.cpu())
@@ -171,7 +172,6 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     plt.figure()
     plt.plot(train_loss)
     plt.xlabel('epoch')
-    plt.legend()
     plt.title('Training Loss Curve')
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     
@@ -179,7 +179,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -203,12 +203,12 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
         model.eval()
         for input, target in test_loader:
-            input = model.scale(input)
-            target = model.scale(target)
+            input = model.scale(input.to(device))
+            target = model.scale(target.to(device))
 
-            output = model(input)
+            output = model(input, device)
             for _ in range(1, n):
-                output = model(output)
+                output = model(output, device)
 
             targets.append(target.cpu())
             outputs.append(output.cpu())

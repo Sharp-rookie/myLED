@@ -37,8 +37,10 @@ class Koopman_OPT(nn.Module):
 
 class LSTM_OPT(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num):
+    def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num, device):
         super(LSTM_OPT, self).__init__()
+        
+        self.device = device
         
         # (batchsize,1,1,4)-->(batchsize,1,4)
         self.flatten = nn.Flatten(start_dim=2)
@@ -62,8 +64,8 @@ class LSTM_OPT(nn.Module):
     
     def forward(self, x):
         
-        h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
-        c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32)
+        h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=self.device)
+        c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=self.device)
         
         x = self.flatten(x)
         _, (h, c)  = self.cell(x, (h0, c0))
@@ -75,7 +77,7 @@ class LSTM_OPT(nn.Module):
 
 class EVOLVER(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim):
+    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, device):
         super(EVOLVER, self).__init__()
         
         # (batchsize,1,1,3)-->(batchsize, embed_dim)
@@ -114,7 +116,7 @@ class EVOLVER(nn.Module):
         
         self.K_opt = Koopman_OPT(slow_dim)
         
-        self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2)
+        self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, device=device)
 
         # scale inside the model
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))

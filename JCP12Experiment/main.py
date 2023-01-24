@@ -21,7 +21,7 @@ from util.intrinsic_dimension import eval_id_embedding
 def train_time_lagged(tau, is_print=False):
     
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(tau)
     log_dir = 'logs/time-lagged/tau_' + str(tau)
     os.makedirs(log_dir, exist_ok=True)
@@ -56,10 +56,10 @@ def train_time_lagged(tau, is_print=False):
         # train
         model.train()
         for input, target in train_loader:
-            input = model.scale(input) # (batchsize,1,1,4)
-            target = model.scale(target)
+            input = model.scale(input.to(device)) # (batchsize,1,1,4)
+            target = model.scale(target.to(device))
             
-            output, _ = model.forward(input.to(device))
+            output, _ = model.forward(input)
             
             loss = loss_func(output, target)
             
@@ -78,10 +78,10 @@ def train_time_lagged(tau, is_print=False):
             
             model.eval()
             for input, target in val_loader:
-                input = model.scale(input)
-                target = model.scale(target)
+                input = model.scale(input.to(device))
+                target = model.scale(target.to(device))
             
-                output, _ = model.forward(input.to(device))
+                output, _ = model.forward(input)
                 outputs.append(output.cpu())
                 targets.append(target.cpu())
                 
@@ -111,7 +111,7 @@ def train_time_lagged(tau, is_print=False):
 def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False):
     
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(tau)
     log_dir = 'logs/time-lagged/tau_' + str(tau)
     os.makedirs(log_dir+'/test', exist_ok=True)
@@ -161,10 +161,10 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             
             # train-dataset
             for batch_idx, (input, target) in enumerate(train_loader):
-                input = model.scale(input) # (batchsize,1,1,4)
-                target = model.scale(target)
+                input = model.scale(input.to(device)) # (batchsize,1,1,4)
+                target = model.scale(target.to(device))
                 
-                output, _ = model.forward(input.to(device))
+                output, _ = model.forward(input)
                 
                 train_outputs = output.cpu() if not len(train_outputs) else torch.concat((train_outputs, output.cpu()), axis=0)
                 train_targets = target.cpu() if not len(train_targets) else torch.concat((train_targets, target.cpu()), axis=0)
@@ -173,10 +173,10 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 
             # test-dataset
             for input, target in test_loader:
-                input = model.scale(input) # (batchsize,1,1,4)
-                target = model.scale(target)
+                input = model.scale(input.to(device)) # (batchsize,1,1,4)
+                target = model.scale(target.to(device))
                 
-                output, embedding = model.forward(input.to(device))
+                output, embedding = model.forward(input)
                 # save the embedding vectors
                 # TODO: 这里的代码好奇怪？
                 for idx in range(input.shape[0]):
@@ -242,14 +242,14 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/random_seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id)
+    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, device=device)
     model.apply(models.weights_normal_init)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
@@ -291,12 +291,12 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
         model.train()
         for input, _, internl_units in train_loader:
             
-            input = model.scale(input) # (batchsize,1,1,4)
+            input = model.scale(input.to(device)) # (batchsize,1,1,4)
             
             ###############
             # slow extract
             ###############
-            slow_var, embed = model.extract(input.to(device))
+            slow_var, embed = model.extract(input)
             slow_info = model.recover(slow_var)
             _, embed_from_info = model.extract(slow_info)
             
@@ -310,7 +310,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             koopman_loss, evolve_loss = 0, 0
             for i in range(1, len(internl_units)):
                 
-                unit = model.scale(internl_units[i]).to(device) # t+i
+                unit = model.scale(internl_units[i].to(device)) # t+i
                 
                 # extract to slow variables
                 unit_slow_var, _ = model.extract(unit)
@@ -362,11 +362,11 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             model.eval()
             for input, target, _ in val_loader:
                 
-                input = model.scale(input) # (batchsize,1,1,4)
-                target = model.scale(target)
+                input = model.scale(input.to(device)) # (batchsize,1,1,4)
+                target = model.scale(target.to(device))
                 
                 # slow extract
-                slow_var, embed = model.extract(input.to(device))
+                slow_var, embed = model.extract(input)
                 slow_info = model.recover(slow_var)
                 _, embed_from_info = model.extract(slow_info)
                 
@@ -522,13 +522,13 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/random_seed{random_seed}'
 
     # load model
     batch_size = 128
-    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id)
+    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, device=device)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
@@ -548,11 +548,11 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         model.eval()
         for input, target in test_loader:
             
-            input = model.scale(input)
-            target = model.scale(target)
+            input = model.scale(input.to(device))
+            target = model.scale(target.to(device))
         
             # slow extract
-            slow_var, _ = model.extract(input.to(device))
+            slow_var, _ = model.extract(input)
             slow_info = model.recover(slow_var)
             
             # slow evolve
@@ -694,7 +694,7 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
 
 def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
-    tau_list = [0.8]
+    tau_list = [1.0]
     id_list = [2]
     workers = []
     
@@ -719,7 +719,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
     # slow evolve sub-process
     for tau in tau_list:
-        for pretrain_epoch in [50]:
+        for pretrain_epoch in [30]:
             for slow_id in id_list:
                 for random_seed in range(1,10):
                     is_print = True if len(workers)==0 else False
@@ -736,6 +736,6 @@ if __name__ == '__main__':
     trace_num = 1000
     
     data_generator_pipeline(trace_num=trace_num, total_t=15)
-    id_esitimate_pipeline(trace_num=trace_num)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    # id_esitimate_pipeline(trace_num=trace_num)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
     # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)

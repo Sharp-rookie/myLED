@@ -170,4 +170,4 @@ def generate_informer_dataset(trace_num, tau, sample_num=None):
     df = pd.DataFrame(data, columns=['c1','c2','c3','c4'])
     df.to_csv(f'JCP12_tau{tau}.csv')
 
-generate_informer_dataset(trace_num=1000, tau=4.0, sample_num=None)
+# generate_informer_dataset(trace_num=1000, tau=4.0, sample_num=None)
