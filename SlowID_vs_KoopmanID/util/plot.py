@@ -115,7 +115,7 @@ def plot_experiment_result(max_epoch):
             self.PCA_id = []
 
     items = []
-    tau_list = [2,4,6,8]
+    tau_list = [4,6,8]
     
     for K in tau_list:
         for tau in [0,5,10,15,20,25]:
@@ -271,4 +271,4 @@ if __name__ == '__main__':
     #     for koopman_dim in [2,4,6,8]:
     #         plot_epoch_test_log(tau, koopman_dim, 200+1)
     
-    plot_experiment_result(300)
+    plot_experiment_result(15)

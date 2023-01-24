@@ -6,6 +6,7 @@ from torch import nn
 from torch.nn.utils import weight_norm
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from multiprocessing import Process
 from pytorch_lightning import seed_everything
 
 from Data.dataset import JCP12Dataset4TCN
@@ -297,7 +298,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 5
-        for i in tqdm(range(1, 5*n+1)):
+        for i in tqdm(range(1, 13*n+1)):
             generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n+i)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, round(tau/n, 3), i, n, is_print, random_seed)
             with open(f'tcn_evolve_test_{tau}.txt','a') as f:
@@ -309,6 +310,25 @@ if __name__ == '__main__':
     trace_num = 1000
     sequence_length = 10
     
+    workers = []
+    
+    tau = 0.32
+    n = 4
+    
+    # train
     for seed in range(1,10+1):
-        main(trace_num=trace_num, tau=0.32, n=4, is_print=True, long_test=False, random_seed=seed)
-        main(trace_num=trace_num, tau=0.32, n=4, is_print=True, long_test=True, random_seed=seed)
+        is_print = True if len(workers)==0 else False
+        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
+        workers[-1].start()
+    while any([sub.exitcode==None for sub in workers]):
+        pass
+    workers = []
+    
+    # test
+    for seed in range(1,10+1):
+        is_print = True if len(workers)==0 else False
+        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
+        workers[-1].start()
+    while any([sub.exitcode==None for sub in workers]):
+        pass
+    workers = []

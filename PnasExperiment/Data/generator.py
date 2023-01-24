@@ -153,9 +153,9 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     #######################j
     # Create [train,val,test] dataset
     #######################
-    train_num = int(0.8*trace_num)
+    train_num = int(0.5*trace_num)
     val_num = int(0.1*trace_num)
-    test_num = int(0.1*trace_num)
+    test_num = int(0.4*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
                 

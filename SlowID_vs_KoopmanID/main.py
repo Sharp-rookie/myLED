@@ -293,4 +293,4 @@ if __name__ == '__main__':
     for koopman_dim in [2,4,6,8]:
         observation_dim = koopman_dim
         data_generator_pipeline(trace_num=trace_num, time_step=time_step, observation_dim=observation_dim, koopman_dim=koopman_dim)
-        id_esitimate_pipeline(trace_num=trace_num, observation_dim=observation_dim, koopman_dim=koopman_dim)
+        # id_esitimate_pipeline(trace_num=trace_num, observation_dim=observation_dim, koopman_dim=koopman_dim)

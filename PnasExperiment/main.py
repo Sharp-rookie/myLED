@@ -728,11 +728,11 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
 
 if __name__ == '__main__':
     
-    trace_num = 128 + 16 + 16
+    trace_num = 200
     
     data_generator_pipeline(trace_num, total_t=27)
     
-    # id_esitimate_pipeline(trace_num=trace_num)
+    id_esitimate_pipeline(trace_num=trace_num)
     
     slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
     slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
