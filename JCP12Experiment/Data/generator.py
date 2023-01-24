@@ -86,9 +86,9 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     ##################################
     # Create [train,val,test] dataset
     ##################################
-    train_num = int(0.8*trace_num)
+    train_num = int(0.5*trace_num)
     val_num = int(0.1*trace_num)
-    test_num = int(0.1*trace_num)
+    test_num = int(0.4*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
                 
@@ -150,3 +150,24 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.plot(sequences[:point_num,0,0,3], label='c4')
             plt.legend()
             plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
+            
+            
+def generate_informer_dataset(trace_num, tau, sample_num=None):
+    
+    # load original data
+    print('loading original trace data:')
+    tmp = np.load(f"Data/origin/origin.npz")
+    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
+
+    # subsampling
+    dt = tmp['dt']
+    subsampling = int(tau/dt) if tau!=0. else 1
+    data = data[:, ::subsampling]
+    print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
+    
+    import pandas as pd
+    data = np.concatenate(data, axis=0)[:,0]
+    df = pd.DataFrame(data, columns=['c1','c2','c3','c4'])
+    df.to_csv(f'JCP12_tau{tau}.csv')
+
+generate_informer_dataset(trace_num=1000, tau=4.0, sample_num=None)

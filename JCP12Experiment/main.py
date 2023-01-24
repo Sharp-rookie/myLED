@@ -678,7 +678,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9, dt=0.0001):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    tau_list = [0.5, 0.75, 1.0, 1.25, 1.5]
     workers = []
     
     # id esitimate sub-process
@@ -735,7 +735,7 @@ if __name__ == '__main__':
     
     trace_num = 1000
     
-    data_generator_pipeline(trace_num=trace_num, total_t=9)
-    # id_esitimate_pipeline(trace_num=trace_num)
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+    data_generator_pipeline(trace_num=trace_num, total_t=15)
+    id_esitimate_pipeline(trace_num=trace_num)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)

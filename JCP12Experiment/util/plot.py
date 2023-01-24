@@ -143,7 +143,7 @@ def plot_jcp12_autocorr():
 
     simdata = np.load('Data/origin/origin.npz')
     
-    trace_num = 100
+    trace_num = 10
     corrC1, corrC2, corrC3, corrC4 = [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)]
     for trace_id in range(trace_num):
         tmp = np.array(simdata['trace'])[trace_id]
@@ -154,7 +154,7 @@ def plot_jcp12_autocorr():
 
         data = pd.DataFrame(np.concatenate((c1,c2,c3,c4), axis=-1), columns=['c1','c2','c3','c4'])
         
-        lag_list = np.arange(0, 5*1000)
+        lag_list = np.arange(0, 9*10000, 100)
         for lag in tqdm(lag_list):
             corrC1[trace_id].append(data['c1'].autocorr(lag=lag))
             corrC2[trace_id].append(data['c2'].autocorr(lag=lag))
@@ -216,9 +216,13 @@ def plot_evolve(tau):
         ax.set_xlabel('t / s')
         ax.legend()
     plt.savefig(f'evolve_test_{tau}.jpg', dpi=300)
+    
+    print(f'our | tau[{our_data[0,0]:.3f}] RMSE={our_data[0,2]:.4f}, MAPE={100*our_data[0,4]:.2f}% | tau[{our_data[9,0]:.3f}] RMSE={our_data[9,2]:.4f}, MAPE={100*our_data[9,4]:.2f}% | tau[{our_data[49,0]:.3f}] RMSE={our_data[49,2]:.4f}, MAPE={100*our_data[49,4]:.2f}%')
+    print(f'lstm | tau[{lstm_data[0,0]:.3f}] RMSE={lstm_data[0,2]:.4f}, MAPE={100*lstm_data[0,4]:.2f}% | tau[{lstm_data[9,0]:.3f}] RMSE={lstm_data[9,2]:.4f}, MAPE={100*lstm_data[9,4]:.2f}% | tau[{lstm_data[49,0]:.3f}] RMSE={lstm_data[49,2]:.4f}, MAPE={100*lstm_data[49,4]:.2f}%')
+    print(f'tcn | tau[{tcn_data[0,0]}:.3f] RMSE={tcn_data[0,2]:.4f}, MAPE={100*tcn_data[0,4]:.2f}% | tau[{tcn_data[9,0]:.3f}] RMSE={tcn_data[9,2]:.4f}, MAPE={100*tcn_data[9,4]:.2f}% | tau[{tcn_data[49,0]:.3f}] RMSE={tcn_data[49,2]:.4f}, MAPE={100*tcn_data[49,4]:.2f}%')
 
 
 if __name__ == '__main__':
     
-    # plot_jcp12_autocorr()
-    plot_evolve(1.5)
+    plot_jcp12_autocorr()
+    # plot_evolve(0.8)

@@ -21,7 +21,8 @@ class Koopman_System(nn.Module):
         self.input_1d_width = input_1d_width
         
         # observation matrix 'D'
-        self.D = torch.ones(koopman_dim, koopman_dim)
+        self.D = torch.eye(koopman_dim)
+        
         # if koopman_dim > 1:
         #     self.D = torch.from_numpy(special_ortho_group.rvs(koopman_dim)).float()
         #     self.D = torch.concat([self.D, 2*(torch.rand(in_channels*input_1d_width-koopman_dim, koopman_dim)-0.5)], dim=0)

@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from multiprocessing import Process
 from pytorch_lightning import seed_everything
 
 from Data.dataset import PNASDataset
@@ -266,6 +267,25 @@ if __name__ == '__main__':
     
     trace_num = 128 + 16 + 16
     
+    workers = []
+    
+    tau = 2.5
+    n = 10
+    
+    # train
     for seed in range(1,10+1):
-        main(trace_num=trace_num, tau=2.5, n=10, is_print=True, long_test=False, random_seed=seed)
-        main(trace_num=trace_num, tau=2.5, n=10, is_print=True, long_test=True, random_seed=seed)
+        is_print = True if len(workers)==0 else False
+        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
+        workers[-1].start()
+    while any([sub.exitcode==None for sub in workers]):
+        pass
+    workers = []
+    
+    # test
+    for seed in range(1,10+1):
+        is_print = True if len(workers)==0 else False
+        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
+        workers[-1].start()
+    while any([sub.exitcode==None for sub in workers]):
+        pass
+    workers = []
