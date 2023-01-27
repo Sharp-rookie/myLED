@@ -8,9 +8,9 @@ parser = argparse.ArgumentParser(description='[Informer] Long Sequences Forecast
 
 parser.add_argument('--model', type=str, required=False, default='informer',help='model of experiment, options: [informer, informerstack, informerlight(TBD)]')
 
-parser.add_argument('--data', type=str, required=False, default='JCP_0.08', help='data')
+parser.add_argument('--data', type=str, required=False, default='JCP_0.1', help='data')
 parser.add_argument('--root_path', type=str, default='./data/JCP/', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='tau_0.08.csv', help='data file')    
+parser.add_argument('--data_path', type=str, default='tau_0.1.csv', help='data file')    
 parser.add_argument('--features', type=str, default='M', help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')
 parser.add_argument('--target', type=str, default='OT', help='target feature in S or MS task')
 parser.add_argument('--freq', type=str, default='h', help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
@@ -43,7 +43,7 @@ parser.add_argument('--mix', action='store_false', help='use mix attention in ge
 parser.add_argument('--cols', type=str, nargs='+', help='certain cols from the data files as the input features')
 parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
 parser.add_argument('--itr', type=int, default=2, help='experiments times')
-parser.add_argument('--train_epochs', type=int, default=6, help='train epochs')
+parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
 parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
 parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
@@ -69,7 +69,9 @@ if args.use_gpu and args.use_multi_gpu:
     args.gpu = args.device_ids[0]
 
 data_parser = {
-    'JCP_0.08':{'data':'tau_0.08.csv','T':'OT','M':[4,4,4]},
+    'JCP_0.1':{'data':'tau_0.1.csv','T':'OT','M':[4,4,4]},
+    'JCP_1.0':{'data':'tau_1.0.csv','T':'OT','M':[4,4,4]},
+    'JCP_5.0':{'data':'tau_5.0.csv','T':'OT','M':[4,4,4]},
     'ETTh1':{'data':'ETTh1.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},
     'ETTh2':{'data':'ETTh2.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},
     'ETTm1':{'data':'ETTm1.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},

@@ -566,64 +566,66 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
             # total evolve
             total_info_next = slow_info_next + fast_info_next
 
-            targets.append(target.cpu())
-            slow_infos_next.append(slow_info_next.cpu())
-            fast_infos_next.append(fast_info_next.cpu())
-            total_infos_next.append(total_info_next.cpu())
+            targets.append(target)
+            slow_infos_next.append(slow_info_next)
+            fast_infos_next.append(fast_info_next)
+            total_infos_next.append(total_info_next)
         
-        # targets = model.descale(torch.concat(targets, axis=0))
-        # slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0))
-        # fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0))
-        # total_infos_next = model.descale(torch.concat(total_infos_next, axis=0))
+        
+        slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0)).cpu()
+        fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0)).cpu()
+        
         targets = torch.concat(targets, axis=0)
-        slow_infos_next = torch.concat(slow_infos_next, axis=0)
-        fast_infos_next = torch.concat(fast_infos_next, axis=0)
         total_infos_next = torch.concat(total_infos_next, axis=0)
-                
-        os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
-        
-        period_num = 30*int(18/delta_t)
-
-        # plot slow infomation prediction curve
-        plt.figure(figsize=(16,5))
-        for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-            ax = plt.subplot(1,4,j+1)
-            ax.set_title(item)
-            plt.plot(targets[:period_num,0,0,j], label='true')
-            plt.plot(slow_infos_next[:period_num,0,0,j], label='predict')
-        plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.jpg", dpi=300)
-        plt.close()
-        
-        # plot fast infomation prediction curve
-        plt.figure(figsize=(16,5))
-        for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-            ax = plt.subplot(1,4,j+1)
-            ax.set_title(item)
-            plt.plot(targets[:period_num,0,0,j], label='true')
-            plt.plot(fast_infos_next[:period_num,0,0,j], label='predict')
-        plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
-        plt.close()
-        
-        # plot total infomation prediction curve
-        plt.figure(figsize=(16,5))
-        for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-            ax = plt.subplot(1,4,j+1)
-            ax.set_title(item)
-            plt.plot(targets[:period_num,0,0,j], label='true')
-            plt.plot(total_infos_next[:period_num,0,0,j], label='predict')
-        plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/{delta_t}/total.jpg", dpi=300)
-        plt.close()
     
     # metrics
+    pred = total_infos_next.detach().cpu().numpy()
+    true = targets.detach().cpu().numpy()
+    MAPE = np.mean(np.abs((pred - true) / true))
+    targets = model.descale(targets)
+    total_infos_next = model.descale(total_infos_next)
     pred = total_infos_next.detach().cpu().numpy()
     true = targets.detach().cpu().numpy()
     MSE = np.mean((pred - true) ** 2)
     RMSE = np.sqrt(MSE)
     MAE = np.mean(np.abs(pred - true))
-    MAPE = np.mean(np.abs((pred - true) / true))
+                
+    os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
+    
+    period_num = 30*int(18/delta_t)
+
+    # plot slow infomation prediction curve
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
+        ax = plt.subplot(1,4,j+1)
+        ax.set_title(item)
+        plt.plot(true[:period_num,0,0,j], label='true')
+        plt.plot(slow_infos_next[:period_num,0,0,j], label='predict')
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.jpg", dpi=300)
+    plt.close()
+    
+    # plot fast infomation prediction curve
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
+        ax = plt.subplot(1,4,j+1)
+        ax.set_title(item)
+        plt.plot(true[:period_num,0,0,j], label='true')
+        plt.plot(fast_infos_next[:period_num,0,0,j], label='predict')
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
+    plt.close()
+    
+    # plot total infomation prediction curve
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
+        ax = plt.subplot(1,4,j+1)
+        ax.set_title(item)
+        plt.plot(true[:period_num,0,0,j], label='true')
+        plt.plot(pred[:period_num,0,0,j], label='predict')
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig(log_dir+f"/test/{delta_t}/total.jpg", dpi=300)
+    plt.close()
     
     return MSE, RMSE, MAE, MAPE
         
@@ -653,7 +655,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    ckpt_epoch = 135
+    ckpt_epoch = 150
 
     if not long_test:
         # train
@@ -678,7 +680,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9, dt=0.0001):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.5, 0.75, 1.0, 1.25, 1.5]
+    tau_list = [0.5, 1.0, 1.5]
     workers = []
     
     # id esitimate sub-process
@@ -694,7 +696,7 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
 
 def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
-    tau_list = [1.0]
+    tau_list = [1.5]
     id_list = [2]
     workers = []
     
@@ -721,7 +723,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     for tau in tau_list:
         for pretrain_epoch in [30]:
             for slow_id in id_list:
-                for random_seed in range(1,10):
+                for random_seed in range(1,10+1):
                     is_print = True if len(workers)==0 else False
                     workers.append(Process(target=worker_2, args=(tau, pretrain_epoch, slow_id, n, random_seed, cpu_num, is_print, id_list, long_test), daemon=True))
                     workers[-1].start()
@@ -735,7 +737,7 @@ if __name__ == '__main__':
     
     trace_num = 1000
     
-    data_generator_pipeline(trace_num=trace_num, total_t=15)
-    # id_esitimate_pipeline(trace_num=trace_num)
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    data_generator_pipeline(trace_num=trace_num, total_t=16)
+    id_esitimate_pipeline(trace_num=trace_num)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
     # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)

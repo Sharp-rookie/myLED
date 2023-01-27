@@ -152,22 +152,28 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
             
             
-def generate_informer_dataset(trace_num, tau, sample_num=None):
+def generate_informer_dataset(trace_num, sample_num=None):
     
     # load original data
     print('loading original trace data:')
     tmp = np.load(f"Data/origin/origin.npz")
-    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
+    simdata = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
 
-    # subsampling
-    dt = tmp['dt']
-    subsampling = int(tau/dt) if tau!=0. else 1
-    data = data[:, ::subsampling]
-    print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
-    
-    import pandas as pd
-    data = np.concatenate(data, axis=0)[:,0]
-    df = pd.DataFrame(data, columns=['c1','c2','c3','c4'])
-    df.to_csv(f'JCP12_tau{tau}.csv')
+    for tau in [0.1, 1.0, 5.0]:
+        # subsampling
+        dt = tmp['dt']
+        subsampling = int(tau/dt) if tau!=0. else 1
+        data = simdata[:, ::subsampling]
+        print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
+        
+        import pandas as pd
+        data = np.concatenate(data, axis=0)[:,0]
+        df = pd.DataFrame(data, columns=['c1','c2','c3','c4'])
+        
+        dt = pd.date_range('2016-07-01 00:00:00', periods=len(df), freq='h')
+        df['date'] = dt
+        df = df[['date','c1','c2','c3','c4']]
+        
+        df.to_csv(f'tau{tau}.csv', index=False)
 
-# generate_informer_dataset(trace_num=1000, tau=4.0, sample_num=None)
+# generate_informer_dataset(trace_num=1000, sample_num=None)

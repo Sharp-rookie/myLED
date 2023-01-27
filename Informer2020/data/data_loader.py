@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 
 class Dataset_JCP_hour(Dataset):
     def __init__(self, root_path, flag='train', size=None, 
-                 features='M', data_path='tau_0.08.csv', 
+                 features='M', data_path='tau_0.1.csv', 
                  target='OT', scale=True, inverse=False, timeenc=0, freq='h', cols=None):
         # size [seq_len, label_len, pred_len]
         # info
@@ -60,7 +60,6 @@ class Dataset_JCP_hour(Dataset):
 
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
-            import ipdb;ipdb.set_trace()
             self.scaler.fit(train_data.values)
             data = self.scaler.transform(df_data.values)
         else:

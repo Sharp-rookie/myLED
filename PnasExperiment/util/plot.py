@@ -138,9 +138,9 @@ def plot_evolve(tau):
     lstm = open(f'lstm_evolve_test_{tau}.txt', 'r')
     tcn = open(f'tcn_evolve_test_{tau}.txt', 'r')
     
-    our_data = [[] for seed in range(9)]
+    our_data = [[] for seed in range(10)]
     lstm_data = [[] for seed in range(10)]
-    tcn_data = [[] for seed in range(5)]
+    tcn_data = [[] for seed in range(10)]
     for i, data in enumerate([our, lstm, tcn]):
         for line in data.readlines():
             tau = float(line.split(',')[0])
@@ -157,7 +157,6 @@ def plot_evolve(tau):
             elif i==2:
                 tcn_data[seed-1].append([tau,mse,rmse,mae,mape])
     
-    import ipdb;ipdb.set_trace()
     our_data = np.mean(np.array(our_data), axis=0)
     lstm_data = np.mean(np.array(lstm_data), axis=0)
     tcn_data = np.mean(np.array(tcn_data), axis=0)
