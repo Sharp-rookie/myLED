@@ -21,7 +21,7 @@ from util.intrinsic_dimension import eval_id_embedding
 def train_time_lagged(tau, is_print=False):
     
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(tau)
     log_dir = 'logs/time-lagged/tau_' + str(tau)
     os.makedirs(log_dir, exist_ok=True)
@@ -111,7 +111,7 @@ def train_time_lagged(tau, is_print=False):
 def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False):
     
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(tau)
     log_dir = 'logs/time-lagged/tau_' + str(tau)
     os.makedirs(log_dir+'/test', exist_ok=True)
@@ -239,7 +239,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -518,7 +518,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
 
@@ -561,64 +561,65 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
             # total evolve
             total_info_next = slow_info_next + fast_info_next
 
-            targets.append(target.cpu())
-            slow_infos_next.append(slow_info_next.cpu())
-            fast_infos_next.append(fast_info_next.cpu())
-            total_infos_next.append(total_info_next.cpu())
+            targets.append(target)
+            slow_infos_next.append(slow_info_next)
+            fast_infos_next.append(fast_info_next)
+            total_infos_next.append(total_info_next)
         
-        # targets = model.descale(torch.concat(targets, axis=0))
-        # slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0))
-        # fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0))
-        # total_infos_next = model.descale(torch.concat(total_infos_next, axis=0))
+        slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0)).cpu()
+        fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0)).cpu()
+        
         targets = torch.concat(targets, axis=0)
-        slow_infos_next = torch.concat(slow_infos_next, axis=0)
-        fast_infos_next = torch.concat(fast_infos_next, axis=0)
         total_infos_next = torch.concat(total_infos_next, axis=0)
-        
-        os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
-        
-        period_num = 50
-
-        # plot slow infomation prediction curve
-        plt.figure(figsize=(16,5))
-        for j, item in enumerate(['X','Y','Z']):
-            ax = plt.subplot(1,3,j+1)
-            ax.set_title(item)
-            plt.plot(targets[:period_num,0,0,j], label='true')
-            plt.plot(slow_infos_next[:period_num,0,0,j], label='predict')
-        plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.jpg", dpi=300)
-        plt.close()
-        
-        # plot fast infomation prediction curve
-        plt.figure(figsize=(16,5))
-        for j, item in enumerate(['X','Y','Z']):
-            ax = plt.subplot(1,3,j+1)
-            ax.set_title(item)
-            plt.plot(targets[:period_num,0,0,j], label='true')
-            plt.plot(fast_infos_next[:period_num,0,0,j], label='predict')
-        plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
-        plt.close()
-        
-        # plot total infomation prediction curve
-        plt.figure(figsize=(16,5))
-        for j, item in enumerate(['X','Y','Z']):
-            ax = plt.subplot(1,3,j+1)
-            ax.set_title(item)
-            plt.plot(targets[:period_num,0,0,j], label='true')
-            plt.plot(total_infos_next[:period_num,0,0,j], label='predict')
-        plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/{delta_t}/total.jpg", dpi=300)
-        plt.close()
-
+    
     # metrics
+    pred = total_infos_next.detach().cpu().numpy()
+    true = targets.detach().cpu().numpy()
+    MAPE = np.mean(np.abs((pred - true) / true))
+    targets = model.descale(targets)
+    total_infos_next = model.descale(total_infos_next)
     pred = total_infos_next.detach().cpu().numpy()
     true = targets.detach().cpu().numpy()
     MSE = np.mean((pred - true) ** 2)
     RMSE = np.sqrt(MSE)
     MAE = np.mean(np.abs(pred - true))
-    MAPE = np.mean(np.abs((pred - true) / true))
+        
+    os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
+    
+    period_num = 50
+
+    # plot slow infomation prediction curve
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['X','Y','Z']):
+        ax = plt.subplot(1,3,j+1)
+        ax.set_title(item)
+        plt.plot(true[:period_num,0,0,j], label='true')
+        plt.plot(slow_infos_next[:period_num,0,0,j], label='predict')
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.jpg", dpi=300)
+    plt.close()
+    
+    # plot fast infomation prediction curve
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['X','Y','Z']):
+        ax = plt.subplot(1,3,j+1)
+        ax.set_title(item)
+        plt.plot(true[:period_num,0,0,j], label='true')
+        plt.plot(fast_infos_next[:period_num,0,0,j], label='predict')
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
+    plt.close()
+    
+    # plot total infomation prediction curve
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['X','Y','Z']):
+        ax = plt.subplot(1,3,j+1)
+        ax.set_title(item)
+        plt.plot(true[:period_num,0,0,j], label='true')
+        plt.plot(pred[:period_num,0,0,j], label='predict')
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig(log_dir+f"/test/{delta_t}/total.jpg", dpi=300)
+    plt.close()
     
     return MSE, RMSE, MAE, MAPE
         
@@ -673,7 +674,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [2.0, 2.5, 3.0]
+    tau_list = [2.5]
     workers = []
     
     # id esitimate sub-process
@@ -734,7 +735,7 @@ if __name__ == '__main__':
     
     # id_esitimate_pipeline(trace_num=trace_num)
     
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
     
     torch.cuda.empty_cache()

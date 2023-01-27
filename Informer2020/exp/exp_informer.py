@@ -61,7 +61,9 @@ class Exp_Informer(Exp_Basic):
         args = self.args
 
         data_dict = {
-            'JCP_0.08':Dataset_JCP_hour,
+            'JCP_0.1':Dataset_JCP_hour,
+            'JCP_1.0':Dataset_JCP_hour,
+            'JCP_5.0':Dataset_JCP_hour,
             'ETTh1':Dataset_ETT_hour,
             'ETTh2':Dataset_ETT_hour,
             'ETTm1':Dataset_ETT_minute,
@@ -220,7 +222,7 @@ class Exp_Informer(Exp_Basic):
             os.makedirs(folder_path)
 
         mae, mse, rmse, mape, mspe = metric(preds, trues)
-        print('mse:{}, mae:{}'.format(mse, mae))
+        print('mse:{}, rmse:{}, mae:{}, mape:{}'.format(mse, rmse, mae, mape))
 
         np.save(folder_path+'metrics.npy', np.array([mae, mse, rmse, mape, mspe]))
         np.save(folder_path+'pred.npy', preds)

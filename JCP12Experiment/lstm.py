@@ -210,34 +210,35 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
             for _ in range(1, n):
                 output = model(output, device)
 
-            targets.append(target.cpu())
-            outputs.append(output.cpu())
+            targets.append(target)
+            outputs.append(output)
         
-        # targets = model.descale(torch.concat(targets, axis=0))
-        # outputs = model.descale(torch.concat(outputs, axis=0))
         targets = torch.concat(targets, axis=0)
         outputs = torch.concat(outputs, axis=0)
-                
-        period_num = 50
         
-        # plot total infomation prediction curve
-        plt.figure(figsize=(16,4))
-        for j, item in enumerate(['c1','c2','c3', 'c4']):
-            ax = plt.subplot(1,4,j+1)
-            ax.set_title(item)
-            plt.plot(targets[:period_num,0,0,j], label='true')
-            plt.plot(outputs[:period_num,0,0,j], label='predict')
-        plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
-        plt.close()
-    
     # metrics
+    pred = outputs.detach().cpu().numpy()
+    true = targets.detach().cpu().numpy()
+    MAPE = np.mean(np.abs((pred - true) / true))
+    targets = model.descale(targets)
+    outputs = model.descale(outputs)
     pred = outputs.detach().cpu().numpy()
     true = targets.detach().cpu().numpy()
     MSE = np.mean((pred - true) ** 2)
     RMSE = np.sqrt(MSE)
     MAE = np.mean(np.abs(pred - true))
-    MAPE = np.mean(np.abs((pred - true) / true))
+    
+    # plot total infomation prediction curve
+    period_num = 50
+    plt.figure(figsize=(16,4))
+    for j, item in enumerate(['c1','c2','c3', 'c4']):
+        ax = plt.subplot(1,4,j+1)
+        ax.set_title(item)
+        plt.plot(true[:period_num,0,0,j], label='true')
+        plt.plot(pred[:period_num,0,0,j], label='predict')
+    plt.subplots_adjust(wspace=0.2)
+    plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
+    plt.close()
     
     return MSE, RMSE, MAE, MAPE
 
@@ -250,7 +251,6 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
 
     if not long_test:
         # train
-        generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
         train(tau, round(tau/n,3), is_print=is_print, random_seed=random_seed)
     else:
         # test evolve
@@ -269,10 +269,12 @@ if __name__ == '__main__':
     
     workers = []
     
-    tau = 0.8
+    tau = 1.5
     n = 10
     
     # train
+    sample_num = None
+    generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
     for seed in range(1,10+1):
         is_print = True if len(workers)==0 else False
         workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
@@ -283,9 +285,10 @@ if __name__ == '__main__':
     
     # test
     for seed in range(1,10+1):
-        is_print = True if len(workers)==0 else False
-        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
-        workers[-1].start()
-    while any([sub.exitcode==None for sub in workers]):
-        pass
-    workers = []
+        main(trace_num, tau, n, True, True, seed)
+    #     is_print = True if len(workers)==0 else False
+    #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
+    #     workers[-1].start()
+    # while any([sub.exitcode==None for sub in workers]):
+    #     pass
+    # workers = []

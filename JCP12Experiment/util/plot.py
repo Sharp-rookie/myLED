@@ -183,7 +183,7 @@ def plot_evolve(tau):
     lstm = open(f'lstm_evolve_test_{tau}.txt', 'r')
     tcn = open(f'tcn_evolve_test_{tau}.txt', 'r')
     
-    our_data = [[] for seed in range(9)]
+    our_data = [[] for seed in range(10)]
     lstm_data = [[] for seed in range(10)]
     tcn_data = [[] for seed in range(10)]
     for i, data in enumerate([our, lstm, tcn]):
@@ -219,10 +219,10 @@ def plot_evolve(tau):
     
     print(f'our | tau[{our_data[0,0]:.3f}] RMSE={our_data[0,2]:.4f}, MAPE={100*our_data[0,4]:.2f}% | tau[{our_data[9,0]:.3f}] RMSE={our_data[9,2]:.4f}, MAPE={100*our_data[9,4]:.2f}% | tau[{our_data[49,0]:.3f}] RMSE={our_data[49,2]:.4f}, MAPE={100*our_data[49,4]:.2f}%')
     print(f'lstm | tau[{lstm_data[0,0]:.3f}] RMSE={lstm_data[0,2]:.4f}, MAPE={100*lstm_data[0,4]:.2f}% | tau[{lstm_data[9,0]:.3f}] RMSE={lstm_data[9,2]:.4f}, MAPE={100*lstm_data[9,4]:.2f}% | tau[{lstm_data[49,0]:.3f}] RMSE={lstm_data[49,2]:.4f}, MAPE={100*lstm_data[49,4]:.2f}%')
-    print(f'tcn | tau[{tcn_data[0,0]}:.3f] RMSE={tcn_data[0,2]:.4f}, MAPE={100*tcn_data[0,4]:.2f}% | tau[{tcn_data[9,0]:.3f}] RMSE={tcn_data[9,2]:.4f}, MAPE={100*tcn_data[9,4]:.2f}% | tau[{tcn_data[49,0]:.3f}] RMSE={tcn_data[49,2]:.4f}, MAPE={100*tcn_data[49,4]:.2f}%')
+    print(f'tcn | tau[{tcn_data[0,0]:.3f}] RMSE={tcn_data[0,2]:.4f}, MAPE={100*tcn_data[0,4]:.2f}% | tau[{tcn_data[9,0]:.3f}] RMSE={tcn_data[9,2]:.4f}, MAPE={100*tcn_data[9,4]:.2f}% | tau[{tcn_data[49,0]:.3f}] RMSE={tcn_data[49,2]:.4f}, MAPE={100*tcn_data[49,4]:.2f}%')
 
 
 if __name__ == '__main__':
     
-    plot_jcp12_autocorr()
-    # plot_evolve(0.8)
+    # plot_jcp12_autocorr()
+    plot_evolve(1.5)
