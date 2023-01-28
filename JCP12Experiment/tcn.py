@@ -312,7 +312,7 @@ if __name__ == '__main__':
     
     workers = []
     
-    tau = 0.6
+    tau = 0.4
     n = 4
     
     # train
