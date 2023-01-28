@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Process
 from pytorch_lightning import seed_everything
 
+from util import set_cpu_num
 from Data.dataset import JCP12Dataset
 from Data.generator import generate_dataset
 
@@ -63,7 +64,7 @@ class LSTM(nn.Module):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -179,7 +180,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -246,6 +247,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
 def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
     seed_everything(729)
+    set_cpu_num(1)
     
     sample_num = 100
 

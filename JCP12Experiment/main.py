@@ -14,7 +14,7 @@ import models
 from Data.dataset import JCP12Dataset
 from Data.generator import generate_dataset, generate_original_data
 from util import set_cpu_num
-from util.plot import plot_epoch_test_log, plot_slow_ae_loss
+from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_id_per_tau
 from util.intrinsic_dimension import eval_id_embedding
 
 
@@ -221,17 +221,17 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             dims = np.load(var_log_dir+f'/id_{method}.npy')
             return np.mean(dims)
         LB_id = cal_id_embedding(tau, epoch, 'MLE')
-        # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
-        # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
-        # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
+        MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
+        MADA_id = cal_id_embedding(tau, epoch, 'MADA')
+        PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
-        # fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
-        fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{0},{0},{0}\n")
+        fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        # fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{0},{0},{0}\n")
         fp.flush()
 
-        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
-        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
         
         if checkpoint_filepath is None: break
         
@@ -263,7 +263,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 100
+    max_epoch = 150
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
     MSE_loss = nn.MSELoss()
@@ -290,7 +290,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
         
         # train
         model.train()
-        [lambda_curve[i].append(model.K_opt.Lambda[i]) for i in range(slow_id) ]
+        [lambda_curve[i].append(model.K_opt.Lambda[i].detach().cpu()) for i in range(slow_id) ]
         for input, _, internl_units in train_loader:
             
             input = model.scale(input.to(device)) # (batchsize,1,1,4)
@@ -690,7 +690,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9, dt=0.0001):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.5, 1.0, 1.5]
+    tau_list = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]
     workers = []
     
     # id esitimate sub-process
@@ -700,6 +700,8 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
         workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
         pass
+
+    plot_id_per_tau(tau_list, 50)
     
     print('ID Esitimate Over!')
 
