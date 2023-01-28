@@ -142,7 +142,7 @@ def plot_pnas_autocorr():
     data = pd.DataFrame(np.concatenate((X,Y,Z), axis=-1), columns=['X', 'Y', 'Z'])
     
     corrX, corrY, corrZ = [], [], []
-    lag_list = np.arange(0, 600*2000, 2000)
+    lag_list = np.arange(0, 1000*2000, 2000)
     from tqdm import tqdm
     for lag in tqdm(lag_list):
         corrX.append(data['X'].autocorr(lag=lag))
@@ -198,9 +198,9 @@ def plot_evolve(tau):
         ax.legend()
     plt.savefig(f'evolve_test_{tau}.jpg', dpi=300)
     
-    print(f'our | tau[{our_data[0,0]:.3f}] RMSE={our_data[0,2]:.4f}, MAPE={100*our_data[0,4]:.2f}% | tau[{our_data[9,0]:.3f}] RMSE={our_data[9,2]:.4f}, MAPE={100*our_data[9,4]:.2f}% | tau[{our_data[49,0]:.3f}] RMSE={our_data[49,2]:.4f}, MAPE={100*our_data[49,4]:.2f}%')
-    print(f'lstm | tau[{lstm_data[0,0]:.3f}] RMSE={lstm_data[0,2]:.4f}, MAPE={100*lstm_data[0,4]:.2f}% | tau[{lstm_data[9,0]:.3f}] RMSE={lstm_data[9,2]:.4f}, MAPE={100*lstm_data[9,4]:.2f}% | tau[{lstm_data[49,0]:.3f}] RMSE={lstm_data[49,2]:.4f}, MAPE={100*lstm_data[49,4]:.2f}%')
-    print(f'tcn | tau[{tcn_data[0,0]}:.3f] RMSE={tcn_data[0,2]:.4f}, MAPE={100*tcn_data[0,4]:.2f}% | tau[{tcn_data[9,0]:.3f}] RMSE={tcn_data[9,2]:.4f}, MAPE={100*tcn_data[9,4]:.2f}% | tau[{tcn_data[49,0]:.3f}] RMSE={tcn_data[49,2]:.4f}, MAPE={100*tcn_data[49,4]:.2f}%')
+    item = ['our','lstm','tcn']
+    for i, data in enumerate([our_data, lstm_data, tcn_data]):
+        print(f'{item[i]} | tau[{data[0,0]:.3f}] RMSE={data[0,2]:.4f}, MAE={data[0,3]:.4f}, MAPE={100*data[0,4]:.2f}% | tau[{data[9,0]:.3f}] RMSE={data[9,2]:.4f}, MAE={data[9,3]:.4f}, MAPE={100*data[9,4]:.2f}% | tau[{data[49,0]:.3f}] RMSE={data[49,2]:.4f}, MAE={data[49,3]:.4f}, MAPE={100*data[49,4]:.2f}%')
 
 
 if __name__ == '__main__':

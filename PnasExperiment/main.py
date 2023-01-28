@@ -747,7 +747,7 @@ if __name__ == '__main__':
     
     # id_esitimate_pipeline(trace_num=trace_num)
     
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
     
     torch.cuda.empty_cache()

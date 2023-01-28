@@ -174,6 +174,6 @@ def generate_informer_dataset(trace_num, sample_num=None):
         df['date'] = dt
         df = df[['date','c1','c2','c3','c4']]
         
-        df.to_csv(f'tau{tau}.csv', index=False)
+        df.to_csv(f'tau_{tau}.csv', index=False)
 
 # generate_informer_dataset(trace_num=1000, sample_num=None)

@@ -249,7 +249,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, device=device)
+    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, redundant_dim=10, device=device)
     model.apply(models.weights_normal_init)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
@@ -270,7 +270,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     optimizer = torch.optim.AdamW(
         [{'params': model.encoder_2.parameters()},
          {'params': model.decoder.parameters()}, 
-         {'params': model.K_opt.parameters()},
+         {'params': model.K_opt.parameters(), 'lr': 0.01},
          {'params': model.lstm.parameters()}],
         lr=lr, weight_decay=weight_decay) # not involve encoder_1 (freezen)
     
@@ -295,47 +295,64 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             
             input = model.scale(input.to(device)) # (batchsize,1,1,4)
             
-            ###############
-            # slow extract
-            ###############
-            slow_var, embed = model.extract(input)
-            slow_info = model.recover(slow_var)
-            _, embed_from_info = model.extract(slow_info)
+            ####################################
+            # obs —— slow —— obs(reconstruction)
+            #         |
+            #      koopman
+            ####################################
+            slow_var, embed = model.obs2slow(input)
+            koop_var = model.slow2koopman(slow_var)
+            slow_obs = model.slow2obs(slow_var)
+            _, embed_from_obs = model.obs2slow(slow_obs)
             
-            adiabatic_loss = L1_loss(embed, embed_from_info)
-            slow_reconstruct_loss = MSE_loss(slow_info, input)
+            adiabatic_loss = L1_loss(embed, embed_from_obs)
+            slow_reconstruct_loss = MSE_loss(slow_obs, input)
             
             ################
             # n-step evolve
             ################
-            fast_info = input - slow_info.detach()
-            koopman_loss, evolve_loss = 0, 0
+            fast_obs = input - slow_obs.detach()
+            obs_evol_loss, slow_evol_loss, koopman_evol_loss = 0, 0, 0
             for i in range(1, len(internl_units)):
                 
                 unit = model.scale(internl_units[i].to(device)) # t+i
                 
-                # extract to slow variables
-                unit_slow_var, _ = model.extract(unit)
+                #######################
+                # slow component evolve
+                #######################
+                # obs ——> slow ——> koopman
+                unit_slow_var, _ = model.obs2slow(unit)
+                unit_koop_var = model.slow2koopman(unit_slow_var)
 
-                # slow evolve
-                t = delta_t * i # delta_t between 0 and t+i
-                unit_slow_var_pred, _ = model.koopman_evolve(slow_var, tau=torch.tensor([t], device=device), T=1) # 0 ——> t+i
-                unit_slow_info_pred = model.recover(unit_slow_var_pred)
+                # koopman evolve
+                t = torch.tensor([delta_t * i], device=device) # delta_t
+                unit_koop_var_next = model.koopman_evolve(koop_var, tau=t) # t ——> t + i*delta_t
+
+                # koopman ——> slow ——> obs
+                unit_slow_var_next = model.koopman2slow(unit_koop_var_next)
+                unit_slow_obs_next = model.slow2obs(unit_slow_var_next)
                 
-                # fast evolve
-                unit_fast_info_pred, _ = model.lstm_evolve(fast_info, T=i) # t ——> t+i
+                #######################
+                # fast component evolve
+                #######################
+                # fast obs evolve
+                unit_fast_obs_next, _ = model.lstm_evolve(fast_obs, T=i) # t ——> t + i*delta_t
                 
-                # total evolve
-                unit_info_pred = unit_slow_info_pred + unit_fast_info_pred
+                ################
+                # calculate loss
+                ################
+                # total obs evolve
+                unit_obs_next = unit_slow_obs_next + unit_fast_obs_next
                 
                 # evolve loss
-                koopman_loss += MSE_loss(unit_slow_var_pred, unit_slow_var)
-                evolve_loss += MSE_loss(unit_info_pred, unit)
+                slow_evol_loss += MSE_loss(unit_slow_var_next, unit_slow_var)
+                koopman_evol_loss += MSE_loss(unit_koop_var_next, unit_koop_var)
+                obs_evol_loss += MSE_loss(unit_obs_next, unit)
             
             ###########
             # optimize
             ###########
-            all_loss = (slow_reconstruct_loss + 0.05*adiabatic_loss) + (0.1*koopman_loss + evolve_loss) / n
+            all_loss = (slow_reconstruct_loss + 0.05*adiabatic_loss) + (0.5*koopman_evol_loss + 0.5*obs_evol_loss) / n
             optimizer.zero_grad()
             all_loss.backward()
             optimizer.step()
@@ -343,23 +360,23 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             # record loss
             losses[0].append(adiabatic_loss.detach().item())
             losses[1].append(slow_reconstruct_loss.detach().item())
-            losses[2].append(koopman_loss.detach().item())
-            losses[3].append(evolve_loss.detach().item())
+            losses[2].append(koopman_evol_loss.detach().item())
+            losses[3].append(obs_evol_loss.detach().item())
         
         train_loss.append([np.mean(losses[0]), np.mean(losses[1]), np.mean(losses[2]), np.mean(losses[3])])
         
-        # validate
+        # validate 
         with torch.no_grad():
             inputs = []
             slow_vars = []
             targets = []
-            slow_infos = []
-            slow_infos_next = []
-            fast_infos = []
-            fast_infos_next = []
-            total_infos_next = []
+            slow_obses = []
+            slow_obses_next = []
+            fast_obses = []
+            fast_obses_next = []
+            total_obses_next = []
             embeds = []
-            embed_from_infos = []
+            embed_from_obses = []
             
             model.eval()
             for input, target, _ in val_loader:
@@ -367,50 +384,53 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 input = model.scale(input.to(device)) # (batchsize,1,1,4)
                 target = model.scale(target.to(device))
                 
-                # slow extract
-                slow_var, embed = model.extract(input)
-                slow_info = model.recover(slow_var)
-                _, embed_from_info = model.extract(slow_info)
+                # obs ——> slow ——> koopman
+                slow_var, embed = model.obs2slow(input)
+                koop_var = model.slow2koopman(slow_var)
+                slow_obs = model.slow2obs(slow_var)
+                _, embed_from_obs = model.obs2slow(slow_obs)
                 
-                # slow evolve
-                slow_var_next, _ = model.koopman_evolve(slow_var, tau=torch.tensor([tau-delta_t], device=device), T=1)
-                slow_info_next = model.recover(slow_var_next)
+                # koopman evolve
+                t = torch.tensor([tau-delta_t], device=device)
+                koop_var_next = model.koopman_evolve(koop_var, tau=t)
+                slow_var_next = model.koopman2slow(koop_var_next)
+                slow_obs_next = model.slow2obs(slow_var_next)
                 
-                # fast evolve
-                fast_info = input - slow_info
-                fast_info_next, _ = model.lstm_evolve(fast_info, T=n)
+                # fast obs evolve
+                fast_obs = input - slow_obs
+                fast_obs_next, _ = model.lstm_evolve(fast_obs, T=n)
                 
-                # total evolve
-                total_info_next = slow_info_next + fast_info_next
+                # total obs evolve
+                total_obs_next = slow_obs_next + fast_obs_next
 
                 # record results
                 inputs.append(input.cpu())
                 slow_vars.append(slow_var.cpu())
                 targets.append(target.cpu())
-                slow_infos.append(slow_info.cpu())
-                slow_infos_next.append(slow_info_next.cpu())
-                fast_infos.append(fast_info.cpu())
-                fast_infos_next.append(fast_info_next.cpu())
-                total_infos_next.append(total_info_next.cpu())
+                slow_obses.append(slow_obs.cpu())
+                slow_obses_next.append(slow_obs_next.cpu())
+                fast_obses.append(fast_obs.cpu())
+                fast_obses_next.append(fast_obs_next.cpu())
+                total_obses_next.append(total_obs_next.cpu())
                 embeds.append(embed.cpu())
-                embed_from_infos.append(embed_from_info.cpu())
+                embed_from_obses.append(embed_from_obs.cpu())
             
             # trans to tensor
             inputs = torch.concat(inputs, axis=0)
             slow_vars = torch.concat(slow_vars, axis=0)
             targets = torch.concat(targets, axis=0)
-            slow_infos = torch.concat(slow_infos, axis=0)
-            slow_infos_next = torch.concat(slow_infos_next, axis=0)
-            fast_infos = torch.concat(fast_infos, axis=0)
-            fast_infos_next = torch.concat(fast_infos_next, axis=0)
-            total_infos_next = torch.concat(total_infos_next, axis=0)
+            slow_obses = torch.concat(slow_obses, axis=0)
+            slow_obses_next = torch.concat(slow_obses_next, axis=0)
+            fast_obses = torch.concat(fast_obses, axis=0)
+            fast_obses_next = torch.concat(fast_obses_next, axis=0)
+            total_obses_next = torch.concat(total_obses_next, axis=0)
             embeds = torch.concat(embeds, axis=0)
-            embed_from_infos = torch.concat(embed_from_infos, axis=0)
+            embed_from_obses = torch.concat(embed_from_obses, axis=0)
             
             # cal loss
-            adiabatic_loss = L1_loss(embeds, embed_from_infos)
-            slow_reconstruct_loss = MSE_loss(slow_infos, inputs)
-            evolve_loss = MSE_loss(total_infos_next, targets)
+            adiabatic_loss = L1_loss(embeds, embed_from_obses)
+            slow_reconstruct_loss = MSE_loss(slow_obses, inputs)
+            evolve_loss = MSE_loss(total_obses_next, targets)
             all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.05*adiabatic_loss
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
             
@@ -418,7 +438,6 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             
             # plot per 5 epoch
             if epoch % 5 == 0:
-                
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
                 
                 period_num = 5*int(18/delta_t)
@@ -451,57 +470,48 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
                 plt.close()
                 
-                # plot slow infomation reconstruction curve
+                # plot fast & slow observation reconstruction curve
                 plt.figure(figsize=(16,5))
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(inputs[:period_num,0,0,j], label='all_info')
-                    plt.plot(slow_infos[:period_num,0,0,j], label='slow_info')
+                    ax.plot(inputs[:period_num,0,0,j], label='all_obs')
+                    ax.plot(slow_obses[:period_num,0,0,j], label='slow_obs')
+                    ax.plot(fast_obses[:period_num,0,0,j], label='fast_obs')
+                    ax.legend()
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_info.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_slow_obs.jpg", dpi=300)
                 plt.close()
                 
-                # plot fast infomation curve (== origin_data - slow_info_recons)
-                plt.figure(figsize=(16,5))
-                for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-                    ax = plt.subplot(1,4,j+1)
-                    ax.set_title(item)
-                    plt.plot(inputs[:period_num,0,0,j], label='all_info')
-                    plt.plot(fast_infos[:period_num,0,0,j], label='fast_info')
-                plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_info.jpg", dpi=300)
-                plt.close()
-                
-                # plot slow infomation one-step prediction curve
+                # plot slow observation one-step prediction curve
                 plt.figure(figsize=(16,5))
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
                     plt.plot(targets[:period_num,0,0,j], label='all_true')
-                    plt.plot(slow_infos_next[:period_num,0,0,j], label='slow_predict')
+                    plt.plot(slow_obses_next[:period_num,0,0,j], label='slow_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
                 plt.close()
                 
-                # plot fast infomation one-step prediction curve
+                # plot fast observation one-step prediction curve
                 plt.figure(figsize=(16,5))
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
                     plt.plot(targets[:period_num,0,0,j], label='all_true')
-                    plt.plot(fast_infos_next[:period_num,0,0,j], label='fast_predict')
+                    plt.plot(fast_obses_next[:period_num,0,0,j], label='fast_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
                 plt.close()
                 
-                # plot total infomation one-step prediction curve
+                # plot total observation one-step prediction curve
                 plt.figure(figsize=(16,5))
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
                     plt.plot(targets[:period_num,0,0,j], label='all_true')
-                    plt.plot(total_infos_next[:period_num,0,0,j], label='all_predict')
+                    plt.plot(total_obses_next[:period_num,0,0,j], label='all_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
                 plt.close()
@@ -538,7 +548,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
 
     # load model
     batch_size = 128
-    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, device=device)
+    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, redundant_dim=10, device=device)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
@@ -551,9 +561,11 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     # testing pipeline        
     with torch.no_grad():
         targets = []
-        slow_infos_next = []
-        fast_infos_next = []
-        total_infos_next = []
+        slow_obses_next = []
+        fast_obses_next = []
+        total_obses_next = []
+
+        koop_vars = []
         
         model.eval()
         for input, target in test_loader:
@@ -561,40 +573,45 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
             input = model.scale(input.to(device))
             target = model.scale(target.to(device))
         
-            # slow extract
-            slow_var, _ = model.extract(input)
-            slow_info = model.recover(slow_var)
+            # obs ——> slow ——> koopman
+            slow_var, _ = model.obs2slow(input)
+            koop_var = model.slow2koopman(slow_var)
+            slow_obs = model.slow2obs(slow_var)
             
-            # slow evolve
-            slow_var_next, _ = model.koopman_evolve(slow_var, tau=torch.tensor([delta_t], device=device), T=1)
-            slow_info_next = model.recover(slow_var_next)
+            # koopman evolve
+            t = torch.tensor([delta_t], device=device)
+            koop_var_next = model.koopman_evolve(koop_var, tau=t)
+            slow_var_next = model.koopman2slow(koop_var_next)
+            slow_obs_next = model.slow2obs(slow_var_next)
             
-            # fast evolve
-            fast_info = input - slow_info
-            fast_info_next, _ = model.lstm_evolve(fast_info, T=n)
+            # fast obs evolve
+            fast_obs = input - slow_obs
+            fast_obs_next, _ = model.lstm_evolve(fast_obs, T=n)
             
-            # total evolve
-            total_info_next = slow_info_next + fast_info_next
+            # total obs evolve
+            total_obs_next = slow_obs_next + fast_obs_next
 
             targets.append(target)
-            slow_infos_next.append(slow_info_next)
-            fast_infos_next.append(fast_info_next)
-            total_infos_next.append(total_info_next)
+            slow_obses_next.append(slow_obs_next)
+            fast_obses_next.append(fast_obs_next)
+            total_obses_next.append(total_obs_next)
+            koop_vars.append(koop_var)
         
         
-        slow_infos_next = model.descale(torch.concat(slow_infos_next, axis=0)).cpu()
-        fast_infos_next = model.descale(torch.concat(fast_infos_next, axis=0)).cpu()
+        slow_obses_next = model.descale(torch.concat(slow_obses_next, axis=0)).cpu()
+        fast_obses_next = model.descale(torch.concat(fast_obses_next, axis=0)).cpu()
+        koop_vars = torch.concat(koop_vars, axis=0).cpu()
         
         targets = torch.concat(targets, axis=0)
-        total_infos_next = torch.concat(total_infos_next, axis=0)
+        total_obses_next = torch.concat(total_obses_next, axis=0)
     
     # metrics
-    pred = total_infos_next.detach().cpu().numpy()
+    pred = total_obses_next.detach().cpu().numpy()
     true = targets.detach().cpu().numpy()
     MAPE = np.mean(np.abs((pred - true) / true))
     targets = model.descale(targets)
-    total_infos_next = model.descale(total_infos_next)
-    pred = total_infos_next.detach().cpu().numpy()
+    total_obses_next = model.descale(total_obses_next)
+    pred = total_obses_next.detach().cpu().numpy()
     true = targets.detach().cpu().numpy()
     MSE = np.mean((pred - true) ** 2)
     RMSE = np.sqrt(MSE)
@@ -604,37 +621,45 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     
     period_num = 30*int(18/delta_t)
 
-    # plot slow infomation prediction curve
+    # plot slow observation prediction curve
     plt.figure(figsize=(16,5))
     for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
         plt.plot(true[:period_num,0,0,j], label='true')
-        plt.plot(slow_infos_next[:period_num,0,0,j], label='predict')
+        plt.plot(slow_obses_next[:period_num,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.jpg", dpi=300)
     plt.close()
     
-    # plot fast infomation prediction curve
+    # plot fast observation prediction curve
     plt.figure(figsize=(16,5))
     for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
         plt.plot(true[:period_num,0,0,j], label='true')
-        plt.plot(fast_infos_next[:period_num,0,0,j], label='predict')
+        plt.plot(fast_obses_next[:period_num,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
     plt.close()
     
-    # plot total infomation prediction curve
+    # plot total observation prediction curve
+    plt.figure(figsize=(16,16))
+    for j in range(12):
+        plt.plot(koop_vars[:period_num,j], label=str(j))
+    plt.subplots_adjust(wspace=0.2)
+    plt.legend()
+    plt.savefig(log_dir+f"/test/{delta_t}/koopman.jpg", dpi=300)
+    plt.close()
+
     plt.figure(figsize=(16,5))
     for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
         plt.plot(true[:period_num,0,0,j], label='true')
-        plt.plot(pred[:period_num,0,0,j], label='predict')
+        plt.plot(fast_obses_next[:period_num,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/total.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
     plt.close()
     
     return MSE, RMSE, MAE, MAPE
@@ -665,7 +690,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    ckpt_epoch = 150
+    ckpt_epoch = 250
 
     if not long_test:
         # train
@@ -742,14 +767,54 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     while any([sub.exitcode==None for sub in workers]):
         pass
     
-    print('Slow-Infomation Evolve Over!')
+    print('Slow-observation Evolve Over!')
+
+
+def test_koopman_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, random_seed=729):
+        
+    # prepare
+    device = torch.device('cuda:1')
+    log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/random_seed{random_seed}'
+
+    # load model
+    model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, redundant_dim=10, device=device)
+    ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
+    ckpt = torch.load(ckpt_path)
+    model.load_state_dict(ckpt)
+    model = model.to(device)
+
+    # slow ——> koopman
+    slow_var = torch.Tensor(32, 2).to(device)
+    torch.nn.init.normal_(slow_var, mean=0, std=0.01)
+    koop_var = model.slow2koopman(slow_var)
+    
+    # koopman evolve
+    t_s = []
+    k_vars = []
+    for delta_t in np.linspace(0.1, 5.0, 50):
+        t = torch.tensor([delta_t], device=device).float()
+        koop_var_next = model.koopman_evolve(koop_var, tau=t)
+        slow_var_next = model.koopman2slow(koop_var_next)
+        t_s.append(delta_t)
+        k_vars.append(koop_var_next.detach().cpu().numpy())
+    t_s = np.array(t_s)
+    k_vars = np.array(k_vars)
+    plt.figure(figsize=(16,5))
+    for i in range(4):
+        ax = plt.subplot(1,4,i+1)
+        ax.plot(t_s, k_vars[:,i,0], label='c1')
+        ax.plot(t_s, k_vars[:,i,1], label='c2')
+        ax.legend()
+    plt.savefig('koopman_evol.pdf', dpi=300)
     
 
 if __name__ == '__main__':
     
-    trace_num = 1000
+    trace_num = 500
     
     data_generator_pipeline(trace_num=trace_num, total_t=16)
     # id_esitimate_pipeline(trace_num=trace_num)
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+
+    # test_koopman_evolve(1.0, 30, 250, 2, 0.1, 1)

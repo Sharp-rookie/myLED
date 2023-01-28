@@ -4,13 +4,14 @@ import torch
 
 from exp.exp_informer import Exp_Informer
 
+
 parser = argparse.ArgumentParser(description='[Informer] Long Sequences Forecasting')
 
 parser.add_argument('--model', type=str, required=False, default='informer',help='model of experiment, options: [informer, informerstack, informerlight(TBD)]')
 
-parser.add_argument('--data', type=str, required=False, default='JCP_0.1', help='data')
-parser.add_argument('--root_path', type=str, default='./data/JCP/', help='root path of the data file')
-parser.add_argument('--data_path', type=str, default='tau_0.1.csv', help='data file')    
+parser.add_argument('--data', type=str, required=False, default='PNAS_0.25', help='data')
+parser.add_argument('--root_path', type=str, default='./data/PNAS/', help='root path of the data file')
+parser.add_argument('--data_path', type=str, default='tau_0.25.csv', help='data file')    
 parser.add_argument('--features', type=str, default='M', help='forecasting task, options:[M, S, MS]; M:multivariate predict multivariate, S:univariate predict univariate, MS:multivariate predict univariate')
 parser.add_argument('--target', type=str, default='OT', help='target feature in S or MS task')
 parser.add_argument('--freq', type=str, default='h', help='freq for time features encoding, options:[s:secondly, t:minutely, h:hourly, d:daily, b:business days, w:weekly, m:monthly], you can also use more detailed freq like 15min or 3h')
@@ -21,9 +22,9 @@ parser.add_argument('--label_len', type=int, default=2, help='start token length
 parser.add_argument('--pred_len', type=int, default=1, help='prediction sequence length')
 # Informer decoder input: concat[start token series(label_len), zero padding series(pred_len)]
 
-parser.add_argument('--enc_in', type=int, default=4, help='encoder input size')
-parser.add_argument('--dec_in', type=int, default=4, help='decoder input size')
-parser.add_argument('--c_out', type=int, default=4, help='output size')
+parser.add_argument('--enc_in', type=int, default=3, help='encoder input size')
+parser.add_argument('--dec_in', type=int, default=3, help='decoder input size')
+parser.add_argument('--c_out', type=int, default=3, help='output size')
 parser.add_argument('--d_model', type=int, default=512, help='dimension of model')
 parser.add_argument('--n_heads', type=int, default=8, help='num of heads')
 parser.add_argument('--e_layers', type=int, default=2, help='num of encoder layers')
@@ -43,7 +44,7 @@ parser.add_argument('--mix', action='store_false', help='use mix attention in ge
 parser.add_argument('--cols', type=str, nargs='+', help='certain cols from the data files as the input features')
 parser.add_argument('--num_workers', type=int, default=0, help='data loader num workers')
 parser.add_argument('--itr', type=int, default=2, help='experiments times')
-parser.add_argument('--train_epochs', type=int, default=10, help='train epochs')
+parser.add_argument('--train_epochs', type=int, default=5, help='train epochs')
 parser.add_argument('--batch_size', type=int, default=32, help='batch size of train input data')
 parser.add_argument('--patience', type=int, default=3, help='early stopping patience')
 parser.add_argument('--learning_rate', type=float, default=0.0001, help='optimizer learning rate')
@@ -51,7 +52,7 @@ parser.add_argument('--des', type=str, default='test',help='exp description')
 parser.add_argument('--loss', type=str, default='mse',help='loss function')
 parser.add_argument('--lradj', type=str, default='type1',help='adjust learning rate')
 parser.add_argument('--use_amp', action='store_true', help='use automatic mixed precision training', default=False)
-parser.add_argument('--inverse', action='store_true', help='inverse output data', default=False)
+parser.add_argument('--inverse', action='store_true', help='inverse output data', default=True)
 
 parser.add_argument('--use_gpu', type=bool, default=True, help='use gpu')
 parser.add_argument('--gpu', type=int, default=0, help='gpu')
@@ -72,7 +73,9 @@ data_parser = {
     'JCP_0.1':{'data':'tau_0.1.csv','T':'OT','M':[4,4,4]},
     'JCP_1.0':{'data':'tau_1.0.csv','T':'OT','M':[4,4,4]},
     'JCP_5.0':{'data':'tau_5.0.csv','T':'OT','M':[4,4,4]},
+    'PNAS_0.25':{'data':'tau_0.25.csv','T':'OT','M':[3,3,3]},
     'PNAS_2.5':{'data':'tau_2.5.csv','T':'OT','M':[3,3,3]},
+    'PNAS_12.5':{'data':'tau_12.5.csv','T':'OT','M':[3,3,3]},
     'ETTh1':{'data':'ETTh1.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},
     'ETTh2':{'data':'ETTh2.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},
     'ETTm1':{'data':'ETTm1.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},

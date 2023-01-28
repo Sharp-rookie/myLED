@@ -180,7 +180,7 @@ def plot_jcp12_autocorr():
 
         data = pd.DataFrame(np.concatenate((c1,c2,c3,c4), axis=-1), columns=['c1','c2','c3','c4'])
         
-        lag_list = np.arange(0, 9*10000, 100)
+        lag_list = np.arange(0, 10*10000, 100)
         for lag in tqdm(lag_list):
             corrC1[trace_id].append(data['c1'].autocorr(lag=lag))
             corrC2[trace_id].append(data['c2'].autocorr(lag=lag))
@@ -193,10 +193,10 @@ def plot_jcp12_autocorr():
     corrC4 = np.mean(corrC4, axis=0)
     
     plt.figure(figsize=(12,8))
-    plt.plot(lag_list*1e-3, np.array(corrC1), label='c1')
-    plt.plot(lag_list*1e-3, np.array(corrC2), label='c2')
-    plt.plot(lag_list*1e-3, np.array(corrC3), label='c3')
-    plt.plot(lag_list*1e-3, np.array(corrC4), label='c4')
+    plt.plot(lag_list*1e-4, np.array(corrC1), label='c1')
+    plt.plot(lag_list*1e-4, np.array(corrC2), label='c2')
+    plt.plot(lag_list*1e-4, np.array(corrC3), label='c3')
+    plt.plot(lag_list*1e-4, np.array(corrC4), label='c4')
     plt.xlabel('time/s')
     plt.legend()
     plt.title('Autocorrelation')
@@ -243,12 +243,12 @@ def plot_evolve(tau):
         ax.legend()
     plt.savefig(f'evolve_test_{tau}.jpg', dpi=300)
     
-    print(f'our | tau[{our_data[0,0]:.3f}] RMSE={our_data[0,2]:.4f}, MAPE={100*our_data[0,4]:.2f}% | tau[{our_data[9,0]:.3f}] RMSE={our_data[9,2]:.4f}, MAPE={100*our_data[9,4]:.2f}% | tau[{our_data[49,0]:.3f}] RMSE={our_data[49,2]:.4f}, MAPE={100*our_data[49,4]:.2f}%')
-    print(f'lstm | tau[{lstm_data[0,0]:.3f}] RMSE={lstm_data[0,2]:.4f}, MAPE={100*lstm_data[0,4]:.2f}% | tau[{lstm_data[9,0]:.3f}] RMSE={lstm_data[9,2]:.4f}, MAPE={100*lstm_data[9,4]:.2f}% | tau[{lstm_data[49,0]:.3f}] RMSE={lstm_data[49,2]:.4f}, MAPE={100*lstm_data[49,4]:.2f}%')
-    print(f'tcn | tau[{tcn_data[0,0]:.3f}] RMSE={tcn_data[0,2]:.4f}, MAPE={100*tcn_data[0,4]:.2f}% | tau[{tcn_data[9,0]:.3f}] RMSE={tcn_data[9,2]:.4f}, MAPE={100*tcn_data[9,4]:.2f}% | tau[{tcn_data[49,0]:.3f}] RMSE={tcn_data[49,2]:.4f}, MAPE={100*tcn_data[49,4]:.2f}%')
+    item = ['our','lstm','tcn']
+    for i, data in enumerate([our_data, lstm_data, tcn_data]):
+        print(f'{item[i]} | tau[{data[0,0]:.3f}] RMSE={data[0,2]:.4f}, MAE={data[0,3]:.4f}, MAPE={100*data[0,4]:.2f}% | tau[{data[9,0]:.3f}] RMSE={data[9,2]:.4f}, MAE={data[9,3]:.4f}, MAPE={100*data[9,4]:.2f}% | tau[{data[49,0]:.3f}] RMSE={data[49,2]:.4f}, MAE={data[49,3]:.4f}, MAPE={100*data[49,4]:.2f}%')
 
 
 if __name__ == '__main__':
     
     # plot_jcp12_autocorr()
-    plot_evolve(1.5)
+    plot_evolve(1.0)

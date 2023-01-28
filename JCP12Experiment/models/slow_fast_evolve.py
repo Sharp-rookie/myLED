@@ -84,10 +84,12 @@ class LSTM_OPT(nn.Module):
 
 class EVOLVER(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, device):
+    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, redundant_dim, device):
         super(EVOLVER, self).__init__()
+
+        self.slow_dim = slow_dim
         
-        # (batchsize,1,1,3)-->(batchsize, embed_dim)
+        # (batchsize,1,1,4)-->(batchsize, embed_dim)
         self.encoder_1 = nn.Sequential(
             nn.Flatten(),
             nn.Linear(in_channels*input_1d_width, 64, bias=True),
@@ -105,8 +107,17 @@ class EVOLVER(nn.Module):
             nn.Linear(64, slow_dim, bias=True),
             nn.Tanh(),
         )
+
+        # (batchsize, slow_dim)-->(batchsize, redundant_dim)
+        self.encoder_3 = nn.Sequential(
+            nn.Linear(slow_dim, 64, bias=True),
+            nn.Tanh(),
+            nn.Dropout(p=0.01),
+            nn.Linear(64, redundant_dim, bias=True),
+            nn.Tanh(),
+        )
         
-        # (batchsize, slow_dim)-->(batchsize,1,1,3)
+        # (batchsize, slow_dim)-->(batchsize,1,1,4)
         self.decoder = nn.Sequential(
             nn.Linear(slow_dim, 64, bias=True),
             nn.Tanh(),
@@ -121,31 +132,46 @@ class EVOLVER(nn.Module):
             nn.Unflatten(-1, (1, in_channels, input_1d_width))
         )
         
-        self.K_opt = Koopman_OPT(slow_dim)
-        
+        self.K_opt = Koopman_OPT(slow_dim+redundant_dim)
         self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, device=device)
 
         # scale inside the model
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
         self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
 
-    def extract(self, x):
-        embed = self.encoder_1(x)
+    def obs2embed(self, obs):
+        # (batchsize,1,1,4)-->(batchsize, embed_dim)
+        embed = self.encoder_1(obs)
+        return embed
+    
+    def obs2slow(self, obs):
+        # (batchsize,1,1,4)-->(batchsize, embed_dim)-->(batchsize, slow_dim)
+        embed = self.encoder_1(obs)
         slow_var = self.encoder_2(embed)
         return slow_var, embed
 
-    def recover(self, x):
-        x = self.decoder(x)
-        return x
+    def slow2obs(self, slow_var):
+        # (batchsize, slow_dim)-->(batchsize,1,1,4)
+        obs = self.decoder(slow_var)
+        return obs
 
-    def koopman_evolve(self, x, tau=1., T=1):
+    def slow2koopman(self, slow_var):
+        # (batchsize, slow_dim)-->(batchsize, koopman_dim = slow_dim + redundant_dim)
+        redundant_var = self.encoder_3(slow_var)
+        koopman_var = torch.concat((slow_var, redundant_var), dim=-1)
+        return koopman_var
+
+    def koopman2slow(self, koopman_var):
+        # (batchsize, koopman_dim = slow_dim + redundant_dim)-->(batchsize, slow_dim)
+        slow_var = koopman_var[:,:self.slow_dim]
+        return slow_var
+
+    def koopman_evolve(self, koopman_var, tau=1.):
         
         K = self.K_opt(tau)
-        y = [torch.matmul(K, x.unsqueeze(-1)).squeeze(-1)]
-        for _ in range(1, T-1): 
-            y.append(torch.matmul(K, y[-1].unsqueeze(-1)).squeeze(-1))
+        koopman_var_next = torch.matmul(K, koopman_var.unsqueeze(-1)).squeeze(-1)
         
-        return y[-1], y[:-1]
+        return koopman_var_next
     
     def lstm_evolve(self, x, T=1):
         
