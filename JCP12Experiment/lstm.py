@@ -230,7 +230,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
     MAE = np.mean(np.abs(pred - true))
     
     # plot total infomation prediction curve
-    period_num = 50
+    period_num = 100
     plt.figure(figsize=(16,4))
     for j, item in enumerate(['c1','c2','c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
