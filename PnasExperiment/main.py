@@ -280,12 +280,14 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training pipeline
     train_loss = []
     val_loss = []
+    lambda_curve = [[] for _ in range(slow_id)]
     for epoch in range(1, max_epoch+1):
         
         losses = [[],[],[],[]]
         
         # train
         model.train()
+        [lambda_curve[i].append(model.K_opt.Lambda[i]) for i in range(slow_id)]
         for input, _, internl_units in train_loader:
             
             input = model.scale(input.to(device)) # (batchsize,1,1,3)
@@ -514,6 +516,14 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
+    # plot Koopman Lambda curve
+    plt.figure()
+    for i in range(slow_id):
+        plt.plot(lambda_curve[i], label=f'lambda[{i}]')
+    plt.xlabel('epoch')
+    plt.legend()
+    plt.savefig(log_dir+'/K_lambda_curve.pdf', dpi=300)
+
 
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
@@ -735,7 +745,7 @@ if __name__ == '__main__':
     
     # id_esitimate_pipeline(trace_num=trace_num)
     
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
     
     torch.cuda.empty_cache()
