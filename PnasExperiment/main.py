@@ -14,7 +14,7 @@ import models
 from Data.dataset import PNASDataset
 from Data.generator import generate_dataset, generate_original_data
 from util import set_cpu_num
-from util.plot import plot_epoch_test_log, plot_slow_ae_loss
+from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_id_per_tau
 from util.intrinsic_dimension import eval_id_embedding
 
 
@@ -287,7 +287,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
         
         # train
         model.train()
-        [lambda_curve[i].append(model.K_opt.Lambda[i]) for i in range(slow_id)]
+        [lambda_curve[i].append(model.K_opt.Lambda[i].detach().cpu()) for i in range(slow_id)]
         for input, _, internl_units in train_loader:
             
             input = model.scale(input.to(device)) # (batchsize,1,1,3)
@@ -684,7 +684,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [2.5]
+    tau_list = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]
     workers = []
     
     # id esitimate sub-process
@@ -694,6 +694,8 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
         workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
         pass
+
+    plot_id_per_tau(tau_list, 100)
     
     print('ID Esitimate Over!')
 

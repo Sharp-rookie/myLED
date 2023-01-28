@@ -250,4 +250,4 @@ def generate_informer_dataset(trace_num, sample_num=None):
         
         df.to_csv(f'tau{tau}.csv', index=False)
 
-generate_informer_dataset(trace_num=200, sample_num=None)
+# generate_informer_dataset(trace_num=200, sample_num=None)

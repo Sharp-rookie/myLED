@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Process
 from pytorch_lightning import seed_everything
 
+from util import set_cpu_num
 from Data.dataset import PNASDataset
 from Data.generator import generate_dataset
 
@@ -246,6 +247,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
 def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
     seed_everything(random_seed)
+    set_cpu_num(1)
     
     sample_num = None
 

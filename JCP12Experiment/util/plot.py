@@ -100,7 +100,33 @@ def plot_epoch_test_log(tau, max_epoch):
         plt.legend()
         plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.jpg', dpi=300)
         plt.close()
-        
+
+
+def plot_id_per_tau(tau_list, id_epoch):
+
+    id_per_tau = [[] for _ in tau_list]
+    for i, tau in enumerate(tau_list):
+        fp = open(f'logs/time-lagged/tau_{tau}/test/log.txt', 'r')
+        for line in fp.readlines():
+            seed = int(line[:-1].split(',')[1])
+            epoch = int(line[:-1].split(',')[6])
+            LB_id = float(line[:-1].split(',')[7])
+            MiND_id = float(line[:-1].split(',')[8])
+            MADA_id = float(line[:-1].split(',')[9])
+            PCA_id = float(line[:-1].split(',')[10])
+
+            if epoch == id_epoch:
+                id_per_tau[i].append([LB_id, MiND_id, MADA_id, PCA_id])
+    
+    id_per_tau = np.mean(id_per_tau, axis=-2)
+
+    plt.figure()
+    for i, item in enumerate(['MLE','MiND','MADA','PCA']):
+        plt.plot(tau_list, id_per_tau[:,i], label=item)
+    plt.legend()
+    plt.xlabel('tau / s')
+    plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
+
         
 def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3,4]):
     

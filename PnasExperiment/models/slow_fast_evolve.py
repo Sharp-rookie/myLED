@@ -6,7 +6,7 @@ from scipy.stats import special_ortho_group
 
 class Koopman_OPT(nn.Module):
 
-    def __init__(self, koopman_dim, device):
+    def __init__(self, koopman_dim):
         super(Koopman_OPT, self).__init__()
 
         self.koopman_dim = koopman_dim
@@ -26,8 +26,8 @@ class Koopman_OPT(nn.Module):
         #     nn.Linear(64, self.koopman_dim)
         # )
 
-        self.V = torch.autograd.Variable(torch.Tensor(koopman_dim, koopman_dim), requires_grad=True).to(device)
-        self.Lambda = torch.autograd.Variable(torch.Tensor(koopman_dim), requires_grad=True).to(device)
+        self.register_parameter('V', nn.Parameter(torch.Tensor(koopman_dim, koopman_dim)))
+        self.register_parameter('Lambda', nn.Parameter(torch.Tensor(koopman_dim)))
 
         # init
         torch.nn.init.normal_(self.V, mean=0, std=0.01)
@@ -122,7 +122,7 @@ class EVOLVER(nn.Module):
             nn.Unflatten(-1, (1, in_channels, input_1d_width))
         )
         
-        self.K_opt = Koopman_OPT(slow_dim, device)
+        self.K_opt = Koopman_OPT(slow_dim)
         
         self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, device=device)
 
