@@ -263,7 +263,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 150
+    max_epoch = 100
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
     MSE_loss = nn.MSELoss()
@@ -283,12 +283,14 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training pipeline
     train_loss = []
     val_loss = []
+    lambda_curve = [[] for _ in range(slow_id)]
     for epoch in range(1, max_epoch+1):
         
         losses = [[],[],[],[]]
         
         # train
         model.train()
+        [lambda_curve[i].append(model.K_opt.Lambda[i]) for i in range(slow_id) ]
         for input, _, internl_units in train_loader:
             
             input = model.scale(input.to(device)) # (batchsize,1,1,4)
@@ -518,6 +520,14 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
+    # plot Koopman Lambda curve
+    plt.figure()
+    for i in range(slow_id):
+        plt.plot(lambda_curve[i], label=f'lambda[{i}]')
+    plt.xlabel('epoch')
+    plt.legend()
+    plt.savefig(log_dir+'/K_lambda_curve.pdf', dpi=300)
+
 
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
@@ -696,7 +706,7 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
 
 def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
-    tau_list = [1.5]
+    tau_list = [1.0]
     id_list = [2]
     workers = []
     
@@ -738,6 +748,6 @@ if __name__ == '__main__':
     trace_num = 1000
     
     data_generator_pipeline(trace_num=trace_num, total_t=16)
-    id_esitimate_pipeline(trace_num=trace_num)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    # id_esitimate_pipeline(trace_num=trace_num)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
     # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)

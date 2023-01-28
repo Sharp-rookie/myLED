@@ -72,6 +72,7 @@ data_parser = {
     'JCP_0.1':{'data':'tau_0.1.csv','T':'OT','M':[4,4,4]},
     'JCP_1.0':{'data':'tau_1.0.csv','T':'OT','M':[4,4,4]},
     'JCP_5.0':{'data':'tau_5.0.csv','T':'OT','M':[4,4,4]},
+    'PNAS_2.5':{'data':'tau_2.5.csv','T':'OT','M':[3,3,3]},
     'ETTh1':{'data':'ETTh1.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},
     'ETTh2':{'data':'ETTh2.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},
     'ETTm1':{'data':'ETTm1.csv','T':'OT','M':[7,7,7],'S':[1,1,1],'MS':[7,7,1]},

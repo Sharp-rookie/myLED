@@ -1,4 +1,4 @@
-from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred, Dataset_JCP_hour
+from data.data_loader import Dataset_ETT_hour, Dataset_ETT_minute, Dataset_Custom, Dataset_Pred, Dataset_JCP_hour, Dataset_PNAS_hour
 from exp.exp_basic import Exp_Basic
 from models.model import Informer, InformerStack
 
@@ -64,6 +64,7 @@ class Exp_Informer(Exp_Basic):
             'JCP_0.1':Dataset_JCP_hour,
             'JCP_1.0':Dataset_JCP_hour,
             'JCP_5.0':Dataset_JCP_hour,
+            'PNAS_2.5':Dataset_PNAS_hour,
             'ETTh1':Dataset_ETT_hour,
             'ETTh2':Dataset_ETT_hour,
             'ETTm1':Dataset_ETT_minute,

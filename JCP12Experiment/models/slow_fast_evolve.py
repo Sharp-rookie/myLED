@@ -5,32 +5,39 @@ from torch import nn
 
 class Koopman_OPT(nn.Module):
 
-    def __init__(self, koopman_dim):
+    def __init__(self, koopman_dim, device):
         super(Koopman_OPT, self).__init__()
 
-        # TODO: 目前认为 koopman_dim == slow_dim，需要进一步研究二者的关系
         self.koopman_dim = koopman_dim
         
-        # (tau,)-->(koopman_dim, koopman_dim)
-        self.V = nn.Sequential(
-            nn.Linear(1, 64),
-            nn.Tanh(),
-            nn.Linear(64, self.koopman_dim**2),
-            nn.Unflatten(-1, (self.koopman_dim, self.koopman_dim))
-        )
+        # # (tau,)-->(koopman_dim, koopman_dim)
+        # self.V = nn.Sequential(
+        #     nn.Linear(1, 64),
+        #     nn.Tanh(),
+        #     nn.Linear(64, self.koopman_dim**2),
+        #     nn.Unflatten(-1, (self.koopman_dim, self.koopman_dim))
+        # )
         
-        # (tau,)-->(koopman_dim,)
-        self.Lambda = nn.Sequential(
-            nn.Linear(1, 64),
-            nn.Tanh(),
-            nn.Linear(64, self.koopman_dim)
-        )
+        # # (tau,)-->(koopman_dim,)
+        # self.Lambda = nn.Sequential(
+        #     nn.Linear(1, 64),
+        #     nn.Tanh(),
+        #     nn.Linear(64, self.koopman_dim)
+        # )
+
+        self.V = torch.autograd.Variable(torch.Tensor(koopman_dim, koopman_dim), requires_grad=True).to(device)
+        self.Lambda = torch.autograd.Variable(torch.Tensor(koopman_dim), requires_grad=True).to(device)
+
+        # init
+        torch.nn.init.normal_(self.V, mean=0, std=0.01)
+        torch.nn.init.normal_(self.Lambda, mean=0, std=0.01)
 
     def forward(self, tau):
 
         # K: (koopman_dim, koopman_dim), K = V * Lambda * V^-1
-        V, Lambda = self.V(tau), self.Lambda(tau)
-        K = torch.mm(torch.mm(V, torch.diag(Lambda)), torch.inverse(V))
+        # V, Lambda = self.V(tau), self.Lambda(tau)
+        # K = torch.mm(torch.mm(V, torch.diag(Lambda)), torch.inverse(V))
+        K = torch.mm(torch.mm(self.V, torch.exp(tau* torch.diag(self.Lambda))), torch.inverse(self.V))
 
         return K
     
@@ -114,7 +121,7 @@ class EVOLVER(nn.Module):
             nn.Unflatten(-1, (1, in_channels, input_1d_width))
         )
         
-        self.K_opt = Koopman_OPT(slow_dim)
+        self.K_opt = Koopman_OPT(slow_dim, device)
         
         self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, device=device)
 
