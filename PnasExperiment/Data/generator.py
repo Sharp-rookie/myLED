@@ -222,6 +222,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
 def generate_informer_dataset(trace_num, sample_num=None):
     
     # load original data
+    simdata = []
     for trace_id in tqdm(range(1, trace_num+1)):
         tmp = np.load(f"Data/origin/{trace_id}/data.npz")
         X = np.array(tmp['X'])[:, np.newaxis, np.newaxis] # (sample_num, channel, feature_num)
@@ -229,8 +230,8 @@ def generate_informer_dataset(trace_num, sample_num=None):
         Z = np.array(tmp['Z'])[:, np.newaxis, np.newaxis]
 
         trace = np.concatenate((X, Y, Z), axis=-1)
-        data.append(trace[np.newaxis])
-    simdata = np.concatenate(data, axis=0)
+        simdata.append(trace[np.newaxis])
+    simdata = np.concatenate(simdata, axis=0)
 
     for tau in [0.25, 2.5, 12.5]:
         # subsampling
@@ -249,4 +250,4 @@ def generate_informer_dataset(trace_num, sample_num=None):
         
         df.to_csv(f'tau{tau}.csv', index=False)
 
-# generate_informer_dataset(trace_num=200, sample_num=None)
+generate_informer_dataset(trace_num=200, sample_num=None)
