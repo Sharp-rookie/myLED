@@ -261,7 +261,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, False)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
-            with open(f'lstm/lstm_evolve_test_{tau}.txt','a') as f:
+            with open(f'lstm_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
 
 

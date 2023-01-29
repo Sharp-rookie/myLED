@@ -1,56 +1,10 @@
 import os
 import numpy as np
-from tqdm import tqdm
 import matplotlib.pyplot as plt
-from scipy.integrate import odeint
 from pytorch_lightning import seed_everything
 import warnings;warnings.simplefilter('ignore')
 
 
-def system_4d(y0, t, para=(0.025,3)):
-    epsilon, omega =  para
-    c1, c2, c3, c4 = y0
-    dc1 = -c1
-    dc2 = -2 * c2
-    dc3 = -(c3-np.sin(omega*c1)*np.sin(omega*c2))/epsilon - c1*omega*np.cos(omega*c1)*np.sin(omega*c2) - c2*omega*np.cos(omega*c2)*np.sin(omega*c1)
-    dc4 = -(c4-1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2))))/epsilon - c1*omega*np.exp(-omega*c1)/((1+np.exp(-omega*c2))*((1+np.exp(-omega*c1))**2)) - c2*omega*np.exp(-omega*c2)/((1+np.exp(-omega*c1))*((1+np.exp(-omega*c2))**2))
-    return [dc1, dc2, dc3, dc4]
-
-
-def generate_original_data(trace_num, total_t=5, dt=0.0001):
-    
-    def solve_1_trace(trace_id=0, total_t=5, dt=0.001):
-        
-        seed_everything(trace_id)
-        
-        y0 = [np.random.uniform(-3,3) for _ in range(4)]
-        t  =np.arange(0, total_t, dt)
-        sol = odeint(system_4d, y0, t)
-
-        # plt.figure()
-        # plt.plot(t, sol[:,0], label='c1')
-        # plt.plot(t, sol[:,1], label='c2')
-        # plt.plot(t, sol[:,2], label='c3')
-        # plt.plot(t, sol[:,3], label='c4')
-        # plt.legend()
-        # plt.savefig(f'Data/origin/jcp12_{trace_id}.jpg', dpi=300)
-        
-        return sol
-    
-    if os.path.exists('Data/origin/origin.npz'): return
-    
-    os.makedirs('Data/origin', exist_ok=True)
-    
-    trace = []
-    for trace_id in tqdm(range(1, trace_num+1)):
-        sol = solve_1_trace(trace_id, total_t, dt)
-        trace.append(sol)
-    
-    np.savez('Data/origin/origin.npz', trace=trace, dt=dt, T=total_t)
-
-    print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
-    
-    
 def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
     if sequence_length is not None and os.path.exists(f"Data/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/test_{sequence_length}.npz"):
@@ -102,7 +56,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         idxs_ic = []
         for ic in range(N_TRACE):
             seq_data = data_item[ic]
-            idxs = np.arange(0, np.shape(seq_data)[0]-step_length*(sequence_length-1), 1)
+            idxs = np.arange(0, np.shape(seq_data)[0]-step_length*sequence_length, 1)
             for idx_ in idxs:
                 idxs_ic.append(ic)
                 idxs_timestep.append(idx_)
@@ -112,13 +66,13 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         for bn in range(len(idxs_timestep)):
             idx_ic = idxs_ic[bn]
             idx_timestep = idxs_timestep[bn]
-            tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(sequence_length-1)+1 : step_length]
+            tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*sequence_length : step_length]
             sequences.append(tmp)
             if is_print: print(f'\rtau[{tau}] sliding window for {item} data [{bn+1}/{len(idxs_timestep)}]', end='')
         if is_print: print()
 
         sequences = np.array(sequences) 
-        if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length})", np.shape(sequences))
+        if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length{sequence_length})", np.shape(sequences))
 
         # keep sequences_length equal to sample_num
         if sample_num is not None:
@@ -151,7 +105,8 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.plot(sequences[:,0,0,3], label='c4')
             plt.legend()
             plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
-            
+generate_dataset(10, 1.0, sample_num=None, is_print=True, sequence_length=10)
+
             
 def generate_informer_dataset(trace_num, sample_num=None):
     
