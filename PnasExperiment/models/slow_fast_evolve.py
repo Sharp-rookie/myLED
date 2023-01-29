@@ -38,7 +38,7 @@ class Koopman_OPT(nn.Module):
         # K: (koopman_dim, koopman_dim), K = V * Lambda * V^-1
         # V, Lambda = self.V(tau), self.Lambda(tau)
         # K = torch.mm(torch.mm(V, torch.diag(Lambda)), torch.inverse(V))
-        K = torch.mm(torch.mm(self.V, torch.exp(tau* torch.diag(self.Lambda))), torch.inverse(self.V))
+        K = torch.mm(torch.mm(torch.inverse(self.V), torch.diag(torch.exp(tau*self.Lambda))), self.V)
 
         return K
     

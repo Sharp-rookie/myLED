@@ -29,17 +29,20 @@ class Koopman_OPT(nn.Module):
         self.register_parameter('Lambda', nn.Parameter(torch.Tensor(koopman_dim)))
 
         # init
-        torch.nn.init.normal_(self.V, mean=0, std=0.01)
-        torch.nn.init.normal_(self.Lambda, mean=0, std=0.01)
+        torch.nn.init.normal_(self.V, mean=0, std=0.1)
+        torch.nn.init.normal_(self.Lambda, mean=0, std=0.1)
 
     def forward(self, tau):
 
-        # K: (koopman_dim, koopman_dim), K = V * Lambda * V^-1
+        # K: (koopman_dim, koopman_dim), K = V * exp(tau*Lambda) * V^-1
         # V, Lambda = self.V(tau), self.Lambda(tau)
         # K = torch.mm(torch.mm(V, torch.diag(Lambda)), torch.inverse(V))
-        K = torch.mm(torch.mm(self.V, torch.exp(tau* torch.diag(self.Lambda))), torch.inverse(self.V))
+        tmp1 = torch.diag(torch.exp(tau*self.Lambda))
+        V_inverse = torch.inverse(self.V)
+        K = torch.mm(torch.mm(V_inverse, tmp1), self.V)
 
-        return K
+        # return K
+        return tmp1
     
 
 class LSTM_OPT(nn.Module):
@@ -108,14 +111,14 @@ class EVOLVER(nn.Module):
             nn.Tanh(),
         )
 
-        # (batchsize, slow_dim)-->(batchsize, redundant_dim)
-        self.encoder_3 = nn.Sequential(
-            nn.Linear(slow_dim, 64, bias=True),
-            nn.Tanh(),
-            nn.Dropout(p=0.01),
-            nn.Linear(64, redundant_dim, bias=True),
-            nn.Tanh(),
-        )
+        # # (batchsize, slow_dim)-->(batchsize, redundant_dim)
+        # self.encoder_3 = nn.Sequential(
+        #     nn.Linear(slow_dim, 64, bias=True),
+        #     nn.Tanh(),
+        #     nn.Dropout(p=0.01),
+        #     nn.Linear(64, redundant_dim, bias=True),
+        #     nn.Tanh(),
+        # )
         
         # (batchsize, slow_dim)-->(batchsize,1,1,4)
         self.decoder = nn.Sequential(
@@ -132,7 +135,8 @@ class EVOLVER(nn.Module):
             nn.Unflatten(-1, (1, in_channels, input_1d_width))
         )
         
-        self.K_opt = Koopman_OPT(slow_dim+redundant_dim)
+        # self.K_opt = Koopman_OPT(slow_dim+redundant_dim)
+        self.K_opt = Koopman_OPT(slow_dim)
         self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, device=device)
 
         # scale inside the model
@@ -155,16 +159,16 @@ class EVOLVER(nn.Module):
         obs = self.decoder(slow_var)
         return obs
 
-    def slow2koopman(self, slow_var):
-        # (batchsize, slow_dim)-->(batchsize, koopman_dim = slow_dim + redundant_dim)
-        redundant_var = self.encoder_3(slow_var)
-        koopman_var = torch.concat((slow_var, redundant_var), dim=-1)
-        return koopman_var
+    # def slow2koopman(self, slow_var):
+    #     # (batchsize, slow_dim)-->(batchsize, koopman_dim = slow_dim + redundant_dim)
+    #     redundant_var = self.encoder_3(slow_var)
+    #     koopman_var = torch.concat((slow_var, redundant_var), dim=-1)
+    #     return koopman_var
 
-    def koopman2slow(self, koopman_var):
-        # (batchsize, koopman_dim = slow_dim + redundant_dim)-->(batchsize, slow_dim)
-        slow_var = koopman_var[:,:self.slow_dim]
-        return slow_var
+    # def koopman2slow(self, koopman_var):
+    #     # (batchsize, koopman_dim = slow_dim + redundant_dim)-->(batchsize, slow_dim)
+    #     slow_var = koopman_var[:,:self.slow_dim]
+    #     return slow_var
 
     def koopman_evolve(self, koopman_var, tau=1.):
         

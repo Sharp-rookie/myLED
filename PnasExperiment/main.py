@@ -21,7 +21,7 @@ from util.intrinsic_dimension import eval_id_embedding
 def train_time_lagged(tau, is_print=False):
     
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(tau)
     log_dir = 'logs/time-lagged/tau_' + str(tau)
     os.makedirs(log_dir, exist_ok=True)
@@ -111,7 +111,7 @@ def train_time_lagged(tau, is_print=False):
 def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False):
     
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(tau)
     log_dir = 'logs/time-lagged/tau_' + str(tau)
     os.makedirs(log_dir+'/test', exist_ok=True)
@@ -239,7 +239,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -260,7 +260,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training params
     lr = 0.001
     batch_size = 32
-    max_epoch = 100
+    max_epoch = 50
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
     MSE_loss = nn.MSELoss()
@@ -528,7 +528,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
 
@@ -659,7 +659,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    ckpt_epoch = 100
+    ckpt_epoch = 50
 
     if not long_test:
         # train
@@ -747,7 +747,7 @@ if __name__ == '__main__':
     
     # id_esitimate_pipeline(trace_num=trace_num)
     
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
+    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
     slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
     
     torch.cuda.empty_cache()
