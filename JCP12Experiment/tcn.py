@@ -106,7 +106,7 @@ class TCN(nn.Module):
 def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -222,7 +222,7 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -300,10 +300,10 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 20
-        for i in tqdm(range(1, 13*n+1-2)):
+        for i in tqdm(range(1, 25*n+1)):
             generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n+i)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, round(tau/n, 3), i, n, is_print, random_seed)
-            with open(f'tcn/tcn_evolve_test_{tau}.txt','a') as f:
+            with open(f'tcn_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{round(tau/n*i, 3)}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
 
 
@@ -314,8 +314,8 @@ if __name__ == '__main__':
     
     workers = []
     
-    tau = 0.4
-    n = 4
+    tau = 0.2
+    n = 2
     
     # train
     sample_num = None

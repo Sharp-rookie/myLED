@@ -300,7 +300,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 20
-        for i in tqdm(range(1, 13*n+1)):
+        for i in tqdm(range(1, 25*n+1)):
             generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n+i)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, round(tau/n, 3), i, n, is_print, random_seed)
             with open(f'tcn_evolve_test_{tau}.txt','a') as f:
@@ -313,19 +313,19 @@ if __name__ == '__main__':
     
     workers = []
     
-    tau = 1.0
-    n = 4
+    tau = 0.5
+    n = 2
     
     # train
-    # sample_num = None
-    # generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
-    # for seed in range(1,10+1):
-    #     is_print = True if len(workers)==0 else False
-    #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
-    #     workers[-1].start()
-    # while any([sub.exitcode==None for sub in workers]):
-    #     pass
-    # workers = []
+    sample_num = None
+    generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
+    for seed in range(1,10+1):
+        is_print = True if len(workers)==0 else False
+        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
+        workers[-1].start()
+    while any([sub.exitcode==None for sub in workers]):
+        pass
+    workers = []
     
     # test
     for seed in range(1,10+1):

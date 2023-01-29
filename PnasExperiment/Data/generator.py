@@ -123,6 +123,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     iter = tqdm(range(1, trace_num+1)) if is_print else range(1, trace_num+1)
     for trace_id in iter:
         tmp = np.load(f"Data/origin/{trace_id}/data.npz")
+        dt = tmp['dt']
         X = np.array(tmp['X'])[:, np.newaxis, np.newaxis] # (sample_num, channel, feature_num)
         Y = np.array(tmp['Y'])[:, np.newaxis, np.newaxis]
         Z = np.array(tmp['Z'])[:, np.newaxis, np.newaxis]
@@ -131,10 +132,6 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         data.append(trace[np.newaxis])
     data = np.concatenate(data, axis=0)
 
-    # subsampling
-    dt = tmp['dt']
-    subsampling = int(tau/dt) if tau!=0. else 1
-    data = data[:, ::subsampling]
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information
@@ -149,10 +146,13 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     # single-sample time steps
     if sequence_length is None:
         sequence_length = 2 if tau != 0. else 1
-
-    #######################j
+        seq_none = True
+    else:
+        seq_none = False
+    
+    ##################################
     # Create [train,val,test] dataset
-    #######################
+    ##################################
     train_num = int(0.5*trace_num)
     val_num = int(0.1*trace_num)
     test_num = int(0.4*trace_num)
@@ -163,28 +163,31 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         N_TRACE = len(trace_list[item])
         data_item = data[trace_list[item]]
 
+        # subsampling
+        step_length = int(tau/dt) if tau!=0. else 1
+
         # select sliding window index from N trace
         idxs_timestep = []
         idxs_ic = []
         for ic in range(N_TRACE):
             seq_data = data_item[ic]
-            idxs = np.arange(0, np.shape(seq_data)[0]-sequence_length, 1)
+            idxs = np.arange(0, np.shape(seq_data)[0]-step_length*(sequence_length-1), 1)
             for idx_ in idxs:
                 idxs_ic.append(ic)
                 idxs_timestep.append(idx_)
-            if is_print: print(f'\rtau[{tau}] {item} data process_1[{ic+1}/{N_TRACE}]', end='')
 
         # generator item dataset
         sequences = []
         for bn in range(len(idxs_timestep)):
             idx_ic = idxs_ic[bn]
             idx_timestep = idxs_timestep[bn]
-            tmp = data_item[idx_ic, idx_timestep:idx_timestep+sequence_length]
+            tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(sequence_length-1)+1 : step_length]
             sequences.append(tmp)
-            if is_print: print(f'\rtau[{tau}] {item} data process_2[{bn+1}/{len(idxs_timestep)}]', end='')
+            if is_print: print(f'\rtau[{tau}] sliding window for {item} data [{bn+1}/{len(idxs_timestep)}]', end='')
+        if is_print: print()
 
         sequences = np.array(sequences) 
-        if is_print: print(f'tau[{tau}]', f"{item} dataset", np.shape(sequences))
+        if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length})", np.shape(sequences))
 
         # keep sequences_length equal to sample_num
         if sample_num is not None:
@@ -202,13 +205,13 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         if is_print: print(f'tau[{tau}]', f"after process", np.shape(sequences))
 
         # save item dataset
-        if sequence_length!=1 and sequence_length!=2:
+        if not seq_none:
             np.savez(data_dir+f'/{item}_{sequence_length}.npz', data=sequences)
         else:
             np.savez(data_dir+f'/{item}.npz', data=sequences)
 
         # plot
-        if sequence_length==1 or sequence_length==2:
+        if seq_none:
             plt.figure(figsize=(16,10))
             plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
             for i in range(3):

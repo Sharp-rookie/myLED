@@ -17,7 +17,7 @@ def plot_epoch_test_log(tau, max_epoch):
             self.MADA_id = [[] for _ in range(max_epoch)]
             self.PCA_id = [[] for _ in range(max_epoch)]
 
-    fp = open(f'logs/time-lagged/tau_{tau}/test/log.txt', 'r')
+    fp = open(f'logs/time-lagged/tau_{tau}/test_log.txt', 'r')
     items = []
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
@@ -72,26 +72,26 @@ def plot_epoch_test_log(tau, max_epoch):
             MADA_id_list.append(np.mean(M.MADA_id[epoch]))
             PCA_id_list.append(np.mean(M.PCA_id[epoch]))
 
-        plt.figure(figsize=(12,9))
-        plt.title(f'tau = {M.tau}')
-        ax1 = plt.subplot(2,1,1)
-        plt.xlabel('epoch')
-        plt.ylabel('ID')
-        plt.plot(range(max_epoch), LB_id_list, label='LB')
-        plt.plot(range(max_epoch), MiND_id_list, label='MiND_ML')
-        plt.plot(range(max_epoch), MADA_id_list, label='MADA')
-        plt.plot(range(max_epoch), PCA_id_list, label='PCA')
-        plt.legend()
-        ax2 = plt.subplot(2,1,2)
-        plt.xlabel('epoch')
-        plt.ylabel('MSE')
-        plt.plot(range(max_epoch), mse_x_list, label='x')
-        plt.plot(range(max_epoch), mse_y_list, label='y')
-        plt.plot(range(max_epoch), mse_z_list, label='z')
-        # plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
-        plt.legend()
-        plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.jpg', dpi=300)
-        plt.close()
+    plt.figure(figsize=(12,9))
+    plt.title(f'tau = {M.tau}')
+    ax1 = plt.subplot(2,1,1)
+    plt.xlabel('epoch')
+    plt.ylabel('ID')
+    plt.plot(range(max_epoch), LB_id_list, label='LB')
+    plt.plot(range(max_epoch), MiND_id_list, label='MiND_ML')
+    plt.plot(range(max_epoch), MADA_id_list, label='MADA')
+    plt.plot(range(max_epoch), PCA_id_list, label='PCA')
+    plt.legend()
+    ax2 = plt.subplot(2,1,2)
+    plt.xlabel('epoch')
+    plt.ylabel('MSE')
+    plt.plot(range(max_epoch), mse_x_list, label='x')
+    plt.plot(range(max_epoch), mse_y_list, label='y')
+    plt.plot(range(max_epoch), mse_z_list, label='z')
+    # plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
+    plt.legend()
+    plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.jpg', dpi=300)
+    plt.close()
 
 
 def plot_id_per_tau(tau_list, id_epoch):

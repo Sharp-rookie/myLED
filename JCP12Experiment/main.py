@@ -18,12 +18,12 @@ from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_id_per_tau
 from util.intrinsic_dimension import eval_id_embedding
 
 
-def train_time_lagged(tau, is_print=False):
+def train_time_lagged(tau, is_print=False, random_seed=729):
     
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(tau)
-    log_dir = 'logs/time-lagged/tau_' + str(tau)
+    log_dir = 'logs/time-lagged/tau_' + str(tau) + f'/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
     
@@ -108,12 +108,12 @@ def train_time_lagged(tau, is_print=False):
     if is_print: print()
     
 
-def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False):
+def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_print=False, random_seed=729):
     
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(tau)
-    log_dir = 'logs/time-lagged/tau_' + str(tau)
+    log_dir = 'logs/time-lagged/tau_' + str(tau) + f'/seed{random_seed}'
     os.makedirs(log_dir+'/test', exist_ok=True)
     
     # testing params
@@ -135,7 +135,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
 
     # testing pipeline
-    fp = open(log_dir+'/test/log.txt', 'a')
+    fp = open('logs/time-lagged/tau_' + str(tau) + '/test_log.txt', 'a')
     for ep in range(max_epoch):
         
         # load weight file
@@ -216,11 +216,11 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
         
         # calculae ID
         def cal_id_embedding(tau, epoch, method='MLE', is_print=False):
-            var_log_dir = f'logs/time-lagged/tau_{tau}/test/epoch-{epoch}'
+            var_log_dir = log_dir + f'/test/epoch-{epoch}'
             eval_id_embedding(var_log_dir, method=method, is_print=is_print, max_point=100)
             dims = np.load(var_log_dir+f'/id_{method}.npy')
             return np.mean(dims)
-        LB_id = cal_id_embedding(tau, epoch, 'MLE')
+        LB_id = cal_id_embedding(tau, epoch, 'MLE', is_print)
         MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
         MADA_id = cal_id_embedding(tau, epoch, 'MADA')
         PCA_id = cal_id_embedding(tau, epoch, 'PCA')
@@ -263,7 +263,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 200
+    max_epoch = 100
     weight_decay = 0.001
     L1_loss = nn.L1Loss()
     MSE_loss = nn.MSELoss()
@@ -359,7 +359,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             # optimize
             ###########
             # all_loss = (slow_reconstruct_loss + 0.05*adiabatic_loss) + (0.5*koopman_evol_loss + 0.5*obs_evol_loss) / n
-            all_loss = (slow_reconstruct_loss + 0.05*adiabatic_loss) + (0.5*slow_evol_loss + 0.5*obs_evol_loss) / n
+            all_loss = (slow_reconstruct_loss + 0.3*adiabatic_loss) + (0.5*slow_evol_loss + 0.5*obs_evol_loss) / n
             optimizer.zero_grad()
             all_loss.backward()
             optimizer.step()
@@ -440,7 +440,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             adiabatic_loss = L1_loss(embeds, embed_from_obses)
             slow_reconstruct_loss = MSE_loss(slow_obses, inputs)
             evolve_loss = MSE_loss(total_obses_next, targets)
-            all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.05*adiabatic_loss
+            all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.1*adiabatic_loss
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
             
             val_loss.append(all_loss.detach().item())
@@ -449,8 +449,6 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             if epoch % 5 == 0:
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
                 
-                period_num = 5*int(18/delta_t)
-
                 # plot slow variable vs input
                 plt.figure(figsize=(16,5+2*(slow_id-1)))
                 plt.title('Val Reconstruction Curve')
@@ -469,9 +467,9 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 plt.title('Slow variable Curve')
                 for id_var in range(slow_id):
                     plt.subplot(slow_id, 1, 1+id_var)
-                    plt.plot(inputs[:period_num,0,0,0], label='c1')
-                    plt.plot(inputs[:period_num,0,0,1], label='c2')
-                    plt.plot(slow_vars[:period_num, id_var], label=f'U{id_var+1}')
+                    plt.plot(inputs[:,0,0,0], label='c1')
+                    plt.plot(inputs[:,0,0,1], label='c2')
+                    plt.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
                     plt.xlabel(item)
                 plt.legend()
                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
@@ -483,9 +481,9 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    ax.plot(inputs[:period_num,0,0,j], label='all_obs')
-                    ax.plot(slow_obses[:period_num,0,0,j], label='slow_obs')
-                    ax.plot(fast_obses[:period_num,0,0,j], label='fast_obs')
+                    ax.plot(inputs[:,0,0,j], label='all_obs')
+                    ax.plot(slow_obses[:,0,0,j], label='slow_obs')
+                    ax.plot(fast_obses[:,0,0,j], label='fast_obs')
                     ax.legend()
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_slow_obs.jpg", dpi=300)
@@ -496,8 +494,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:period_num,0,0,j], label='all_true')
-                    plt.plot(slow_obses_next[:period_num,0,0,j], label='slow_predict')
+                    plt.plot(targets[:,0,0,j], label='all_true')
+                    plt.plot(slow_obses_next[:,0,0,j], label='slow_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
                 plt.close()
@@ -507,8 +505,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:period_num,0,0,j], label='all_true')
-                    plt.plot(fast_obses_next[:period_num,0,0,j], label='fast_predict')
+                    plt.plot(targets[:,0,0,j], label='all_true')
+                    plt.plot(fast_obses_next[:,0,0,j], label='fast_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
                 plt.close()
@@ -518,8 +516,8 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:period_num,0,0,j], label='all_true')
-                    plt.plot(total_obses_next[:period_num,0,0,j], label='all_predict')
+                    plt.plot(targets[:,0,0,j], label='all_true')
+                    plt.plot(total_obses_next[:,0,0,j], label='all_predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
                 plt.close()
@@ -548,460 +546,6 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     np.savez(log_dir+'/K_lambda_curve.npz',lambda_curve=lambda_curve)
 
 
-# def train_slow_extract(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
-        
-#     # prepare
-#     device = torch.device('cuda:0')
-#     data_filepath = 'Data/data/tau_' + str(delta_t)
-#     log_dir = f'logs/slow_extract/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/random_seed{random_seed}'
-#     os.makedirs(log_dir, exist_ok=True)
-#     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
-
-#     # init model
-#     model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, redundant_dim=10, device=device)
-#     model.apply(models.weights_normal_init)
-#     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
-#     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
-    
-#     # load pretrained time-lagged AE
-#     ckpt_path = f'logs/time-lagged/tau_{tau}/checkpoints/epoch-{pretrain_epoch}.ckpt'
-#     ckpt = torch.load(ckpt_path)
-#     model.encoder_1.load_state_dict(ckpt['encoder'])
-#     model = model.to(device)
-    
-#     # training params
-#     lr = 0.001
-#     batch_size = 128
-#     max_epoch = 200
-#     weight_decay = 0.001
-#     L1_loss = nn.L1Loss()
-#     MSE_loss = nn.MSELoss()
-#     optimizer = torch.optim.AdamW(
-#         [{'params': model.encoder_2.parameters()},
-#          {'params': model.decoder.parameters()}],
-#         lr=lr, weight_decay=weight_decay)
-    
-#     # dataset
-#     train_dataset = JCP12Dataset(data_filepath, 'train', length=n)
-#     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-#     val_dataset = JCP12Dataset(data_filepath, 'val', length=n)
-#     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-    
-#     # training pipeline
-#     train_loss = []
-#     val_loss = []
-#     for epoch in range(1, max_epoch+1):
-        
-#         losses = [[],[]]
-        
-#         # train
-#         model.train()
-#         for input, _, _ in train_loader:
-            
-#             input = model.scale(input.to(device)) # (batchsize,1,1,4)
-            
-#             # obs —— slow —— obs(reconstruction)
-#             slow_var, embed = model.obs2slow(input)
-#             slow_obs = model.slow2obs(slow_var)
-#             _, embed_from_obs = model.obs2slow(slow_obs)
-            
-#             adiabatic_loss = L1_loss(embed, embed_from_obs)
-#             slow_reconstruct_loss = MSE_loss(slow_obs, input)
-
-#             all_loss = slow_reconstruct_loss + 0.05*adiabatic_loss
-#             optimizer.zero_grad()
-#             all_loss.backward()
-#             optimizer.step()
-            
-#             # record loss
-#             losses[0].append(adiabatic_loss.detach().item())
-#             losses[1].append(slow_reconstruct_loss.detach().item())
-        
-#         train_loss.append([np.mean(losses[0]), np.mean(losses[1])])
-        
-#         # validate 
-#         with torch.no_grad():
-#             inputs = []
-#             slow_vars = []
-#             targets = []
-#             slow_obses = []
-#             fast_obses = []
-#             embeds = []
-#             embed_from_obses = []
-            
-#             model.eval()
-#             for input, target, _ in val_loader:
-                
-#                 input = model.scale(input.to(device)) # (batchsize,1,1,4)
-#                 target = model.scale(target.to(device))
-                
-#                 # obs ——> slow ——> koopman
-#                 slow_var, embed = model.obs2slow(input)
-#                 # koop_var = model.slow2koopman(slow_var)
-#                 slow_obs = model.slow2obs(slow_var)
-#                 fast_obs = input - slow_obs
-#                 _, embed_from_obs = model.obs2slow(slow_obs)
-
-#                 # record results
-#                 inputs.append(input.cpu())
-#                 slow_vars.append(slow_var.cpu())
-#                 targets.append(target.cpu())
-#                 slow_obses.append(slow_obs.cpu())
-#                 fast_obses.append(fast_obs.cpu())
-#                 embeds.append(embed.cpu())
-#                 embed_from_obses.append(embed_from_obs.cpu())
-            
-#             # trans to tensor
-#             inputs = torch.concat(inputs, axis=0)
-#             slow_vars = torch.concat(slow_vars, axis=0)
-#             targets = torch.concat(targets, axis=0)
-#             slow_obses = torch.concat(slow_obses, axis=0)
-#             fast_obses = torch.concat(fast_obses, axis=0)
-#             embeds = torch.concat(embeds, axis=0)
-#             embed_from_obses = torch.concat(embed_from_obses, axis=0)
-            
-#             # cal loss
-#             adiabatic_loss = L1_loss(embeds, embed_from_obses)
-#             slow_reconstruct_loss = MSE_loss(slow_obses, inputs)
-#             all_loss = 0.5*slow_reconstruct_loss + 0.05*adiabatic_loss
-#             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}', end='')
-            
-#             val_loss.append(all_loss.detach().item())
-            
-#             # plot per 5 epoch
-#             if epoch % 10 == 0:
-#                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
-                
-#                 period_num = 5*int(18/delta_t)
-
-#                 # plot slow variable vs input
-#                 plt.figure(figsize=(16,5+2*(slow_id-1)))
-#                 plt.title('Val Reconstruction Curve')
-#                 for id_var in range(slow_id):
-#                     for index, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-#                         plt.subplot(slow_id, 4, index+1+4*(id_var))
-#                         plt.scatter(inputs[:,0,0,index], slow_vars[:, id_var], s=5)
-#                         plt.xlabel(item)
-#                         plt.ylabel(f'U{id_var+1}')
-#                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.jpg", dpi=300)
-#                 plt.close()
-                
-#                 # plot slow variable
-#                 plt.figure(figsize=(12,5+2*(slow_id-1)))
-#                 plt.title('Slow variable Curve')
-#                 for id_var in range(slow_id):
-#                     plt.subplot(slow_id, 1, 1+id_var)
-#                     plt.plot(inputs[:period_num,0,0,0], label='c1')
-#                     plt.plot(inputs[:period_num,0,0,1], label='c2')
-#                     plt.plot(slow_vars[:period_num, id_var], label=f'U{id_var+1}')
-#                     plt.xlabel(item)
-#                 plt.legend()
-#                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
-#                 plt.close()
-                
-#                 # plot fast & slow observation reconstruction curve
-#                 plt.figure(figsize=(16,5))
-#                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-#                     ax = plt.subplot(1,4,j+1)
-#                     ax.set_title(item)
-#                     ax.plot(inputs[:period_num,0,0,j], label='all_obs')
-#                     ax.plot(slow_obses[:period_num,0,0,j], label='slow_obs')
-#                     ax.plot(fast_obses[:period_num,0,0,j], label='fast_obs')
-#                     ax.legend()
-#                 plt.subplots_adjust(wspace=0.2)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_slow_obs.jpg", dpi=300)
-#                 plt.close()
-        
-#                 # save model
-#                 torch.save(model.state_dict(), log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
-    
-#     # plot loss curve
-#     train_loss = np.array(train_loss)
-#     plt.figure()
-#     for i, item in enumerate(['adiabatic','slow_reconstruct']):
-#         plt.plot(train_loss[:, i], label=item)
-#     plt.xlabel('epoch')
-#     plt.legend()
-#     plt.title('Training Loss Curve')
-#     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
-#     np.save(log_dir+'/val_loss_curve.npy', val_loss)
-
-#     if is_print: print('slow extractor training over!')
-
-
-# def train_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
-
-#     # prepare
-#     device = torch.device('cuda:0')
-#     data_filepath = 'Data/data/tau_' + str(delta_t)
-#     log_dir = f'logs/evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/random_seed{random_seed}'
-#     os.makedirs(log_dir, exist_ok=True)
-#     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
-
-#     # init model
-#     model = models.EVOLVER(in_channels=1, input_1d_width=4, embed_dim=64, slow_dim=slow_id, redundant_dim=10, device=device)
-#     ckpt_path = f'logs/slow_extract/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/random_seed{random_seed}/checkpoints/epoch-{200}.ckpt'
-#     ckpt = torch.load(ckpt_path)
-#     model.load_state_dict(ckpt)
-#     model = model.to(device)
-    
-#     # training params
-#     lr = 0.001
-#     batch_size = 128
-#     max_epoch = 10
-#     weight_decay = 0.001
-#     L1_loss = nn.L1Loss()
-#     MSE_loss = nn.MSELoss()
-#     optimizer = torch.optim.AdamW(
-#         [{'params': model.K_opt.parameters()},
-#          {'params': model.lstm.parameters()}],
-#         lr=lr, weight_decay=weight_decay)
-    
-#     # dataset
-#     train_dataset = JCP12Dataset(data_filepath, 'train', length=n)
-#     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-#     val_dataset = JCP12Dataset(data_filepath, 'val', length=n)
-#     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
-    
-#     # training pipeline
-#     train_loss = []
-#     val_loss = []
-#     lambda_curve = [[] for _ in range(slow_id)]
-#     for epoch in range(1, max_epoch+1):
-        
-#         losses = [[],[]]
-        
-#         # train
-#         model.train()
-#         [lambda_curve[i].append(model.K_opt.Lambda[i].detach().cpu()) for i in range(slow_id) ]
-#         for input, _, internl_units in train_loader:
-            
-#             input = model.scale(input.to(device)) # (batchsize,1,1,4)
-            
-#             # obs —— slow —— obs(reconstruction)
-#             slow_var, embed = model.obs2slow(input)
-#             slow_obs = model.slow2obs(slow_var)
-
-#             ################
-#             # n-step evolve
-#             ################
-#             fast_obs = input - slow_obs
-#             obs_evol_loss, slow_evol_loss = 0, 0
-#             for i in range(1, len(internl_units)):
-                
-#                 unit = model.scale(internl_units[i].to(device)) # t+i
-                
-#                 # obs ——> slow ——> koopman
-#                 unit_slow_var, _ = model.obs2slow(unit)
-#                 # unit_koop_var = model.slow2koopman(unit_slow_var)
-
-#                 # slow evolve
-#                 t = torch.tensor([delta_t * i], device=device) # delta_t
-#                 unit_slow_var_next = model.koopman_evolve(slow_var, tau=t) # t ——> t + i*delta_t
-
-#                 # koopman ——> slow ——> obs
-#                 unit_slow_obs_next = model.slow2obs(unit_slow_var_next)
-                
-#                 # fast obs evolve
-#                 unit_fast_obs_next, _ = model.lstm_evolve(fast_obs, T=i) # t ——> t + i*delta_t
-                
-#                 # total obs evolve
-#                 unit_obs_next = unit_slow_obs_next + unit_fast_obs_next
-                
-#                 # evolve loss
-#                 slow_evol_loss += MSE_loss(unit_slow_var_next, unit_slow_var)
-#                 obs_evol_loss += MSE_loss(unit_obs_next, unit)
-            
-#             ###########
-#             # optimize
-#             ###########
-#             all_loss = 0.5*slow_evol_loss + 0.5*obs_evol_loss
-#             optimizer.zero_grad()
-#             all_loss.backward()
-#             optimizer.step()
-            
-#             # record loss
-#             losses[0].append(slow_evol_loss.detach().item())
-#             losses[1].append(obs_evol_loss.detach().item())
-        
-#         train_loss.append([np.mean(losses[0]), np.mean(losses[1])])
-        
-#         # validate 
-#         with torch.no_grad():
-#             inputs = []
-#             slow_vars = []
-#             targets = []
-#             slow_obses = []
-#             slow_obses_next = []
-#             fast_obses = []
-#             fast_obses_next = []
-#             total_obses_next = []
-#             embeds = []
-#             embed_from_obses = []
-            
-#             model.eval()
-#             for input, target, _ in val_loader:
-                
-#                 input = model.scale(input.to(device)) # (batchsize,1,1,4)
-#                 target = model.scale(target.to(device))
-                
-#                 # obs ——> slow ——> koopman
-#                 slow_var, embed = model.obs2slow(input)
-#                 slow_obs = model.slow2obs(slow_var)
-#                 _, embed_from_obs = model.obs2slow(slow_obs)
-                
-#                 # koopman evolve
-#                 t = torch.tensor([tau-delta_t], device=device)
-#                 slow_var_next = model.koopman_evolve(slow_var, tau=t)
-#                 slow_obs_next = model.slow2obs(slow_var_next)
-                
-#                 # fast obs evolve
-#                 fast_obs = input - slow_obs
-#                 fast_obs_next, _ = model.lstm_evolve(fast_obs, T=n)
-                
-#                 # total obs evolve
-#                 total_obs_next = slow_obs_next + fast_obs_next
-
-#                 # record results
-#                 inputs.append(input.cpu())
-#                 slow_vars.append(slow_var.cpu())
-#                 targets.append(target.cpu())
-#                 slow_obses.append(slow_obs.cpu())
-#                 slow_obses_next.append(slow_obs_next.cpu())
-#                 fast_obses.append(fast_obs.cpu())
-#                 fast_obses_next.append(fast_obs_next.cpu())
-#                 total_obses_next.append(total_obs_next.cpu())
-#                 embeds.append(embed.cpu())
-#                 embed_from_obses.append(embed_from_obs.cpu())
-            
-#             # trans to tensor
-#             inputs = torch.concat(inputs, axis=0)
-#             slow_vars = torch.concat(slow_vars, axis=0)
-#             targets = torch.concat(targets, axis=0)
-#             slow_obses = torch.concat(slow_obses, axis=0)
-#             slow_obses_next = torch.concat(slow_obses_next, axis=0)
-#             fast_obses = torch.concat(fast_obses, axis=0)
-#             fast_obses_next = torch.concat(fast_obses_next, axis=0)
-#             total_obses_next = torch.concat(total_obses_next, axis=0)
-#             embeds = torch.concat(embeds, axis=0)
-#             embed_from_obses = torch.concat(embed_from_obses, axis=0)
-            
-#             # cal loss
-#             adiabatic_loss = L1_loss(embeds, embed_from_obses)
-#             slow_reconstruct_loss = MSE_loss(slow_obses, inputs)
-#             evolve_loss = MSE_loss(total_obses_next, targets)
-#             all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.05*adiabatic_loss
-#             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
-            
-#             val_loss.append(all_loss.detach().item())
-            
-#             # plot per 5 epoch
-#             if epoch % 5 == 0:
-#                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
-                
-#                 period_num = 5*int(18/delta_t)
-
-#                 # plot slow variable vs input
-#                 plt.figure(figsize=(16,5+2*(slow_id-1)))
-#                 plt.title('Val Reconstruction Curve')
-#                 for id_var in range(slow_id):
-#                     for index, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-#                         plt.subplot(slow_id, 4, index+1+4*(id_var))
-#                         plt.scatter(inputs[:,0,0,index], slow_vars[:, id_var], s=5)
-#                         plt.xlabel(item)
-#                         plt.ylabel(f'U{id_var+1}')
-#                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.jpg", dpi=300)
-#                 plt.close()
-                
-#                 # plot slow variable
-#                 plt.figure(figsize=(12,5+2*(slow_id-1)))
-#                 plt.title('Slow variable Curve')
-#                 for id_var in range(slow_id):
-#                     ax = plt.subplot(slow_id, 1, 1+id_var)
-#                     ax.plot(inputs[:period_num,0,0,0], label='c1')
-#                     ax.plot(inputs[:period_num,0,0,1], label='c2')
-#                     ax.plot(slow_vars[:period_num, id_var], label=f'U{id_var+1}')
-#                     ax.legend()
-#                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
-#                 plt.close()
-                
-#                 # plot fast & slow observation reconstruction curve
-#                 plt.figure(figsize=(16,5))
-#                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-#                     ax = plt.subplot(1,4,j+1)
-#                     ax.set_title(item)
-#                     ax.plot(inputs[:period_num,0,0,j], label='all_obs')
-#                     ax.plot(slow_obses[:period_num,0,0,j], label='slow_obs')
-#                     ax.plot(fast_obses[:period_num,0,0,j], label='fast_obs')
-#                     ax.legend()
-#                 plt.subplots_adjust(wspace=0.2)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_slow_obs.jpg", dpi=300)
-#                 plt.close()
-                
-#                 # plot slow observation one-step prediction curve
-#                 plt.figure(figsize=(16,5))
-#                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-#                     ax = plt.subplot(1,4,j+1)
-#                     ax.set_title(item)
-#                     ax.plot(targets[:period_num,0,0,j], label='all_true')
-#                     ax.plot(slow_obses_next[:period_num,0,0,j], label='slow_predict')
-#                     ax.legend()
-#                 plt.subplots_adjust(wspace=0.2)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
-#                 plt.close()
-                
-#                 # plot fast observation one-step prediction curve
-#                 plt.figure(figsize=(16,5))
-#                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-#                     ax = plt.subplot(1,4,j+1)
-#                     ax.set_title(item)
-#                     ax.plot(targets[:period_num,0,0,j], label='all_true')
-#                     ax.plot(fast_obses_next[:period_num,0,0,j], label='fast_predict')
-#                     ax.legend()
-#                 plt.subplots_adjust(wspace=0.2)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
-#                 plt.close()
-                
-#                 # plot total observation one-step prediction curve
-#                 plt.figure(figsize=(16,5))
-#                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
-#                     ax = plt.subplot(1,4,j+1)
-#                     ax.set_title(item)
-#                     ax.plot(targets[:period_num,0,0,j], label='all_true')
-#                     ax.plot(total_obses_next[:period_num,0,0,j], label='all_predict')
-#                     ax.legend()
-#                 plt.subplots_adjust(wspace=0.2)
-#                 plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
-#                 plt.close()
-        
-#                 # save model
-#                 torch.save(model.state_dict(), log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
-    
-#     # plot loss curve
-#     train_loss = np.array(train_loss)
-#     plt.figure()
-#     for i, item in enumerate(['koopman_evolve','total_evolve']):
-#         plt.plot(train_loss[:, i], label=item)
-#     plt.xlabel('epoch')
-#     plt.legend()
-#     plt.title('Training Loss Curve')
-#     plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
-#     np.save(log_dir+'/val_loss_curve.npy', val_loss)
-
-#     # plot Koopman Lambda curve
-#     plt.figure()
-#     for i in range(slow_id):
-#         plt.plot(lambda_curve[i], label=f'lambda[{i}]')
-#     plt.xlabel('epoch')
-#     plt.legend()
-#     plt.savefig(log_dir+'/K_lambda_curve.pdf', dpi=300)
-#     np.savez(log_dir+'K_lambda_curve.npz',lambda_curve=lambda_curve)
-
-
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
@@ -1016,6 +560,12 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
     model = model.to(device)
+
+    if is_print and delta_t==0.1:
+        print('Koopman V:')
+        print(model.K_opt.V.detach().cpu().numpy())
+        print('Koopman Lambda:')
+        print(model.K_opt.Lambda.detach().cpu().numpy())
 
     # # record koopman param
     # np.savetxt('koopman_params.txt', (model.K_opt.V.detach().cpu().numpy(), model.K_opt.Lambda.detach().cpu().numpy()))
@@ -1088,15 +638,13 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
                 
     os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
     
-    period_num = 30*int(18/delta_t)
-
     # plot koopman space prediction curve
     plt.figure(figsize=(16,5))
     for j, item in enumerate(['u1', 'u2']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
-        ax.plot(slow_vars_truth[:period_num,j], label='"true"')
-        ax.plot(slow_vars_next[:period_num,j], label='predict')
+        ax.plot(slow_vars_truth[:,j], label='"true"')
+        ax.plot(slow_vars_next[:,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/{delta_t}/koopman_pred.jpg", dpi=300)
@@ -1107,8 +655,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
-        ax.plot(true[:period_num,0,0,j], label='true')
-        ax.plot(slow_obses_next[:period_num,0,0,j], label='predict')
+        ax.plot(true[:,0,0,j], label='true')
+        ax.plot(slow_obses_next[:,0,0,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.jpg", dpi=300)
@@ -1119,8 +667,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
-        ax.plot(true[:period_num,0,0,j], label='true')
-        ax.plot(fast_obses_next[:period_num,0,0,j], label='predict')
+        ax.plot(true[:,0,0,j], label='true')
+        ax.plot(fast_obses_next[:,0,0,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
@@ -1131,8 +679,8 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
-        ax.plot(true[:period_num,0,0,j], label='true')
-        ax.plot(pred[:period_num,0,0,j], label='predict')
+        ax.plot(true[:,0,0,j], label='true')
+        ax.plot(pred[:,0,0,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/{delta_t}/total_pred.jpg", dpi=300)
@@ -1147,17 +695,11 @@ def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=Fals
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
     
-    sample_num = 100
-
-    # generate dataset
-    generate_dataset(trace_num, tau, sample_num, is_print=is_print)
     # train
-    train_time_lagged(tau, is_print)
+    train_time_lagged(tau, is_print, random_seed)
     # test and calculating ID
     # test_and_save_embeddings_of_time_lagged(tau, None, is_print)
-    test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}", is_print)
-    # plot id of each epoch
-    plot_epoch_test_log(tau, max_epoch=100+1)
+    test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}/seed{random_seed}", is_print, random_seed)
 
 
 def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_print=False, id_list=[1,2,3,4], long_test=False):
@@ -1166,17 +708,11 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    ckpt_epoch = 200
-
-    E2E = True
+    ckpt_epoch = 100
 
     if not long_test:
         # train
-        if E2E:
-            train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print, random_seed=random_seed)
-        else:
-            train_slow_extract(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print, random_seed=random_seed)
-            train_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print, random_seed=random_seed)
+        train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, round(tau/n,3), n, is_print=is_print, random_seed=random_seed)
         # plot mse curve of each id
         try: plot_slow_ae_loss(tau, pretrain_epoch, delta_t, id_list) 
         except: pass
@@ -1185,7 +721,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
         for i in tqdm(range(1, 5*n+1)):
             delta_t = round(tau/n*i, 3)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
-            with open(f'evolve_test_{tau}.txt','a') as f:
+            with open(f'pretrain{pretrain_epoch}_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
     
     
@@ -1197,18 +733,24 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9, dt=0.0001):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]
+    tau_list = [0.0, 0.5, 1.0, 1.5]
     workers = []
     
     # id esitimate sub-process
     for tau in tau_list:
-        is_print = True if len(workers)==0 else False
-        workers.append(Process(target=worker_1, args=(tau, trace_num, 729, cpu_num, is_print), daemon=True))
-        workers[-1].start()
+
+        # generate dataset
+        generate_dataset(trace_num, tau, None, is_print=True)
+
+        for seed in range(1, 5+1):
+            is_print = True if len(workers)==0 else False
+            workers.append(Process(target=worker_1, args=(tau, trace_num, seed, cpu_num, is_print), daemon=True))
+            workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
         pass
 
-    plot_id_per_tau(tau_list, 50)
+    [plot_epoch_test_log(tau, max_epoch=50+1) for tau in tau_list]
+    # plot_id_per_tau(tau_list, 50)
     
     print('ID Esitimate Over!')
 
@@ -1220,7 +762,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     workers = []
     
     # generate dataset sub-process
-    sample_num = 100
+    sample_num = None
     for tau in tau_list:
         if not long_test:
             # dataset for training
@@ -1240,7 +782,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
     # slow evolve sub-process
     for tau in tau_list:
-        for pretrain_epoch in [30]:
+        for pretrain_epoch in [40]:
             for slow_id in id_list:
                 for random_seed in range(1,10+1):
                     is_print = True if len(workers)==0 else False
@@ -1311,11 +853,13 @@ def test_koopman_evolve():
 
 if __name__ == '__main__':
     
-    trace_num = 500
+    trace_num = 100
     
-    # data_generator_pipeline(trace_num=trace_num, total_t=16)
-    # id_esitimate_pipeline(trace_num=trace_num)
+    data_generator_pipeline(trace_num=trace_num, total_t=5)
+    id_esitimate_pipeline(trace_num=trace_num)
     # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
-    slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
 
     # test_koopman_evolve()
+
+    torch.cuda.empty_cache()
