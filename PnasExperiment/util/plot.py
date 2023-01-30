@@ -96,9 +96,9 @@ def plot_epoch_test_log(tau, max_epoch):
 
 def plot_id_per_tau(tau_list, id_epoch):
 
-    id_per_tau = [[] for _ in range(tau_list)]
+    id_per_tau = [[] for _ in tau_list]
     for i, tau in enumerate(tau_list):
-        fp = open(f'logs/time-lagged/tau_{tau}/test/log.txt', 'r')
+        fp = open(f'logs/time-lagged/tau_{round(tau,2)}/test_log.txt', 'r')
         for line in fp.readlines():
             seed = int(line[:-1].split(',')[1])
             epoch = int(line[:-1].split(',')[5])
@@ -107,14 +107,23 @@ def plot_id_per_tau(tau_list, id_epoch):
             MADA_id = float(line[:-1].split(',')[8])
             PCA_id = float(line[:-1].split(',')[9])
 
-            if epoch == id_epoch:
+            if epoch in id_epoch:
                 id_per_tau[i].append([LB_id, MiND_id, MADA_id, PCA_id])
     
-    id_per_tau = np.mean(id_per_tau, axis=-2)
+    for i in range(len(tau_list)):
+        id_per_tau[i] = np.mean(id_per_tau[i], axis=0)
+    id_per_tau = np.array(id_per_tau)
+
+    round_id_per_tau = []
+    for id in id_per_tau:
+        round_id_per_tau.append([round(id[0]),round(id[1]),round(id[2]),round(id[3])])
+    round_id_per_tau = np.array(round_id_per_tau)
 
     plt.figure()
-    for i, item in enumerate(['MLE','MiND','MADA','PCA']):
-        plt.plot(tau_list, id_per_tau[:,i], label=item)
+    # for i, item in enumerate(['MLE','MiND','MADA','PCA']):
+    for i, item in enumerate(['MLE']):
+        plt.plot(tau_list, id_per_tau[:,i], label=item+"")
+        plt.plot(tau_list, round_id_per_tau[:,i], label=item+"-round")
     plt.legend()
     plt.xlabel('tau / s')
     plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
@@ -205,5 +214,5 @@ def plot_evolve(tau):
 
 if __name__ == '__main__':
     
-    # plot_pnas_autocorr()
-    plot_evolve(2.5)
+    plot_pnas_autocorr()
+    # plot_evolve(2.5)

@@ -187,16 +187,14 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
             if epoch % 5 == 0:
                 
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
-
-                period_num = 5*int(9/delta_t)
                 
                 # plot total infomation one-step prediction curve
                 plt.figure(figsize=(16,5))
                 for j, item in enumerate(['X','Y','Z']):
                     ax = plt.subplot(1,3,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:period_num,0,0,j], label='true')
-                    plt.plot(outputs[:period_num,0,0,j], label='predict')
+                    plt.plot(targets[:,0,0,j], label='true')
+                    plt.plot(outputs[:,0,0,j], label='predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
                 plt.close()
@@ -273,13 +271,12 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, ra
     MAE = np.mean(np.abs(pred - true))
     
     # plot total infomation prediction curve
-    period_num = 50
     plt.figure(figsize=(16,5))
     for j, item in enumerate(['X','Y','Z']):
         ax = plt.subplot(1,3,j+1)
         ax.set_title(item)
-        plt.plot(true[:period_num,0,0,j], label='true')
-        plt.plot(pred[:period_num,0,0,j], label='predict')
+        plt.plot(true[:,0,0,j], label='true')
+        plt.plot(pred[:,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
     plt.close()
@@ -328,7 +325,7 @@ if __name__ == '__main__':
     workers = []
     
     # test
-    for seed in range(1,10+1):
+    for seed in range(1,5+1):
         main(trace_num, tau, n, True, True, seed)
     #     is_print = True if len(workers)==0 else False
     #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))

@@ -42,7 +42,7 @@ class LSTM(nn.Module):
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
         self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
     
-    def forward(self, x, device=torch.device('cpu')):
+    def forward(self, x, device=torch.device('cuda:1')):
         
         h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=device)
         c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=device)
@@ -64,7 +64,7 @@ class LSTM(nn.Module):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -145,16 +145,14 @@ def train(tau, delta_t, is_print=False, random_seed=729):
             if epoch % 5 == 0:
                 
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
-
-                period_num = 5*int(9/delta_t)
                 
                 # plot total infomation one-step prediction curve
                 plt.figure(figsize=(16,4))
                 for j, item in enumerate(['c1','c2','c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:period_num,0,0,j], label='true')
-                    plt.plot(outputs[:period_num,0,0,j], label='predict')
+                    plt.plot(targets[:,0,0,j], label='true')
+                    plt.plot(outputs[:,0,0,j], label='predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
                 plt.close()
@@ -180,7 +178,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cpu')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -230,13 +228,12 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
     MAE = np.mean(np.abs(pred - true))
     
     # plot total infomation prediction curve
-    period_num = 100
     plt.figure(figsize=(16,4))
     for j, item in enumerate(['c1','c2','c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
-        plt.plot(true[:period_num,0,0,j], label='true')
-        plt.plot(pred[:period_num,0,0,j], label='predict')
+        plt.plot(true[:,0,0,j], label='true')
+        plt.plot(pred[:,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
     plt.close()
@@ -257,7 +254,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 50
-        for i in tqdm(range(1, 5*n+1)):
+        for i in tqdm(range(1, 6*n+1+2)):
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, False)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
@@ -267,16 +264,16 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
 
 if __name__ == '__main__':
     
-    trace_num = 1000
+    trace_num = 200
     
     workers = []
     
-    tau = 1.0
-    n = 10
+    tau = 0.8
+    n = 8
     
     # train
     sample_num = None
-    generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
+    generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
     for seed in range(1,10+1):
         is_print = True if len(workers)==0 else False
         workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))

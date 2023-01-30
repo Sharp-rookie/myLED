@@ -10,7 +10,7 @@ from multiprocessing import Process
 from pytorch_lightning import seed_everything
 
 from util import set_cpu_num
-from Data.dataset import JCP12Dataset4TCN
+from Data.dataset import JCP12Dataset
 from Data.generator import generate_dataset
 
 
@@ -121,15 +121,15 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 20
+    max_epoch = 50
     weight_decay = 0.001
     MSE_loss = nn.MSELoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = JCP12Dataset4TCN(data_filepath, 'train', length=sequence_length, sequence_length=sequence_length)
+    train_dataset = JCP12Dataset(data_filepath, 'train')
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = JCP12Dataset4TCN(data_filepath, 'val', length=sequence_length, sequence_length=sequence_length)
+    val_dataset = JCP12Dataset(data_filepath, 'val')
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
@@ -187,16 +187,14 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
             if epoch % 5 == 0:
                 
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
-
-                period_num = 5*int(9/delta_t)
                 
                 # plot total infomation one-step prediction curve
                 plt.figure(figsize=(16,4))
                 for j, item in enumerate(['c1','c2','c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:period_num,0,0,j], label='true')
-                    plt.plot(outputs[:period_num,0,0,j], label='predict')
+                    plt.plot(targets[:,0,0,j], label='true')
+                    plt.plot(outputs[:,0,0,j], label='predict')
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
                 plt.close()
@@ -236,7 +234,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, ra
     model = model.to(device)
     
     # dataset
-    test_dataset = JCP12Dataset4TCN(data_filepath, 'test', length=sequence_length+n, sequence_length=sequence_length)
+    test_dataset = JCP12Dataset(data_filepath, 'test')
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # testing pipeline        
@@ -273,13 +271,12 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, ra
     MAE = np.mean(np.abs(pred - true))
     
     # plot total infomation prediction curve
-    period_num = 100
     plt.figure(figsize=(16,4))
     for j, item in enumerate(['c1','c2','c3', 'c4']):
         ax = plt.subplot(1,4,j+1)
         ax.set_title(item)
-        plt.plot(true[:period_num,0,0,j], label='true')
-        plt.plot(pred[:period_num,0,0,j], label='predict')
+        plt.plot(true[:,0,0,j], label='true')
+        plt.plot(pred[:,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/predict_{round(tau/sequence_length*n,3)}.jpg", dpi=300)
     plt.close()
@@ -300,8 +297,8 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 20
-        for i in tqdm(range(1, 25*n+1)):
-            generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n+i)
+        for i in tqdm(range(1, 6*n+1+2)):
+            generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, round(tau/n, 3), i, n, is_print, random_seed)
             with open(f'tcn_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{round(tau/n*i, 3)}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
@@ -309,8 +306,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
 
 if __name__ == '__main__':
     
-    trace_num = 1000
-    sequence_length = 10
+    trace_num = 200
     
     workers = []
     
@@ -319,7 +315,7 @@ if __name__ == '__main__':
     
     # train
     sample_num = None
-    generate_dataset(trace_num, round(tau/n, 3), sample_num, False, n)
+    generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
     for seed in range(1,10+1):
         is_print = True if len(workers)==0 else False
         workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))

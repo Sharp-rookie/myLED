@@ -84,9 +84,9 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     ##################################
     # Create [train,val,test] dataset
     ##################################
-    train_num = int(0.5*trace_num)
+    train_num = int(0.7*trace_num)
     val_num = int(0.1*trace_num)
-    test_num = int(0.4*trace_num)
+    test_num = int(0.2*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
                 
@@ -118,7 +118,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         if is_print: print()
 
         sequences = np.array(sequences) 
-        if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length})", np.shape(sequences))
+        if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length}, step_length={step_length})", np.shape(sequences))
 
         # keep sequences_length equal to sample_num
         if sample_num is not None:
@@ -150,7 +150,16 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.plot(sequences[:,0,0,2], label='c3')
             plt.plot(sequences[:,0,0,3], label='c4')
             plt.legend()
-            plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
+            plt.savefig(data_dir+f'/{item}_input.jpg', dpi=300)
+
+            plt.figure(figsize=(16,10))
+            plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+            plt.plot(sequences[:,sequence_length-1,0,0], label='c1')
+            plt.plot(sequences[:,sequence_length-1,0,1], label='c2')
+            plt.plot(sequences[:,sequence_length-1,0,2], label='c3')
+            plt.plot(sequences[:,sequence_length-1,0,3], label='c4')
+            plt.legend()
+            plt.savefig(data_dir+f'/{item}_target.jpg', dpi=300)
             
             
 def generate_informer_dataset(trace_num, sample_num=None):
