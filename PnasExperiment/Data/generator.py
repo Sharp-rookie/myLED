@@ -26,7 +26,7 @@ def findNearestPoint(data_t, start=0, object_t=10.0):
     return index
 
 
-def time_discretization(seed, total_t, origin_dt=False, is_print=False):
+def time_discretization(seed, total_t, dt=None, is_print=False):
     """Time-forward NearestNeighbor interpolate to discretizate the time"""
 
     data = np.load(f'Data/origin/{seed}/origin.npz')
@@ -35,7 +35,7 @@ def time_discretization(seed, total_t, origin_dt=False, is_print=False):
     data_Y = data['Y']
     data_Z = data['Z']
 
-    dt = 5e-6 if origin_dt else 5e-3 # 5e-6是手动pnas这个实验仿真得出的时间间隔大概平均值
+    dt = 5e-6 if dt is None else dt # 5e-6是手动pnas这个实验仿真得出的时间间隔大概平均值
     current_t = 0.0
     index = 0
     t, X, Y, Z = [], [], [], []
@@ -99,9 +99,9 @@ def generate_original_data(trace_num, total_t):
     subprocess = []
     for seed in range(1, trace_num+1):
         if not os.path.exists(f'Data/origin/{seed}/data.npz'):
-            origin_dt = True
+            dt = 1e-3
             is_print = len(subprocess)==0
-            subprocess.append(Process(target=time_discretization, args=(seed, total_t, origin_dt, is_print), daemon=True))
+            subprocess.append(Process(target=time_discretization, args=(seed, total_t, dt, is_print), daemon=True))
             subprocess[-1].start()
             # print(f'\rStart process[seed={seed}] for time-discrete data' + ' '*30)
     while any([subp.exitcode == None for subp in subprocess]):
@@ -153,9 +153,9 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     ##################################
     # Create [train,val,test] dataset
     ##################################
-    train_num = int(0.5*trace_num)
+    train_num = int(0.7*trace_num)
     val_num = int(0.1*trace_num)
-    test_num = int(0.4*trace_num)
+    test_num = int(0.2*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
                 
@@ -219,7 +219,16 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
                 ax.set_title(['X','Y','Z'][i])
                 plt.plot(sequences[:, 0, 0, i])
             plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
-            plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
+            plt.savefig(data_dir+f'/{item}_input.jpg', dpi=300)
+
+            plt.figure(figsize=(16,10))
+            plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+            for i in range(3):
+                ax = plt.subplot(3,1,i+1)
+                ax.set_title(['X','Y','Z'][i])
+                plt.plot(sequences[:, sequence_length-1, 0, i])
+            plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
+            plt.savefig(data_dir+f'/{item}_target.jpg', dpi=300)
             
         
 def generate_informer_dataset(trace_num, sample_num=None):

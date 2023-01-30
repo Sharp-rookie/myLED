@@ -101,14 +101,12 @@ def plot_epoch_test_log(tau, max_epoch):
     plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.jpg', dpi=300)
     plt.close()
 
-    print(tau, LB_id_list[20])
-
 
 def plot_id_per_tau(tau_list, id_epoch):
 
     id_per_tau = [[] for _ in tau_list]
     for i, tau in enumerate(tau_list):
-        fp = open(f'logs/time-lagged/tau_{tau}/test_log.txt', 'r')
+        fp = open(f'logs/time-lagged/tau_{round(tau,2)}/test_log.txt', 'r')
         for line in fp.readlines():
             seed = int(line[:-1].split(',')[1])
             epoch = int(line[:-1].split(',')[6])
@@ -117,14 +115,23 @@ def plot_id_per_tau(tau_list, id_epoch):
             MADA_id = float(line[:-1].split(',')[9])
             PCA_id = float(line[:-1].split(',')[10])
 
-            if epoch == id_epoch:
+            if epoch in id_epoch:
                 id_per_tau[i].append([LB_id, MiND_id, MADA_id, PCA_id])
     
-    id_per_tau = np.mean(id_per_tau, axis=-2)
+    for i in range(len(tau_list)):
+        id_per_tau[i] = np.mean(id_per_tau[i], axis=0)
+    id_per_tau = np.array(id_per_tau)
+
+    round_id_per_tau = []
+    for id in id_per_tau:
+        round_id_per_tau.append([round(id[0]),round(id[1]),round(id[2]),round(id[3])])
+    round_id_per_tau = np.array(round_id_per_tau)
 
     plt.figure()
-    for i, item in enumerate(['MLE','MiND','MADA','PCA']):
-        plt.plot(tau_list, id_per_tau[:,i], label=item)
+    # for i, item in enumerate(['MLE','MiND','MADA','PCA']):
+    for i, item in enumerate(['MLE']):
+        plt.plot(tau_list, id_per_tau[:,i], label=item+"")
+        plt.plot(tau_list, round_id_per_tau[:,i], label=item+"-round")
     plt.legend()
     plt.xlabel('tau / s')
     plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
@@ -171,7 +178,7 @@ def plot_jcp12_autocorr():
 
     simdata = np.load('Data/origin/origin.npz')
     
-    trace_num = 10
+    trace_num = 3
     corrC1, corrC2, corrC3, corrC4 = [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)]
     for trace_id in range(trace_num):
         tmp = np.array(simdata['trace'])[trace_id]
@@ -182,7 +189,7 @@ def plot_jcp12_autocorr():
 
         data = pd.DataFrame(np.concatenate((c1,c2,c3,c4), axis=-1), columns=['c1','c2','c3','c4'])
         
-        lag_list = np.arange(0, 10*10000, 100)
+        lag_list = np.arange(0, 5*100, 1)
         for lag in tqdm(lag_list):
             corrC1[trace_id].append(data['c1'].autocorr(lag=lag))
             corrC2[trace_id].append(data['c2'].autocorr(lag=lag))
@@ -195,10 +202,10 @@ def plot_jcp12_autocorr():
     corrC4 = np.mean(corrC4, axis=0)
     
     plt.figure(figsize=(12,8))
-    plt.plot(lag_list*1e-4, np.array(corrC1), label='c1')
-    plt.plot(lag_list*1e-4, np.array(corrC2), label='c2')
-    plt.plot(lag_list*1e-4, np.array(corrC3), label='c3')
-    plt.plot(lag_list*1e-4, np.array(corrC4), label='c4')
+    plt.plot(lag_list*1e-2, np.array(corrC1), label='c1')
+    plt.plot(lag_list*1e-2, np.array(corrC2), label='c2')
+    plt.plot(lag_list*1e-2, np.array(corrC3), label='c3')
+    plt.plot(lag_list*1e-2, np.array(corrC4), label='c4')
     plt.xlabel('time/s')
     plt.legend()
     plt.title('Autocorrelation')
@@ -207,7 +214,7 @@ def plot_jcp12_autocorr():
     
 def plot_evolve(tau):
     
-    our = open(f'pretrain40_evolve_test_{tau}.txt', 'r')
+    our = open(f'pretrain50_evolve_test_{tau}.txt', 'r')
     lstm = open(f'lstm_evolve_test_{tau}.txt', 'r')
     tcn = open(f'tcn_evolve_test_{tau}.txt', 'r')
     

@@ -37,7 +37,7 @@ def train_time_lagged(tau, is_print=False, random_seed=729):
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
@@ -71,24 +71,25 @@ def train_time_lagged(tau, is_print=False, random_seed=729):
             
         loss_curve.append(np.mean(losses))
         
-        # validate
-        with torch.no_grad():
-            targets = []
-            outputs = []
+        # # validate
+        # with torch.no_grad():
+        #     targets = []
+        #     outputs = []
             
-            model.eval()
-            for input, target in val_loader:
-                input = model.scale(input.to(device))
-                target = model.scale(target.to(device))
+        #     model.eval()
+        #     for input, target in val_loader:
+        #         input = model.scale(input.to(device))
+        #         target = model.scale(target.to(device))
             
-                output, _ = model.forward(input)
-                outputs.append(output.cpu())
-                targets.append(target.cpu())
+        #         output, _ = model.forward(input)
+        #         outputs.append(output.cpu())
+        #         targets.append(target.cpu())
                 
-            targets = torch.concat(targets, axis=0)
-            outputs = torch.concat(outputs, axis=0)
-            mse = loss_func(outputs, targets)
-            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE={mse:.5f}', end='')
+        #     targets = torch.concat(targets, axis=0)
+        #     outputs = torch.concat(outputs, axis=0)
+        #     mse = loss_func(outputs, targets)
+        #     if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE={mse:.5f}', end='')
+        if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] train-MSE={loss:.5f}', end='')
         
         # save each epoch model
         model.train()
@@ -118,7 +119,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     
     # testing params
     batch_size = 128
-    max_epoch = 50
+    max_epoch = 100
     loss_func = nn.MSELoss()
     
     # init model
@@ -136,7 +137,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 
     # testing pipeline
     fp = open('logs/time-lagged/tau_' + str(tau) + '/test_log.txt', 'a')
-    for ep in range(max_epoch):
+    for ep in range(1,max_epoch):
         
         # load weight file
         epoch = ep
@@ -159,17 +160,17 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
         # testing
         with torch.no_grad():
             
-            # train-dataset
-            for batch_idx, (input, target) in enumerate(train_loader):
-                input = model.scale(input.to(device)) # (batchsize,1,1,4)
-                target = model.scale(target.to(device))
+            # # train-dataset
+            # for batch_idx, (input, target) in enumerate(train_loader):
+            #     input = model.scale(input.to(device)) # (batchsize,1,1,4)
+            #     target = model.scale(target.to(device))
                 
-                output, _ = model.forward(input)
+            #     output, _ = model.forward(input)
                 
-                train_outputs = output.cpu() if not len(train_outputs) else torch.concat((train_outputs, output.cpu()), axis=0)
-                train_targets = target.cpu() if not len(train_targets) else torch.concat((train_targets, target.cpu()), axis=0)
+            #     train_outputs = output.cpu() if not len(train_outputs) else torch.concat((train_outputs, output.cpu()), axis=0)
+            #     train_targets = target.cpu() if not len(train_targets) else torch.concat((train_targets, target.cpu()), axis=0)
                                 
-                if batch_idx >= len(test_loader): break
+            #     if batch_idx >= len(test_loader): break
 
             # test-dataset
             for input, target in test_loader:
@@ -198,15 +199,19 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
         for i in range(len(test_outputs)):
             for j in range(4):
                 test_plot[j].append([test_outputs[i,0,0,j], test_targets[i,0,0,j]])
-                train_plot[j].append([train_outputs[i,0,0,j], train_targets[i,0,0,j]])
-        plt.figure(figsize=(16,9))
-        for i, item in enumerate(['test', 'train']):
+                # train_plot[j].append([train_outputs[i,0,0,j], train_targets[i,0,0,j]])
+        # plt.figure(figsize=(16,9))
+        # for i, item in enumerate(['test', 'train']):
+        plt.figure(figsize=(16,5))
+        for i, item in enumerate(['test']):
             plot_data = test_plot if i == 0 else train_plot
             for j in range(4):
-                ax = plt.subplot(2,4,j+1+4*i)
+                # ax = plt.subplot(2,4,j+1+4*i)
+                ax = plt.subplot(1,4,j+1+4*i)
                 ax.set_title(item+'_'+['c1','c2','c3','c4'][j])
-                plt.plot(np.array(plot_data[j])[:int(5/tau),1], label='true')
-                plt.plot(np.array(plot_data[j])[:int(5/tau),0], label='predict')
+                ax.plot(np.array(plot_data[j])[:,1], label='true')
+                ax.plot(np.array(plot_data[j])[:,0], label='predict')
+                ax.legend()
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
         plt.savefig(var_log_dir+"/result.jpg", dpi=300)
         plt.close()
@@ -221,17 +226,17 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
             dims = np.load(var_log_dir+f'/id_{method}.npy')
             return np.mean(dims)
         LB_id = cal_id_embedding(tau, epoch, 'MLE', is_print)
-        MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
-        MADA_id = cal_id_embedding(tau, epoch, 'MADA')
-        PCA_id = cal_id_embedding(tau, epoch, 'PCA')
+        # MiND_id = cal_id_embedding(tau, epoch, 'MiND_ML')
+        # MADA_id = cal_id_embedding(tau, epoch, 'MADA')
+        # PCA_id = cal_id_embedding(tau, epoch, 'PCA')
 
         # logging
-        fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
-        # fp.write(f"{tau},0,{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{0},{0},{0}\n")
+        # fp.write(f"{tau},{random_seed},{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{MiND_id},{MADA_id},{PCA_id}\n")
+        fp.write(f"{tau},{random_seed},{mse_c1},{mse_c2},{mse_c3},{mse_c4},{epoch},{LB_id},{0},{0},{0}\n")
         fp.flush()
 
-        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
-        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
+        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}, MinD={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}   ', end='')
+        if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={LB_id:.1f}   ', end='')
         
         if checkpoint_filepath is None: break
         
@@ -255,7 +260,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
     
     # load pretrained time-lagged AE
-    ckpt_path = f'logs/time-lagged/tau_{tau}/checkpoints/epoch-{pretrain_epoch}.ckpt'
+    ckpt_path = f'logs/time-lagged/tau_{tau}/seed1/checkpoints/epoch-{pretrain_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.encoder_1.load_state_dict(ckpt['encoder'])
     model = model.to(device)
@@ -466,12 +471,12 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 plt.figure(figsize=(12,5+2*(slow_id-1)))
                 plt.title('Slow variable Curve')
                 for id_var in range(slow_id):
-                    plt.subplot(slow_id, 1, 1+id_var)
-                    plt.plot(inputs[:,0,0,0], label='c1')
-                    plt.plot(inputs[:,0,0,1], label='c2')
-                    plt.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
+                    ax = plt.subplot(slow_id, 1, 1+id_var)
+                    ax.plot(inputs[:,0,0,0], label='c1')
+                    ax.plot(inputs[:,0,0,1], label='c2')
+                    ax.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
                     plt.xlabel(item)
-                plt.legend()
+                    ax.legend()
                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
                 plt.close()
@@ -494,8 +499,9 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:,0,0,j], label='all_true')
-                    plt.plot(slow_obses_next[:,0,0,j], label='slow_predict')
+                    ax.plot(targets[:,0,0,j], label='all_true')
+                    ax.plot(slow_obses_next[:,0,0,j], label='slow_predict')
+                    ax.legend()
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
                 plt.close()
@@ -505,8 +511,9 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:,0,0,j], label='all_true')
-                    plt.plot(fast_obses_next[:,0,0,j], label='fast_predict')
+                    ax.plot(targets[:,0,0,j], label='all_true')
+                    ax.plot(fast_obses_next[:,0,0,j], label='fast_predict')
+                    ax.legend()
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
                 plt.close()
@@ -516,8 +523,9 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                 for j, item in enumerate(['c1', 'c2', 'c3', 'c4']):
                     ax = plt.subplot(1,4,j+1)
                     ax.set_title(item)
-                    plt.plot(targets[:,0,0,j], label='all_true')
-                    plt.plot(total_obses_next[:,0,0,j], label='all_predict')
+                    ax.plot(targets[:,0,0,j], label='all_true')
+                    ax.plot(total_obses_next[:,0,0,j], label='all_predict')
+                    ax.legend()
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
                 plt.close()
@@ -698,7 +706,7 @@ def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=Fals
     # train
     train_time_lagged(tau, is_print, random_seed)
     # test and calculating ID
-    # test_and_save_embeddings_of_time_lagged(tau, None, is_print)
+    test_and_save_embeddings_of_time_lagged(tau, None, is_print, random_seed)
     test_and_save_embeddings_of_time_lagged(tau, f"logs/time-lagged/tau_{tau}/seed{random_seed}", is_print, random_seed)
 
 
@@ -718,7 +726,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
         except: pass
     else:
         # test evolve
-        for i in tqdm(range(1, 5*n+1)):
+        for i in tqdm(range(1, n+1)):
             delta_t = round(tau/n*i, 3)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
             with open(f'pretrain{pretrain_epoch}_evolve_test_{tau}.txt','a') as f:
@@ -733,31 +741,32 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9, dt=0.0001):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.0, 0.5, 1.0, 1.5]
+    tau_list = np.arange(0., 3.1, 0.1)
     workers = []
     
     # id esitimate sub-process
     for tau in tau_list:
 
         # generate dataset
+        tau = round(tau, 2)
         generate_dataset(trace_num, tau, None, is_print=True)
 
-        for seed in range(1, 5+1):
+        for seed in range(10, 15+1):
             is_print = True if len(workers)==0 else False
             workers.append(Process(target=worker_1, args=(tau, trace_num, seed, cpu_num, is_print), daemon=True))
             workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
         pass
 
-    [plot_epoch_test_log(tau, max_epoch=50+1) for tau in tau_list]
-    # plot_id_per_tau(tau_list, 50)
+    [plot_epoch_test_log(round(tau,2), max_epoch=100+1) for tau in tau_list]
+    plot_id_per_tau(tau_list, np.arange(95,100+1,1))
     
     print('ID Esitimate Over!')
 
 
 def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
-    tau_list = [1.0]
+    tau_list = [0.8]
     id_list = [2]
     workers = []
     
@@ -770,10 +779,10 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
             workers[-1].start()
             
         # dataset for testing
-        for i in range(1, 5*n+1):
-            print(f'processing testing dataset [{i}/{5*n}]')
+        for i in range(1, 6*n+1+2):
+            print(f'processing testing dataset [{i}/{6*n+2}]')
             delta_t = round(tau/n*i, 3)
-            generate_dataset(trace_num, delta_t, sample_num, False)
+            generate_dataset(trace_num, delta_t, sample_num, True)
             # workers.append(Process(target=generate_dataset, args=(trace_num, delta_t, sample_num, False), daemon=True))
             # workers[-1].start()
     while any([sub.exitcode==None for sub in workers]):
@@ -782,7 +791,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
     
     # slow evolve sub-process
     for tau in tau_list:
-        for pretrain_epoch in [40]:
+        for pretrain_epoch in [100]:
             for slow_id in id_list:
                 for random_seed in range(1,10+1):
                     is_print = True if len(workers)==0 else False
@@ -853,12 +862,12 @@ def test_koopman_evolve():
 
 if __name__ == '__main__':
     
-    trace_num = 100
+    trace_num = 200
     
-    data_generator_pipeline(trace_num=trace_num, total_t=5)
-    id_esitimate_pipeline(trace_num=trace_num)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=False)
-    # slow_evolve_pipeline(trace_num=trace_num, n=10, long_test=True)
+    data_generator_pipeline(trace_num=trace_num, total_t=5.1, dt=0.01)
+    # id_esitimate_pipeline(trace_num=trace_num)
+    slow_evolve_pipeline(trace_num=trace_num, n=8, long_test=False)
+    slow_evolve_pipeline(trace_num=trace_num, n=8, long_test=True)
 
     # test_koopman_evolve()
 

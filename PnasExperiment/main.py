@@ -37,7 +37,7 @@ def train_time_lagged(tau, is_print=False, random_seed=729):
     # training params
     lr = 0.001
     batch_size = 32
-    max_epoch = 100
+    max_epoch = 20
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     loss_func = nn.MSELoss()
@@ -118,7 +118,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
     
     # testing params
     batch_size = 32
-    max_epoch = 100
+    max_epoch = 20
     loss_func = nn.MSELoss()
     
     # init model
@@ -659,7 +659,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
         except: pass
     else:
         # test evolve
-        for i in tqdm(range(1, 5*n+1)):
+        for i in tqdm(range(1, n+1)):
             delta_t = round(tau/n*i, 3)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
             with open(f'evolve_test_{tau}.txt','a') as f:
@@ -674,7 +674,7 @@ def data_generator_pipeline(trace_num=256+32+32, total_t=9):
     
 def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     
-    tau_list = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]
+    tau_list = [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5]
     workers = []
     
     # id esitimate sub-process
@@ -689,8 +689,8 @@ def id_esitimate_pipeline(cpu_num=1, trace_num=256+32+32):
     while any([sub.exitcode==None for sub in workers]):
         pass
 
-    [plot_epoch_test_log(tau, max_epoch=100+1) for tau in tau_list]
-    # plot_id_per_tau(tau_list, 100)
+    [plot_epoch_test_log(tau, max_epoch=20+1) for tau in tau_list]
+    # plot_id_per_tau(tau_list, 20)
     
     print('ID Esitimate Over!')
 
@@ -710,8 +710,8 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
             workers[-1].start()
         
         # dataset for testing
-        for i in range(1, 5*n+1):
-            print(f'processing testing dataset [{i}/{5*n}]')
+        for i in range(1, n+1):
+            print(f'processing testing dataset [{i}/{n}]')
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, True)
             # workers.append(Process(target=generate_dataset, args=(trace_num, delta_t, sample_num, False), daemon=True))
@@ -736,7 +736,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
 
 if __name__ == '__main__':
     
-    trace_num = 100
+    trace_num = 20
     
     data_generator_pipeline(trace_num, total_t=12.5)
     
