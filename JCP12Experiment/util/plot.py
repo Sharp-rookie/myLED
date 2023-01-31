@@ -98,7 +98,7 @@ def plot_epoch_test_log(tau, max_epoch):
     plt.plot(range(max_epoch), mse_c4_list, label='c4')
     # plt.ylim((0., 1.05*max(np.max(mse_c1_list), np.max(mse_c2_list), np.max(mse_c3_list))))
     plt.legend()
-    plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.jpg', dpi=300)
+    plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.pdf', dpi=300)
     plt.close()
 
 
@@ -127,13 +127,18 @@ def plot_id_per_tau(tau_list, id_epoch):
         round_id_per_tau.append([round(id[0]),round(id[1]),round(id[2]),round(id[3])])
     round_id_per_tau = np.array(round_id_per_tau)
 
+    plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
     plt.figure()
+    plt.rcParams.update({'font.size':15})
     # for i, item in enumerate(['MLE','MiND','MADA','PCA']):
     for i, item in enumerate(['MLE']):
-        plt.plot(tau_list, id_per_tau[:,i], label=item+"")
-        plt.plot(tau_list, round_id_per_tau[:,i], label=item+"-round")
+        plt.plot(tau_list, id_per_tau[:,i], marker="o", markersize=6, label="ID")
+        plt.plot(tau_list, round_id_per_tau[:,i], marker="^", markersize=6, label="ID-rounding")
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.legend()
-    plt.xlabel('tau / s')
+    plt.xlabel(r'$\tau / s$', fontsize=17)
+    plt.subplots_adjust(bottom=0.15)
     plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
 
         
@@ -146,7 +151,7 @@ def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3
     plt.xlabel('epoch')
     plt.legend()
     plt.title(f'Val mse | tau[{tau}] | pretrain_epoch[{pretrain_epoch}] | delta_t[{delta_t}]')
-    plt.savefig(f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/val_loss_curves.jpg', dpi=300)
+    plt.savefig(f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/val_loss_curves.pdf', dpi=300)
 
 
 def plot_pnas_autocorr():
@@ -171,7 +176,7 @@ def plot_pnas_autocorr():
     plt.xlabel('time/s')
     plt.legend()
     plt.title('Autocorrelation')
-    plt.savefig('corr.jpg', dpi=300)
+    plt.savefig('corr.pdf', dpi=300)
     
 
 def plot_jcp12_autocorr():
@@ -209,14 +214,14 @@ def plot_jcp12_autocorr():
     plt.xlabel('time/s')
     plt.legend()
     plt.title('Autocorrelation')
-    plt.savefig('corr.jpg', dpi=300)
+    plt.savefig('corr.pdf', dpi=300)
     
     
-def plot_evolve(tau):
+def plot_evolve(length):
     
-    our = open(f'pretrain50_evolve_test_{tau}.txt', 'r')
-    lstm = open(f'lstm_evolve_test_{tau}.txt', 'r')
-    tcn = open(f'tcn_evolve_test_{tau}.txt', 'r')
+    our = open(f'pretrain100_evolve_test_{length}.txt', 'r')
+    lstm = open(f'lstm_evolve_test_{length}.txt', 'r')
+    tcn = open(f'tcn_evolve_test_{length}.txt', 'r')
     
     our_data = [[] for seed in range(10)]
     lstm_data = [[] for seed in range(10)]
@@ -250,7 +255,7 @@ def plot_evolve(tau):
         ax.set_title(item)
         ax.set_xlabel('t / s')
         ax.legend()
-    plt.savefig(f'evolve_test_{tau}.jpg', dpi=300)
+    plt.savefig(f'evolve_test_{length}.pdf', dpi=300)
     
     item = ['our','lstm','tcn']
     for i, data in enumerate([our_data, lstm_data, tcn_data]):
@@ -260,4 +265,4 @@ def plot_evolve(tau):
 if __name__ == '__main__':
     
     # plot_jcp12_autocorr()
-    plot_evolve(1.0)
+    plot_evolve(0.8)

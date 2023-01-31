@@ -103,7 +103,7 @@ class TCN(nn.Module):
         return x * (self.max-self.min+1e-6) + self.min
 
 
-def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
+def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cuda:1')
@@ -196,7 +196,7 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
                     plt.plot(targets[:,0,0,j], label='true')
                     plt.plot(outputs[:,0,0,j], label='predict')
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.pdf", dpi=300)
                 plt.close()
         
             # record best model
@@ -214,10 +214,10 @@ def train(tau, delta_t, sequence_length, is_print=False, random_seed=729):
     plt.plot(train_loss)
     plt.xlabel('epoch')
     plt.title('Training Loss Curve')
-    plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
+    plt.savefig(log_dir+'/train_loss_curve.pdf', dpi=300)
     
 
-def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, random_seed=729):
+def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
     device = torch.device('cuda:1')
@@ -278,7 +278,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, sequence_length, is_print=False, ra
         plt.plot(true[:,0,0,j], label='true')
         plt.plot(pred[:,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/predict_{round(tau/sequence_length*n,3)}.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/predict_{delta_t}.pdf", dpi=300)
     plt.close()
     
     return MSE, RMSE, MAE, MAPE
@@ -293,13 +293,14 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
     if not long_test:
         # train
-        train(tau, round(tau/n,3), n, is_print=is_print, random_seed=random_seed)
+        train(tau, round(tau/n,3), is_print=is_print, random_seed=random_seed)
     else:
         # test evolve
-        ckpt_epoch = 20
-        for i in tqdm(range(1, 6*n+1+2)):
-            generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
-            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, round(tau/n, 3), i, n, is_print, random_seed)
+        ckpt_epoch = 50
+        for i in tqdm(range(1, 25*n+1)):
+            delta_t = round(tau/n*i, 3)
+            generate_dataset(trace_num, delta_t, sample_num, False)
+            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
             with open(f'tcn_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{round(tau/n*i, 3)}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
 

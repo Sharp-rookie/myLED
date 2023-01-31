@@ -104,7 +104,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.plot(sequences[:,0,0,2], label='c3')
             plt.plot(sequences[:,0,0,3], label='c4')
             plt.legend()
-            plt.savefig(data_dir+f'/{item}.jpg', dpi=300)
+            plt.savefig(data_dir+f'/{item}.pdf', dpi=300)
 generate_dataset(10, 1.0, sample_num=None, is_print=True, sequence_length=10)
 
             

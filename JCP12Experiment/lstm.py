@@ -154,7 +154,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
                     plt.plot(targets[:,0,0,j], label='true')
                     plt.plot(outputs[:,0,0,j], label='predict')
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.pdf", dpi=300)
                 plt.close()
         
             # record best model
@@ -172,7 +172,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     plt.plot(train_loss)
     plt.xlabel('epoch')
     plt.title('Training Loss Curve')
-    plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
+    plt.savefig(log_dir+'/train_loss_curve.pdf', dpi=300)
     
 
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
@@ -235,7 +235,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         plt.plot(true[:,0,0,j], label='true')
         plt.plot(pred[:,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/predict_{delta_t}.pdf", dpi=300)
     plt.close()
     
     return MSE, RMSE, MAE, MAPE

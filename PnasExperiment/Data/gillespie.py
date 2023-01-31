@@ -129,7 +129,7 @@ def generate_origin(total_t=None, seed=729, IC=[100,40,2500]):
         bottom=0.15,
         wspace=0.2
     )
-    plt.savefig(f'Data/origin/{seed}/origin.png', dpi=500)
+    plt.savefig(f'Data/origin/{seed}/origin.pdf', dpi=500)
     
     # calculate average dt
     digit = f'{np.average(np.diff(t)):.20f}'.count("0")
