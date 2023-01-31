@@ -33,7 +33,7 @@ def generate_original_data(trace_num, total_t=5, dt=0.0001):
         # plt.plot(t, sol[:,2], label='c3')
         # plt.plot(t, sol[:,3], label='c4')
         # plt.legend()
-        # plt.savefig(f'Data/origin/jcp12_{trace_id}.jpg', dpi=300)
+        # plt.savefig(f'Data/origin/jcp12_{trace_id}.pdf', dpi=300)
         
         return sol
     
@@ -150,7 +150,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.plot(sequences[:,0,0,2], label='c3')
             plt.plot(sequences[:,0,0,3], label='c4')
             plt.legend()
-            plt.savefig(data_dir+f'/{item}_input.jpg', dpi=300)
+            plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
 
             plt.figure(figsize=(16,10))
             plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
@@ -159,7 +159,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.plot(sequences[:,sequence_length-1,0,2], label='c3')
             plt.plot(sequences[:,sequence_length-1,0,3], label='c4')
             plt.legend()
-            plt.savefig(data_dir+f'/{item}_target.jpg', dpi=300)
+            plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
             
             
 def generate_informer_dataset(trace_num, sample_num=None):

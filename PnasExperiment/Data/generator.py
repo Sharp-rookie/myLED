@@ -72,7 +72,7 @@ def time_discretization(seed, total_t, dt=None, is_print=False):
         bottom=0.1,
         wspace=0.2
     )
-    plt.savefig(f'Data/origin/{seed}/data.png', dpi=500)
+    plt.savefig(f'Data/origin/{seed}/data.pdf', dpi=500)
 
     np.savez(f'Data/origin/{seed}/data.npz', dt=dt, t=t, X=X, Y=Y, Z=Z)
 
@@ -99,7 +99,7 @@ def generate_original_data(trace_num, total_t):
     subprocess = []
     for seed in range(1, trace_num+1):
         if not os.path.exists(f'Data/origin/{seed}/data.npz'):
-            dt = 1e-3
+            dt = 1e-2
             is_print = len(subprocess)==0
             subprocess.append(Process(target=time_discretization, args=(seed, total_t, dt, is_print), daemon=True))
             subprocess[-1].start()
@@ -219,7 +219,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
                 ax.set_title(['X','Y','Z'][i])
                 plt.plot(sequences[:, 0, 0, i])
             plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
-            plt.savefig(data_dir+f'/{item}_input.jpg', dpi=300)
+            plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
 
             plt.figure(figsize=(16,10))
             plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
@@ -228,7 +228,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
                 ax.set_title(['X','Y','Z'][i])
                 plt.plot(sequences[:, sequence_length-1, 0, i])
             plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
-            plt.savefig(data_dir+f'/{item}_target.jpg', dpi=300)
+            plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
             
         
 def generate_informer_dataset(trace_num, sample_num=None):

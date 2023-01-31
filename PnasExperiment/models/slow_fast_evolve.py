@@ -91,19 +91,19 @@ class EVOLVER(nn.Module):
         # (batchsize,1,1,3)-->(batchsize, embed_dim)
         self.encoder_1 = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(in_channels*input_1d_width, 64, bias=True),
+            nn.Linear(in_channels*input_1d_width, 16, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
-            nn.Linear(64, embed_dim, bias=True),
+            nn.Linear(16, embed_dim, bias=True),
             nn.Tanh(),
         )
         
         # (batchsize, embed_dim)-->(batchsize, slow_dim)
         self.encoder_2 = nn.Sequential(
-            nn.Linear(embed_dim, 64, bias=True),
+            nn.Linear(embed_dim, 16, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
-            nn.Linear(64, slow_dim, bias=True),
+            nn.Linear(16, slow_dim, bias=True),
             nn.Tanh(),
         )
         

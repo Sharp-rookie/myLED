@@ -42,7 +42,7 @@ class LSTM(nn.Module):
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
         self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
     
-    def forward(self, x, device=torch.device('cpu')):
+    def forward(self, x, device=torch.device('cuda:1')):
         
         h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=device)
         c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device=device)
@@ -64,7 +64,7 @@ class LSTM(nn.Module):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -154,7 +154,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
                     plt.plot(targets[:,0,0,j], label='true')
                     plt.plot(outputs[:,0,0,j], label='predict')
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/predict.pdf", dpi=300)
                 plt.close()
         
             # record best model
@@ -172,13 +172,13 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     plt.plot(train_loss)
     plt.xlabel('epoch')
     plt.title('Training Loss Curve')
-    plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
+    plt.savefig(log_dir+'/train_loss_curve.pdf', dpi=300)
     
 
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/lstm/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -235,7 +235,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         plt.plot(true[:,0,0,j], label='true')
         plt.plot(pred[:,0,0,j], label='predict')
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/predict_{delta_t}.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/predict_{delta_t}.pdf", dpi=300)
     plt.close()
     
     return MSE, RMSE, MAE, MAPE
@@ -264,11 +264,11 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
 
 if __name__ == '__main__':
     
-    trace_num = 200
+    trace_num = 100
     
     workers = []
     
-    tau = 2.5
+    tau = 3.0
     n = 10
     
     # train
@@ -283,7 +283,7 @@ if __name__ == '__main__':
     workers = []
     
     # test
-    for seed in range(1,5+1):
+    for seed in range(1,10+1):
         main(trace_num, tau, n, True, True, seed)
     #     is_print = True if len(workers)==0 else False
     #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))

@@ -18,6 +18,27 @@ from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_id_per_tau
 from util.intrinsic_dimension import eval_id_embedding
 
 
+class CCFLoss(nn.Module):
+    def __init__(self):
+        super(CCFLoss,self).__init__()
+        
+    def forward(self, series_1, series_2):
+        assert len(series_1.shape) == 2
+
+        length = series_1.shape[-1]
+        m_1 = torch.mean(series_1, (-1), keepdim=True)
+        m_2 = torch.mean(series_2, (-1), keepdim=True)
+        std_1 = torch.std(series_1, (-1), keepdim=True)
+        std_2 = torch.std(series_2, (-1), keepdim=True)
+
+        cov = torch.sum((series_1 - m_1)*(series_2 - m_2), (-1), keepdim=True) / (length-1)
+        ccf = cov / (std_1*std_2)
+
+        abs = torch.abs(ccf)
+        
+        return - torch.mean(abs)
+    
+
 def train_time_lagged(tau, is_print=False, random_seed=729):
     
     # prepare
@@ -103,7 +124,7 @@ def train_time_lagged(tau, is_print=False, random_seed=729):
     plt.plot(loss_curve)
     plt.xlabel('epoch')
     plt.title('Train MSELoss Curve')
-    plt.savefig(log_dir+'/loss_curve.jpg', dpi=300)
+    plt.savefig(log_dir+'/loss_curve.pdf', dpi=300)
     np.save(log_dir+'/loss_curve.npy', loss_curve)
     
     if is_print: print()
@@ -213,7 +234,7 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
                 ax.plot(np.array(plot_data[j])[:,0], label='predict')
                 ax.legend()
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
-        plt.savefig(var_log_dir+"/result.jpg", dpi=300)
+        plt.savefig(var_log_dir+"/result.pdf", dpi=300)
         plt.close()
 
         # save embedding
@@ -316,7 +337,6 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             ################
             # n-step evolve
             ################
-            slow_var = slow_var.detach()
             fast_obs = input - slow_obs.detach()
             # obs_evol_loss, slow_evol_loss, koopman_evol_loss = 0, 0, 0
             obs_evol_loss, slow_evol_loss = 0, 0
@@ -364,7 +384,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
             # optimize
             ###########
             # all_loss = (slow_reconstruct_loss + 0.05*adiabatic_loss) + (0.5*koopman_evol_loss + 0.5*obs_evol_loss) / n
-            all_loss = (slow_reconstruct_loss + 0.3*adiabatic_loss) + (0.5*slow_evol_loss + 0.5*obs_evol_loss) / n
+            all_loss = (slow_reconstruct_loss + 0.1*adiabatic_loss) + (0.5*slow_evol_loss + 0.5*obs_evol_loss) / n
             optimizer.zero_grad()
             all_loss.backward()
             optimizer.step()
@@ -464,7 +484,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                         plt.xlabel(item)
                         plt.ylabel(f'U{id_var+1}')
                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.pdf", dpi=300)
                 plt.close()
                 
                 # plot slow variable
@@ -478,7 +498,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                     plt.xlabel(item)
                     ax.legend()
                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.pdf", dpi=300)
                 plt.close()
                 
                 # plot fast & slow observation reconstruction curve
@@ -491,7 +511,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                     ax.plot(fast_obses[:,0,0,j], label='fast_obs')
                     ax.legend()
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_slow_obs.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_slow_obs.pdf", dpi=300)
                 plt.close()
                 
                 # plot slow observation one-step prediction curve
@@ -503,7 +523,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                     ax.plot(slow_obses_next[:,0,0,j], label='slow_predict')
                     ax.legend()
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_predict.pdf", dpi=300)
                 plt.close()
                 
                 # plot fast observation one-step prediction curve
@@ -515,7 +535,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                     ax.plot(fast_obses_next[:,0,0,j], label='fast_predict')
                     ax.legend()
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/fast_predict.pdf", dpi=300)
                 plt.close()
                 
                 # plot total observation one-step prediction curve
@@ -527,7 +547,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
                     ax.plot(total_obses_next[:,0,0,j], label='all_predict')
                     ax.legend()
                 plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.jpg", dpi=300)
+                plt.savefig(log_dir+f"/val/epoch-{epoch}/all_predict.pdf", dpi=300)
                 plt.close()
         
                 # save model
@@ -541,7 +561,7 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     plt.xlabel('epoch')
     plt.legend()
     plt.title('Training Loss Curve')
-    plt.savefig(log_dir+'/train_loss_curve.jpg', dpi=300)
+    plt.savefig(log_dir+'/train_loss_curve.pdf', dpi=300)
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
     # plot Koopman Lambda curve
@@ -584,7 +604,10 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     
     # testing pipeline        
     with torch.no_grad():
+        inputs = []
         targets = []
+        slow_vars = []
+        slow_obses = []
         slow_obses_next = []
         fast_obses_next = []
         total_obses_next = []
@@ -616,15 +639,21 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
             # total obs evolve
             total_obs_next = slow_obs_next + fast_obs_next
 
+            inputs.append(input)
             targets.append(target)
+            slow_vars.append(slow_var)
+            slow_obses.append(slow_obs)
             slow_obses_next.append(slow_obs_next)
             fast_obses_next.append(fast_obs_next)
             total_obses_next.append(total_obs_next)   
             slow_vars_next.append(slow_var_next)   
             slow_vars_truth.append(model.obs2slow(target)[0])     
         
+        inputs = model.descale(torch.concat(inputs, axis=0)).cpu()
+        slow_obses = model.descale(torch.concat(slow_obses, axis=0)).cpu()
         slow_obses_next = model.descale(torch.concat(slow_obses_next, axis=0)).cpu()
         fast_obses_next = model.descale(torch.concat(fast_obses_next, axis=0)).cpu()
+        slow_vars = torch.concat(slow_vars, axis=0).cpu()
         slow_vars_next = torch.concat(slow_vars_next, axis=0).cpu()
         slow_vars_truth = torch.concat(slow_vars_truth, axis=0).cpu()
         
@@ -645,6 +674,43 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     MAE = np.mean(np.abs(pred - true))
                 
     os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
+
+    # plot slow extract from original data
+    start = 1471 - 1
+    end = 3430 - 1
+    sample = 3
+    plt.rcParams.update({'font.size':15})
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate([r'$c_1$', r'$c_2$', r'$c_3$', r'$c_4$']):
+        ax = plt.subplot(1,4,j+1)
+        ax.set_title(item, fontsize=17)
+        t = torch.range(0,end-start-1) * 0.01
+        ax.plot(t[::sample], inputs[start:end:sample,0,0,j], label=r'$X$')
+        ax.plot(t[::sample], slow_obses[start:end:sample,0,0,j], marker="^", markersize=4, label=r'$X_s$')
+        ax.legend()
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.xlabel('t / s', fontsize=17)
+    plt.subplots_adjust(wspace=0.35)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.pdf", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.jpg", dpi=300)
+    plt.close()
+
+    # plot slow variable vs input
+    sample = 2
+    plt.figure(figsize=(16,5+2*(slow_id-1)))
+    for id_var in range(slow_id):
+        for index, item in enumerate([r'$c_1$', r'$c_2$', r'$c_3$', r'$c_4$']):
+            plt.subplot(slow_id, 4, index+1+4*(id_var))
+            plt.scatter(inputs[::sample,0,0,index], slow_vars[::sample, id_var], s=2)
+            plt.xticks(fontsize=15)
+            plt.yticks(fontsize=15)
+            plt.xlabel(item, fontsize=17)
+            plt.ylabel(rf'$U_{id_var+1}$', fontsize=17)
+    plt.subplots_adjust(wspace=0.55, hspace=0.35)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.jpg", dpi=300)
+    plt.close()
     
     # plot koopman space prediction curve
     plt.figure(figsize=(16,5))
@@ -655,7 +721,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         ax.plot(slow_vars_next[:,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/koopman_pred.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/koopman_pred.pdf", dpi=300)
     plt.close()
 
     # plot slow observation prediction curve
@@ -667,7 +733,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         ax.plot(slow_obses_next[:,0,0,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.pdf", dpi=300)
     plt.close()
     
     # plot fast observation prediction curve
@@ -679,7 +745,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         ax.plot(fast_obses_next[:,0,0,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.pdf", dpi=300)
     plt.close()
 
     # plot total observation prediction curve
@@ -691,7 +757,7 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         ax.plot(pred[:,0,0,j], label='predict')
         ax.legend()
     plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/total_pred.jpg", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/total_pred.pdf", dpi=300)
     plt.close()
     
     return MSE, RMSE, MAE, MAPE
@@ -726,7 +792,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
         except: pass
     else:
         # test evolve
-        for i in tqdm(range(1, n+1)):
+        for i in tqdm(range(1, 6*n+1+2)):
             delta_t = round(tau/n*i, 3)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
             with open(f'pretrain{pretrain_epoch}_evolve_test_{tau}.txt','a') as f:
@@ -866,7 +932,7 @@ if __name__ == '__main__':
     
     data_generator_pipeline(trace_num=trace_num, total_t=5.1, dt=0.01)
     # id_esitimate_pipeline(trace_num=trace_num)
-    slow_evolve_pipeline(trace_num=trace_num, n=8, long_test=False)
+    # slow_evolve_pipeline(trace_num=trace_num, n=8, long_test=False)
     slow_evolve_pipeline(trace_num=trace_num, n=8, long_test=True)
 
     # test_koopman_evolve()

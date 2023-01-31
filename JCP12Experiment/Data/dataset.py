@@ -51,7 +51,7 @@ class JCP12Dataset(Dataset):
 #         plt.plot(inputs[:100], label='input')
 #         plt.plot(targets[:100], label='target')
 #         plt.legend()
-#         plt.savefig('data.jpg', dpi=300)
+#         plt.savefig('data.pdf', dpi=300)
 
 # data_path = 'Data/data/tau_' + str(0.15)
 # j = JCP12Dataset(data_path, 'val', length=10)
