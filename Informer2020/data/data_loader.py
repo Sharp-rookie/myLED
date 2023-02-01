@@ -50,8 +50,8 @@ class Dataset_JCP_hour(Dataset):
         # border1s = [0, 12*30*24 - self.seq_len, 12*30*24+4*30*24 - self.seq_len]
         # border2s = [12*30*24, 12*30*24+4*30*24, 12*30*24+8*30*24]
         # train : val : test = 6 : 1 : 3
-        border1s = [0, int(0.6*len(df_raw)) - self.seq_len, int(0.7*len(df_raw)) - self.seq_len]
-        border2s = [int(0.6*len(df_raw)), int(0.7*len(df_raw)), int(1.0*len(df_raw))]
+        border1s = [0, int(0.33*len(df_raw)) - self.seq_len, int(0.66*len(df_raw)) - self.seq_len]
+        border2s = [int(0.33*len(df_raw)), int(0.66*len(df_raw)), int(0.99*len(df_raw))]
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
         

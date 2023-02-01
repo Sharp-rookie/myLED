@@ -629,19 +629,23 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
 
     # plot slow variable vs input
     sample = 1
-    plt.figure(figsize=(16,5+2*(slow_id-1)))
+    plt.figure(figsize=(16,5))
     for id_var in range(slow_id):
         for index, item in enumerate([r'$X$', r'$Y$', r'$Z$']):
-            plt.subplot(slow_id, 3, index+1+4*(id_var))
-            plt.scatter(inputs[::sample,0,0,index], slow_vars[::sample, id_var], s=2)
-            plt.xticks(fontsize=15)
-            plt.yticks(fontsize=15)
+            ax = plt.subplot(slow_id, 3, index+1+4*(id_var))
+            ax.scatter(inputs[::sample,0,0,index], slow_vars[::sample, id_var], s=2)
             plt.xlabel(item, fontsize=17)
-            plt.ylabel(rf'$U_{id_var+1}$', fontsize=17)
-    plt.subplots_adjust(wspace=0.55, hspace=0.35)
+            plt.ylabel(rf'$U$', fontsize=17)
+            if index==2:
+                ax.xaxis.set_major_locator(plt.MultipleLocator(5000))
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.subplots_adjust(wspace=0.55, hspace=0.35, bottom=0.15)
     plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=300)
     plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.jpg", dpi=300)
     plt.close()
+
+    exit(0)
     
     # plot slow infomation prediction curve
     plt.figure(figsize=(16,5))

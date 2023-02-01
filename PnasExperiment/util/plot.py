@@ -161,7 +161,7 @@ def plot_pnas_autocorr():
         corrX.append(data['X'].autocorr(lag=lag))
         corrY.append(data['Y'].autocorr(lag=lag))
         corrZ.append(data['Z'].autocorr(lag=lag))
-    plt.figure(figsize=(10,8))
+    plt.figure(figsize=(6,6))
     plt.rcParams.update({'font.size':15})
     plt.plot(lag_list*1e-2, np.array(corrX), marker="o", markersize=6, label=r'$X$')
     plt.plot(lag_list*1e-2, np.array(corrY), marker="^", markersize=6, label=r'$Y$')

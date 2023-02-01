@@ -13,7 +13,7 @@ class JCP12Dataset(Dataset):
 
         # Search for txt files
         if self.neural_ode:
-            self.data = np.load(file_path+f'/neural_ode_{mode}.npz')['data'] # (trace_num, sample_num, 2, 1, 4)
+            self.data = np.load(file_path+f'/neural_ode_{mode}.npz')['data'] # (1*sample_num, 1, 1, 4)
         else:
             self.data = np.load(file_path+f'/{mode}.npz')['data'] # (trace_num*sample_num, 2, 1, 4)
 
@@ -40,9 +40,11 @@ class JCP12Dataset(Dataset):
         
         else:
             sample = self.data[:, index]
-            input =  torch.from_numpy(sample[:,:1]).float()
-            target =  torch.from_numpy(sample[:,1:]).float()
-            return input, target
+            # input =  torch.from_numpy(sample[:,:1]).float()
+            # target =  torch.from_numpy(sample[:,1:]).float()
+            input =  torch.from_numpy(sample).float()
+            target =  input
+            return input.unsqueeze(-2), target.unsqueeze(-2)
 
     def __len__(self):
         return len(self.data) if not self.neural_ode else len(self.data[0])

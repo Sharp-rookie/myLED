@@ -1,6 +1,7 @@
 import os
 import numpy as np
 from tqdm import tqdm
+from matplotlib import cm
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 from pytorch_lightning import seed_everything
@@ -51,13 +52,61 @@ def generate_original_data(trace_num, total_t=5, dt=0.0001, save=True):
     print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
 
     return trace
-    
-    
-def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
-    if sequence_length is not None and os.path.exists(f"Data/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/test_{sequence_length}.npz"):
+
+def plot_c3_c4_trajectory():
+    
+    c1, c2 = np.meshgrid(np.linspace(-1, 1, 20), np.linspace(-1, 1, 20))
+
+    omega = 3
+    c3 = np.sin(omega*c1)*np.sin(omega*c2)
+    c4 = 1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2)))
+
+    y0 = [1.,1.,2.,1.5]
+    t  =np.arange(0, 5.1, 0.05)
+    sol = odeint(system_4d, y0, t)
+    c1_trace = sol[:, 0]
+    c2_trace = sol[:, 1]
+    c3_trace = sol[:, 2]
+    c4_trace = sol[:, 3]
+    
+    # Picture 1
+    for i, c in enumerate([c3, c4]):
+        fig = plt.figure(figsize=(8,8))
+        plt.rcParams.update({'font.size':15})
+        ax = fig.gca(projection='3d')
+        # plot the surface.
+        ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
+        ax.plot(c1_trace, c2_trace, c3_trace, linewidth=2, color="r", label=rf'Solution  trajectory')
+        ax.scatter(c1_trace[::6], c2_trace[::6], c3_trace[::6], linewidth=2, color="b", marker='o')
+        ax.set_xlabel(r"$c_2$", labelpad=10, fontsize=17)
+        ax.set_ylabel(r"$c_1$", labelpad=10, fontsize=17)
+        ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+        ax.set_zlabel(r"$c_3$", labelpad=10, fontsize=17)
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+        ax.grid(False)
+        ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+        ax.view_init(elev=25. if i==0 else 15., azim=-100 if i==0 else -15.) # view direction: elve=vertical angle ,azim=horizontal angle
+        plt.tick_params(labelsize=15)
+        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+        ax.zaxis.set_major_locator(plt.MultipleLocator(1))
+        plt.legend()
+        plt.subplots_adjust(bottom=0., top=1.)
+        plt.savefig(f"Data/origin/c{2+i+1}.pdf", dpi=300)
+        plt.close()
+plot_c3_c4_trajectory()
+    
+def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None, neural_ode=False):
+
+    if not neural_ode and (sequence_length is not None) and os.path.exists(f"Data/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/data/tau_{tau}/test_{sequence_length}.npz"):
         return
-    elif sequence_length is None and os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
+    elif not neural_ode and (sequence_length is None) and os.path.exists(f"Data/data/tau_{tau}/train.npz") and os.path.exists(f"Data/data/tau_{tau}/val.npz") and os.path.exists(f"Data/data/tau_{tau}/test.npz"):
+        return
+    elif neural_ode and (sequence_length is None) and os.path.exists(f"Data/data/tau_{tau}/neural_ode_train.npz") and os.path.exists(f"Data/data/tau_{tau}/neural_ode_val.npz") and os.path.exists(f"Data/data/tau_{tau}/neural_ode_test.npz"):
         return
     
     # load original data
@@ -86,9 +135,14 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     ##################################
     # Create [train,val,test] dataset
     ##################################
-    train_num = int(0.7*trace_num)
-    val_num = int(0.1*trace_num)
-    test_num = int(0.2*trace_num)
+    if neural_ode:
+        train_num = int(trace_num/3)
+        val_num = int(trace_num/3)
+        test_num = int(trace_num/3)
+    else:
+        train_num = int(0.7*trace_num)
+        val_num = int(0.1*trace_num)
+        test_num = int(0.2*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
                 
@@ -111,13 +165,11 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
 
         # generator item dataset
         sequences = []
-        parallel_trace = [[] for _ in range(N_TRACE)]
         for bn in range(len(idxs_timestep)):
             idx_ic = idxs_ic[bn]
             idx_timestep = idxs_timestep[bn]
             tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(sequence_length-1)+1 : step_length]
             sequences.append(tmp)
-            parallel_trace[idx_ic].append(tmp)
             if is_print: print(f'\rtau[{tau}] sliding window for {item} data [{bn+1}/{len(idxs_timestep)}]', end='')
         if is_print: print()
 
@@ -139,37 +191,35 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
         if is_print: print(f'tau[{tau}]', f"after process", np.shape(sequences))
 
-        # save item dataset
-        if not seq_none:
-            np.savez(data_dir+f'/{item}_{sequence_length}.npz', data=sequences)
+        # save
+        if neural_ode:
+            np.savez(data_dir+f'/neural_ode_{item}.npz', data=sequences[:,0])
         else:
-            np.savez(data_dir+f'/{item}.npz', data=sequences)
+            if not seq_none:
+                np.savez(data_dir+f'/{item}_{sequence_length}.npz', data=sequences)
+            else:
+                np.savez(data_dir+f'/{item}.npz', data=sequences)
 
-        for i in range(len(parallel_trace)):
-            parallel_trace[i] = np.array(parallel_trace[i])
-        parallel_trace = np.array(parallel_trace)
-        np.savez(data_dir+f'/neural_ode_{item}.npz', data=parallel_trace, tau=tau)
+            # plot
+            if seq_none:
+                plt.figure(figsize=(16,10))
+                plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+                plt.plot(sequences[:,0,0,0], label='c1')
+                plt.plot(sequences[:,0,0,1], label='c2')
+                plt.plot(sequences[:,0,0,2], label='c3')
+                plt.plot(sequences[:,0,0,3], label='c4')
+                plt.legend()
+                plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
 
-        # plot
-        if seq_none:
-            plt.figure(figsize=(16,10))
-            plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-            plt.plot(sequences[:,0,0,0], label='c1')
-            plt.plot(sequences[:,0,0,1], label='c2')
-            plt.plot(sequences[:,0,0,2], label='c3')
-            plt.plot(sequences[:,0,0,3], label='c4')
-            plt.legend()
-            plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
+                plt.figure(figsize=(16,10))
+                plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+                plt.plot(sequences[:,sequence_length-1,0,0], label='c1')
+                plt.plot(sequences[:,sequence_length-1,0,1], label='c2')
+                plt.plot(sequences[:,sequence_length-1,0,2], label='c3')
+                plt.plot(sequences[:,sequence_length-1,0,3], label='c4')
+                plt.legend()
+                plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
 
-            plt.figure(figsize=(16,10))
-            plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-            plt.plot(sequences[:,sequence_length-1,0,0], label='c1')
-            plt.plot(sequences[:,sequence_length-1,0,1], label='c2')
-            plt.plot(sequences[:,sequence_length-1,0,2], label='c3')
-            plt.plot(sequences[:,sequence_length-1,0,3], label='c4')
-            plt.legend()
-            plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
-            
             
 def generate_informer_dataset(trace_num=1000, total_t=5.1, dt=0.01, sample_num=None):
 
@@ -177,10 +227,10 @@ def generate_informer_dataset(trace_num=1000, total_t=5.1, dt=0.01, sample_num=N
     simdata = generate_original_data(trace_num=trace_num, total_t=total_t, dt=dt, save=False)
     simdata = np.array(simdata)[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
 
-    for tau in [0.1, 1.0, 5.0]:
+    for tau in [0.01]:
         # subsampling
         subsampling = int(tau/dt) if tau!=0. else 1
-        data = simdata[:, :int(total_t/5*subsampling):subsampling]
+        data = simdata[:, ::subsampling]
         print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
         
         import pandas as pd
@@ -193,4 +243,4 @@ def generate_informer_dataset(trace_num=1000, total_t=5.1, dt=0.01, sample_num=N
         
         df.to_csv(f'tau_{tau}.csv', index=False)
 
-# generate_informer_dataset(trace_num=10000, total_t=100.1, dt=0.01, sample_num=None)
+# generate_informer_dataset(trace_num=3, total_t=5.1, dt=0.01, sample_num=None)
