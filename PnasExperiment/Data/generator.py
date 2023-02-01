@@ -50,29 +50,32 @@ def time_discretization(seed, total_t, dt=None, is_print=False):
 
         if is_print == 1: print(f'\rSeed[{seed}] interpolating {current_t:.6f}/{total_t}', end='')
 
-    plt.figure(figsize=(16,4))
-    plt.title(f'dt = {dt}')
+    plt.figure(figsize=(16,5))
+    plt.rcParams.update({'font.size':15})
+    # plt.title(f'dt = {dt}')
     ax1 = plt.subplot(1,3,1)
-    ax1.set_title('X')
-    plt.plot(t, X, label='X')
-    plt.xlabel('time / s')
+    ax1.set_title(r'$X$', fontsize=17)
+    plt.plot(t, X, label=r'$X$')
+    plt.xlabel(r'$t / s$', fontsize=17)
     ax2 = plt.subplot(1,3,2)
-    ax2.set_title('Y')
-    plt.plot(t, Y, label='Y')
-    plt.xlabel('time / s')
+    ax2.set_title(r'$Y$', fontsize=17)
+    plt.plot(t, Y, label=r'$Y$')
+    plt.xlabel(r'$time / s$', fontsize=17)
     ax3 = plt.subplot(1,3,3)
-    ax3.set_title('Z')
-    plt.plot(t, Z, label='Z')
-    plt.xlabel('time / s')
+    ax3.set_title(r'$Z$', fontsize=17)
+    plt.plot(t, Z, label=r'$Z$')
+    plt.xlabel(r'$time / s$', fontsize=17)
 
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.subplots_adjust(
         left=0.05,
         right=0.95,
         top=0.9,
-        bottom=0.1,
+        bottom=0.15,
         wspace=0.2
     )
-    plt.savefig(f'Data/origin/{seed}/data.pdf', dpi=500)
+    plt.savefig(f'Data/origin/{seed}/data.pdf', dpi=300)
 
     np.savez(f'Data/origin/{seed}/data.npz', dt=dt, t=t, X=X, Y=Y, Z=Z)
 
@@ -245,7 +248,7 @@ def generate_informer_dataset(trace_num, sample_num=None):
         simdata.append(trace[np.newaxis])
     simdata = np.concatenate(simdata, axis=0)
 
-    for tau in [0.25, 2.5, 12.5]:
+    for tau in [0.3, 3.0, 15.0]:
         # subsampling
         dt = tmp['dt']
         subsampling = int(tau/dt) if tau!=0. else 1
@@ -261,5 +264,4 @@ def generate_informer_dataset(trace_num, sample_num=None):
         df = df[['date','X','Y','Z']]
         
         df.to_csv(f'tau_{tau}.csv', index=False)
-
-# generate_informer_dataset(trace_num=200, sample_num=None)
+generate_informer_dataset(trace_num=100, sample_num=None)

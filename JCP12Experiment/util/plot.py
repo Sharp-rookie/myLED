@@ -194,7 +194,7 @@ def plot_jcp12_autocorr():
 
         data = pd.DataFrame(np.concatenate((c1,c2,c3,c4), axis=-1), columns=['c1','c2','c3','c4'])
         
-        lag_list = np.arange(0, 5*100, 1)
+        lag_list = np.arange(0, 5*100, 10)
         for lag in tqdm(lag_list):
             corrC1[trace_id].append(data['c1'].autocorr(lag=lag))
             corrC2[trace_id].append(data['c2'].autocorr(lag=lag))
@@ -206,14 +206,17 @@ def plot_jcp12_autocorr():
     corrC3 = np.mean(corrC3, axis=0)
     corrC4 = np.mean(corrC4, axis=0)
     
-    plt.figure(figsize=(12,8))
-    plt.plot(lag_list*1e-2, np.array(corrC1), label='c1')
-    plt.plot(lag_list*1e-2, np.array(corrC2), label='c2')
-    plt.plot(lag_list*1e-2, np.array(corrC3), label='c3')
-    plt.plot(lag_list*1e-2, np.array(corrC4), label='c4')
-    plt.xlabel('time/s')
+    plt.figure(figsize=(10,8))
+    plt.rcParams.update({'font.size':15})
+    plt.plot(lag_list*1e-2, np.array(corrC1), marker="o", markersize=6, label=r'$c_1$')
+    plt.plot(lag_list*1e-2, np.array(corrC2), marker="^", markersize=6, label=r'$c_2$')
+    plt.plot(lag_list*1e-2, np.array(corrC3), marker="D", markersize=6, label=r'$c_3$')
+    plt.plot(lag_list*1e-2, np.array(corrC4), marker="*", markersize=6, label=r'$c_4$')
+    plt.xlabel(r'$t/s$', fontsize=17)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.legend()
-    plt.title('Autocorrelation')
+    plt.subplots_adjust(bottom=0.15)
     plt.savefig('corr.pdf', dpi=300)
     
     
@@ -234,13 +237,15 @@ def plot_evolve(length):
             rmse = float(line.split(',')[3])
             mae = float(line.split(',')[4])
             mape = float(line.split(',')[5])
+            c1_mae = float(line.split(',')[6])
+            c2_mae = float(line.split(',')[7])
             
             if i==0:
-                our_data[seed-1].append([tau,mse,rmse,mae,mape])
+                our_data[seed-1].append([tau,mse,rmse,mae,mape,np.mean([c1_mae,c2_mae]),c1_mae,c2_mae])
             elif i==1:
-                lstm_data[seed-1].append([tau,mse,rmse,mae,mape])
+                lstm_data[seed-1].append([tau,mse,rmse,mae,mape,np.mean([c1_mae,c2_mae])])
             elif i==2:
-                tcn_data[seed-1].append([tau,mse,rmse,mae,mape])
+                tcn_data[seed-1].append([tau,mse,rmse,mae,mape,np.mean([c1_mae,c2_mae])])
     
     our_data = np.mean(np.array(our_data), axis=0)
     lstm_data = np.mean(np.array(lstm_data), axis=0)
@@ -256,11 +261,35 @@ def plot_evolve(length):
         ax.set_xlabel('t / s')
         ax.legend()
     plt.savefig(f'evolve_test_{length}.pdf', dpi=300)
+
+    plt.figure(figsize=(8,8))
+    plt.rcParams.update({'font.size':15})
+    plt.plot(our_data[:,0], our_data[:,5], marker="o", markersize=6, label='Our Model')
+    plt.plot(lstm_data[:,0], lstm_data[:,5], marker="^", markersize=6, label='LSTM')
+    plt.plot(tcn_data[:,0], tcn_data[:,5], marker="D", markersize=6, label='TCN')
+    plt.xlabel(r'$t / s$', fontsize=17)
+    plt.subplots_adjust(bottom=0.15)
+    plt.legend()
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.savefig(f'slow_evolve_mae.pdf', dpi=300)
+
+    plt.figure(figsize=(8,8))
+    plt.rcParams.update({'font.size':15})
+    plt.plot(our_data[:,0], our_data[:,3], marker="o", markersize=6, label=r'$overall$')
+    plt.plot(our_data[:,0], our_data[:,6], marker="^", markersize=6, label=r'$c_1$')
+    plt.plot(our_data[:,0], our_data[:,7], marker="D", markersize=6, label=r'$c_2$')
+    plt.xlabel(r'$t / s$', fontsize=17)
+    plt.subplots_adjust(bottom=0.15)
+    plt.legend()
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
+    plt.savefig(f'our_slow_evolve_mae.pdf', dpi=300)
     
     item = ['our','lstm','tcn']
     for i, data in enumerate([our_data, lstm_data, tcn_data]):
         print(f'{item[i]} | tau[{data[0,0]:.3f}] RMSE={data[0,2]:.4f}, MAE={data[0,3]:.4f}, MAPE={100*data[0,4]:.2f}% | tau[{data[9,0]:.3f}] RMSE={data[9,2]:.4f}, MAE={data[9,3]:.4f}, MAPE={100*data[9,4]:.2f}% | tau[{data[49,0]:.3f}] RMSE={data[49,2]:.4f}, MAE={data[49,3]:.4f}, MAPE={100*data[49,4]:.2f}%')
-
+    
 
 if __name__ == '__main__':
     

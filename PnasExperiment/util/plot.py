@@ -155,19 +155,22 @@ def plot_pnas_autocorr():
     data = pd.DataFrame(np.concatenate((X,Y,Z), axis=-1), columns=['X', 'Y', 'Z'])
     
     corrX, corrY, corrZ = [], [], []
-    lag_list = np.arange(0, 1000*2000, 2000)
+    lag_list = np.arange(0, 7*100, 30)
     from tqdm import tqdm
     for lag in tqdm(lag_list):
         corrX.append(data['X'].autocorr(lag=lag))
         corrY.append(data['Y'].autocorr(lag=lag))
         corrZ.append(data['Z'].autocorr(lag=lag))
-    plt.figure(figsize=(12,8))
-    plt.plot(lag_list*5e-6, np.array(corrX), label='X')
-    plt.plot(lag_list*5e-6, np.array(corrY), label='Y')
-    plt.plot(lag_list*5e-6, np.array(corrZ), label='Z')
-    plt.xlabel('time/s')
+    plt.figure(figsize=(10,8))
+    plt.rcParams.update({'font.size':15})
+    plt.plot(lag_list*1e-2, np.array(corrX), marker="o", markersize=6, label=r'$X$')
+    plt.plot(lag_list*1e-2, np.array(corrY), marker="^", markersize=6, label=r'$Y$')
+    plt.plot(lag_list*1e-2, np.array(corrZ), marker="D", markersize=6, label=r'$Z$')
+    plt.xlabel(r'$t/s$', fontsize=17)
+    plt.xticks(fontsize=15)
+    plt.yticks(fontsize=15)
     plt.legend()
-    plt.title('Autocorrelation')
+    plt.subplots_adjust(bottom=0.15)
     plt.savefig('corr.pdf', dpi=300)
 
 
@@ -218,5 +221,5 @@ def plot_evolve(length):
 
 if __name__ == '__main__':
     
-    # plot_pnas_autocorr()
-    plot_evolve(3.0)
+    plot_pnas_autocorr()
+    # plot_evolve(3.0)

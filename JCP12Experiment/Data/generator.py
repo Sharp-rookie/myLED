@@ -17,7 +17,7 @@ def system_4d(y0, t, para=(0.025,3)):
     return [dc1, dc2, dc3, dc4]
 
 
-def generate_original_data(trace_num, total_t=5, dt=0.0001):
+def generate_original_data(trace_num, total_t=5, dt=0.0001, save=True):
     
     def solve_1_trace(trace_id=0, total_t=5, dt=0.001):
         
@@ -37,7 +37,7 @@ def generate_original_data(trace_num, total_t=5, dt=0.0001):
         
         return sol
     
-    if os.path.exists('Data/origin/origin.npz'): return
+    if save and os.path.exists('Data/origin/origin.npz'): return
     
     os.makedirs('Data/origin', exist_ok=True)
     
@@ -46,9 +46,11 @@ def generate_original_data(trace_num, total_t=5, dt=0.0001):
         sol = solve_1_trace(trace_id, total_t, dt)
         trace.append(sol)
     
-    np.savez('Data/origin/origin.npz', trace=trace, dt=dt, T=total_t)
+    if save: np.savez('Data/origin/origin.npz', trace=trace, dt=dt, T=total_t)
 
     print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
+
+    return trace
     
     
 def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
@@ -109,11 +111,13 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
 
         # generator item dataset
         sequences = []
+        parallel_trace = [[] for _ in range(N_TRACE)]
         for bn in range(len(idxs_timestep)):
             idx_ic = idxs_ic[bn]
             idx_timestep = idxs_timestep[bn]
             tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(sequence_length-1)+1 : step_length]
             sequences.append(tmp)
+            parallel_trace[idx_ic].append(tmp)
             if is_print: print(f'\rtau[{tau}] sliding window for {item} data [{bn+1}/{len(idxs_timestep)}]', end='')
         if is_print: print()
 
@@ -141,6 +145,11 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
         else:
             np.savez(data_dir+f'/{item}.npz', data=sequences)
 
+        for i in range(len(parallel_trace)):
+            parallel_trace[i] = np.array(parallel_trace[i])
+        parallel_trace = np.array(parallel_trace)
+        np.savez(data_dir+f'/neural_ode_{item}.npz', data=parallel_trace, tau=tau)
+
         # plot
         if seq_none:
             plt.figure(figsize=(16,10))
@@ -162,28 +171,26 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
             plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
             
             
-def generate_informer_dataset(trace_num, sample_num=None):
-    
+def generate_informer_dataset(trace_num=1000, total_t=5.1, dt=0.01, sample_num=None):
+
     # load original data
-    print('loading original trace data:')
-    tmp = np.load(f"Data/origin/origin.npz")
-    simdata = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
+    simdata = generate_original_data(trace_num=trace_num, total_t=total_t, dt=dt, save=False)
+    simdata = np.array(simdata)[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
 
     for tau in [0.1, 1.0, 5.0]:
         # subsampling
-        dt = tmp['dt']
         subsampling = int(tau/dt) if tau!=0. else 1
-        data = simdata[:, ::subsampling]
+        data = simdata[:, :int(total_t/5*subsampling):subsampling]
         print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
         
         import pandas as pd
         data = np.concatenate(data, axis=0)[:,0]
         df = pd.DataFrame(data, columns=['c1','c2','c3','c4'])
         
-        dt = pd.date_range('2016-07-01 00:00:00', periods=len(df), freq='h')
-        df['date'] = dt
+        t = pd.date_range('2016-07-01 00:00:00', periods=len(df), freq='h')
+        df['date'] = t
         df = df[['date','c1','c2','c3','c4']]
         
         df.to_csv(f'tau_{tau}.csv', index=False)
 
-# generate_informer_dataset(trace_num=1000, sample_num=None)
+# generate_informer_dataset(trace_num=10000, total_t=100.1, dt=0.01, sample_num=None)

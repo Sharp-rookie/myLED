@@ -281,7 +281,10 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
     plt.savefig(log_dir+f"/test/predict_{delta_t}.pdf", dpi=300)
     plt.close()
     
-    return MSE, RMSE, MAE, MAPE
+    c1_evolve_mae = np.mean(np.abs(pred[:,0,0,0] - true[:,0,0,0]))
+    c2_evolve_mae = np.mean(np.abs(pred[:,0,0,1] - true[:,0,0,1]))
+    
+    return MSE, RMSE, MAE, MAPE, c1_evolve_mae, c2_evolve_mae
 
 
 def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
@@ -300,9 +303,9 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
         for i in tqdm(range(1, 25*n+1)):
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, False)
-            MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
+            MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
             with open(f'tcn_evolve_test_{tau}.txt','a') as f:
-                f.writelines(f'{round(tau/n*i, 3)}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
+                f.writelines(f'{round(tau/n*i, 3)}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
 
 
 if __name__ == '__main__':
