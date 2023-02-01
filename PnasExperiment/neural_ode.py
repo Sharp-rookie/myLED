@@ -13,7 +13,7 @@ else:
     from torchdiffeq import odeint
 
 from util import set_cpu_num
-from Data.dataset import JCP12Dataset
+from Data.dataset import PNASDataset
 from Data.generator import generate_dataset
 
 
@@ -124,14 +124,14 @@ def normal_kl(mu1, lv1, mu2, lv2):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/neural_ode/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = Latent_ODE(in_channels=1, input_1d_width=4, latent_dim=4)
+    model = Latent_ODE(in_channels=1, input_1d_width=3, latent_dim=4)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
     model.to(device)
@@ -145,9 +145,9 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = JCP12Dataset(data_filepath, 'train', neural_ode=True)
+    train_dataset = PNASDataset(data_filepath, 'train', neural_ode=True)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = JCP12Dataset(data_filepath, 'val', neural_ode=True)
+    val_dataset = PNASDataset(data_filepath, 'val', neural_ode=True)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
@@ -161,7 +161,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
         sunsample = int(delta_t/0.01) # dt==0.01
         for t_step, (input, target) in enumerate(train_loader):
             input = model.scale(input[:, ::sunsample].to(device)) # (batchsize,time_length,1,3)
-            target = model.scale(target[0,::sunsample].to(device))
+            target = model.scale(target[:, ::sunsample].to(device))
 
             # backward in time to infer q(z_0)
             h = model.initHidden(input.size(0)).to(device)
@@ -250,9 +250,9 @@ def train(tau, delta_t, is_print=False, random_seed=729):
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
                 
                 # plot total infomation one-step prediction curve
-                plt.figure(figsize=(16,4))
-                for j, item in enumerate(['c1','c2','c3', 'c4']):
-                    ax = plt.subplot(1,4,j+1)
+                plt.figure(figsize=(16,5))
+                for j, item in enumerate(['X','Y','Z']):
+                    ax = plt.subplot(1,3,j+1)
                     ax.set_title(item)
                     plt.plot(targets[:,j], label='true')
                     plt.plot(outputs[:,j], label='predict')
@@ -275,21 +275,21 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/neural_ode/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
     batch_size = 1
-    model = Latent_ODE(in_channels=1, input_1d_width=4, latent_dim=4)
+    model = Latent_ODE(in_channels=1, input_1d_width=3, latent_dim=4)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
     model = model.to(device)
     
     # dataset
-    test_dataset = JCP12Dataset(data_filepath, 'test', neural_ode=True)
+    test_dataset = PNASDataset(data_filepath, 'test', neural_ode=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # testing pipeline        
@@ -336,9 +336,9 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
     MAE = np.mean(np.abs(pred - true))
     
     # plot total infomation prediction curve
-    plt.figure(figsize=(16,4))
-    for j, item in enumerate(['c1','c2','c3', 'c4']):
-        ax = plt.subplot(1,4,j+1)
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['X','Y','Z']):
+        ax = plt.subplot(1,3,j+1)
         ax.set_title(item)
         plt.plot(true[:,j], label='true')
         plt.plot(pred[:,j], label='predict')
@@ -354,7 +354,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
 
 def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
-    seed_everything(729)
+    seed_everything(random_seed)
     set_cpu_num(1)
     
     if not long_test:
@@ -363,7 +363,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 200
-        for i in tqdm(range(1, 6*n+1+2)):
+        for i in tqdm(range(1, 5*n+1)):
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, None, True, neural_ode=True)
             MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
@@ -377,8 +377,8 @@ if __name__ == '__main__':
     
     workers = []
     
-    tau = 0.8
-    n = 8
+    tau = 3.0
+    n = 10
     
     train
     sample_num = None
@@ -400,3 +400,5 @@ if __name__ == '__main__':
     # while any([sub.exitcode==None for sub in workers]):
     #     pass
     # workers = []
+
+    torch.cuda.empty_cache()

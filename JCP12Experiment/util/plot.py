@@ -206,7 +206,7 @@ def plot_jcp12_autocorr():
     corrC3 = np.mean(corrC3, axis=0)
     corrC4 = np.mean(corrC4, axis=0)
     
-    plt.figure(figsize=(10,8))
+    plt.figure(figsize=(6,6))
     plt.rcParams.update({'font.size':15})
     plt.plot(lag_list*1e-2, np.array(corrC1), marker="o", markersize=6, label=r'$c_1$')
     plt.plot(lag_list*1e-2, np.array(corrC2), marker="^", markersize=6, label=r'$c_2$')
@@ -262,11 +262,11 @@ def plot_evolve(length):
         ax.legend()
     plt.savefig(f'evolve_test_{length}.pdf', dpi=300)
 
-    plt.figure(figsize=(8,8))
+    plt.figure(figsize=(6,6))
     plt.rcParams.update({'font.size':15})
-    plt.plot(our_data[:,0], our_data[:,5], marker="o", markersize=6, label='Our Model')
-    plt.plot(lstm_data[:,0], lstm_data[:,5], marker="^", markersize=6, label='LSTM')
-    plt.plot(tcn_data[:,0], tcn_data[:,5], marker="D", markersize=6, label='TCN')
+    plt.plot(our_data[::2,0], our_data[::2,5], marker="o", markersize=6, label='Our Model')
+    plt.plot(lstm_data[::2,0], lstm_data[::2,5], marker="^", markersize=6, label='LSTM')
+    plt.plot(tcn_data[::2,0], tcn_data[::2,5], marker="D", markersize=6, label='TCN')
     plt.xlabel(r'$t / s$', fontsize=17)
     plt.subplots_adjust(bottom=0.15)
     plt.legend()
@@ -274,7 +274,7 @@ def plot_evolve(length):
     plt.yticks(fontsize=15)
     plt.savefig(f'slow_evolve_mae.pdf', dpi=300)
 
-    plt.figure(figsize=(8,8))
+    plt.figure(figsize=(4,4))
     plt.rcParams.update({'font.size':15})
     plt.plot(our_data[:,0], our_data[:,3], marker="o", markersize=6, label=r'$overall$')
     plt.plot(our_data[:,0], our_data[:,6], marker="^", markersize=6, label=r'$c_1$')

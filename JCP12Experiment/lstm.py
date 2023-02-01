@@ -246,10 +246,10 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
 
 def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
-    seed_everything(729)
+    seed_everything(random_seed)
     set_cpu_num(1)
     
-    sample_num = 100
+    sample_num = None
 
     if not long_test:
         # train
