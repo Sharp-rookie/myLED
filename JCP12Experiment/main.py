@@ -16,27 +16,6 @@ from Data.generator import generate_dataset, generate_original_data
 from util import set_cpu_num
 from util.plot import plot_epoch_test_log, plot_slow_ae_loss, plot_id_per_tau
 from util.intrinsic_dimension import eval_id_embedding
-
-
-class CCFLoss(nn.Module):
-    def __init__(self):
-        super(CCFLoss,self).__init__()
-        
-    def forward(self, series_1, series_2):
-        assert len(series_1.shape) == 2
-
-        length = series_1.shape[-1]
-        m_1 = torch.mean(series_1, (-1), keepdim=True)
-        m_2 = torch.mean(series_2, (-1), keepdim=True)
-        std_1 = torch.std(series_1, (-1), keepdim=True)
-        std_2 = torch.std(series_2, (-1), keepdim=True)
-
-        cov = torch.sum((series_1 - m_1)*(series_2 - m_2), (-1), keepdim=True) / (length-1)
-        ccf = cov / (std_1*std_2)
-
-        abs = torch.abs(ccf)
-        
-        return - torch.mean(abs)
     
 
 def train_time_lagged(tau, is_print=False, random_seed=729):
@@ -565,13 +544,26 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
     np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
     # plot Koopman Lambda curve
-    plt.figure()
+    plt.figure(figsize=(8,8))
     for i in range(slow_id):
         plt.plot(lambda_curve[i], label=f'lambda[{i}]')
     plt.xlabel('epoch')
     plt.legend()
     plt.savefig(log_dir+'/K_lambda_curve.pdf', dpi=300)
     np.savez(log_dir+'/K_lambda_curve.npz',lambda_curve=lambda_curve)
+
+    # # plot Koopman Lambda curve
+    # lambda_curve = np.load(log_dir+'/K_lambda_curve.npz')['lambda_curve']
+    # plt.figure(figsize=(8,8))
+    # plt.rcParams.update({'font.size':15})
+    # plt.plot(np.arange(int(lambda_curve.shape[-1]/3)+1)*3, lambda_curve[0,::3], marker="o", markersize=6, label=rf'$\lambda_1$')
+    # plt.plot(np.arange(int(lambda_curve.shape[-1]/3)+1)*3, lambda_curve[1,::3], marker="^", markersize=6, label=rf'$\lambda_2$')
+    # plt.xlabel('epoch', fontsize=17)
+    # plt.xticks(fontsize=15)
+    # plt.yticks(fontsize=15)
+    # plt.legend()
+    # plt.subplots_adjust(bottom=0.15)
+    # plt.savefig(log_dir+'/K_lambda_curve.pdf', dpi=300)
 
 
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
@@ -759,8 +751,11 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
     plt.subplots_adjust(wspace=0.2)
     plt.savefig(log_dir+f"/test/{delta_t}/total_pred.pdf", dpi=300)
     plt.close()
+
+    c1_evolve_mae = torch.mean(torch.abs(slow_obses_next[:,0,0,0] - true[:,0,0,0]))
+    c2_evolve_mae = torch.mean(torch.abs(slow_obses_next[:,0,0,1] - true[:,0,0,1]))
     
-    return MSE, RMSE, MAE, MAPE
+    return MSE, RMSE, MAE, MAPE, c1_evolve_mae.item(), c2_evolve_mae.item()
         
     
 def worker_1(tau, trace_num=256+32+32, random_seed=729, cpu_num=1, is_print=False):
@@ -782,7 +777,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
     seed_everything(random_seed)
     set_cpu_num(cpu_num)
 
-    ckpt_epoch = 100
+    ckpt_epoch = 110
 
     if not long_test:
         # train
@@ -794,9 +789,9 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
         # test evolve
         for i in tqdm(range(1, 6*n+1+2)):
             delta_t = round(tau/n*i, 3)
-            MSE, RMSE, MAE, MAPE = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
+            MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
             with open(f'pretrain{pretrain_epoch}_evolve_test_{tau}.txt','a') as f:
-                f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
+                f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
     
     
 def data_generator_pipeline(trace_num=256+32+32, total_t=9, dt=0.0001):
