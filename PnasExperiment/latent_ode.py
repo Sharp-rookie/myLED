@@ -13,7 +13,7 @@ else:
     from torchdiffeq import odeint
 
 from util import set_cpu_num
-from Data.dataset import JCP12Dataset
+from Data.dataset import PNASDataset
 from Data.generator import generate_dataset
 
 
@@ -41,8 +41,7 @@ class Decoder(nn.Module):
 
     def __init__(self, in_channels, input_1d_width, latent_dim=4, nhidden=32):
         super(Decoder, self).__init__()
-        # self.relu = nn.ReLU(inplace=True)
-        self.relu = nn.Tanh()
+        self.relu = nn.ReLU(inplace=True)
         self.fc1 = nn.Linear(latent_dim, nhidden)
         self.fc2 = nn.Linear(nhidden, in_channels*input_1d_width)
         self.unflatten = nn.Unflatten(-1, (in_channels, input_1d_width))
@@ -125,30 +124,30 @@ def normal_kl(mu1, lv1, mu2, lv2):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/latent_ode/tau_{tau}/seed{random_seed}'
+    log_dir = f'logs/neural_ode_mse/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = Latent_ODE(in_channels=1, input_1d_width=4, latent_dim=4)
+    model = Latent_ODE(in_channels=1, input_1d_width=3, latent_dim=4)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
     model.to(device)
     
     # training params
     lr = 1e-4
-    batch_size = 32
+    batch_size = 1
     max_epoch = 2000
     weight_decay = 0.001
     MSE_loss = nn.MSELoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = JCP12Dataset(data_filepath, 'train', neural_ode=True)
+    train_dataset = PNASDataset(data_filepath, 'train', neural_ode=True)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = JCP12Dataset(data_filepath, 'val', neural_ode=True)
+    val_dataset = PNASDataset(data_filepath, 'val', neural_ode=True)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
@@ -162,13 +161,12 @@ def train(tau, delta_t, is_print=False, random_seed=729):
         dt = 0.01 # same with it in dataset
         sunsample = int(delta_t/dt)
         for t_step, (input, target) in enumerate(train_loader):
-            input = model.scale(input[:, ::sunsample].to(device)) # (batchsize,time_length,1,3)
-            target = model.scale(target[:,::sunsample].to(device))
+            input = model.scale(input[0,:, ::sunsample].to(device)) # (batchsize,time_length,1,3)
+            target = model.scale(target[0,:, ::sunsample].to(device))
 
             # backward in time to infer q(z_0)
             h = model.initHidden(input.size(0)).to(device)
-            # for t in reversed(range(input.size(1))):
-            for t in range(input.size(1)):
+            for t in reversed(range(input.size(1))):
                 obs = input[:, t]
                 out, h = model.obs2latent(obs, h)
             qz0_mean, qz0_logvar = out[:, :model.latent_dim], out[:, model.latent_dim:]
@@ -180,26 +178,16 @@ def train(tau, delta_t, is_print=False, random_seed=729):
             latent_next = odeint(model.ode, z0, t).permute(1, 0, 2)
             output = model.latent2obs(latent_next)
 
-            # print(input.shape, t.shape)
-            # print(t)
-            # fig=plt.figure()
-            # ax=fig.gca(projection='3d')
-            # ax.plot(input[4,:,0,0].detach().cpu(),input[4,:,0,1].detach().cpu(),input[4,:,0,2].detach().cpu())
-            # plt.savefig('tmp.pdf', dpi=300)
-            # exit(0)
+            # # compute loss
+            # noise_std = 3.
+            # noise_std_ = torch.zeros(output[:,:,0].size()).to(device) + noise_std
+            # noise_logvar = 2. * torch.log(noise_std_).to(device)
+            # logpx = log_normal_pdf(input[:,:,0], output[:,:,0], noise_logvar).sum(-1).sum(-1)
+            # pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
+            # analytic_kl = normal_kl(qz0_mean, qz0_logvar, pz0_mean, pz0_logvar).sum(-1)
+            # loss = torch.mean(-logpx + analytic_kl, dim=0)
 
-            # compute loss
-            noise_std = 3.
-            noise_std_ = torch.zeros(output[:,:,0].size()).to(device) + noise_std
-            noise_logvar = 2. * torch.log(noise_std_).to(device)
-            logpx = log_normal_pdf(input[:,:,0], output[:,:,0], noise_logvar).sum(-1).sum(-1)
-            pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
-            analytic_kl = normal_kl(qz0_mean, qz0_logvar, pz0_mean, pz0_logvar).sum(-1)
-            loss = torch.mean(-logpx + analytic_kl, dim=0)
-            # loss = torch.mean(-l
-            # ogpx, dim=0)
-
-            # loss = MSE_loss(output, target)
+            loss = MSE_loss(output, target)
 
             optimizer.zero_grad()
             loss.backward()
@@ -217,12 +205,12 @@ def train(tau, delta_t, is_print=False, random_seed=729):
             
             model.eval()
             for input, target in val_loader:
-                input = model.scale(input[:, ::sunsample].to(device)) # (batchsize,1,1,3)
-                target = model.scale(target[:, ::sunsample].to(device))
+                input = model.scale(input[0,:, ::sunsample].to(device)) # (batchsize,1,1,3)
+                target = model.scale(target[0,:, ::sunsample].to(device))
                 
                 # backward in time to infer q(z_0)
                 h = model.initHidden(input.size(0)).to(device)
-                for t in range(input.size(1)):
+                for t in reversed(range(input.size(1))):
                     obs = input[:, t]
                     out, h = model.obs2latent(obs, h)
                 qz0_mean, qz0_logvar = out[:, :model.latent_dim], out[:, model.latent_dim:]
@@ -234,17 +222,17 @@ def train(tau, delta_t, is_print=False, random_seed=729):
                 latent_next = odeint(model.ode, z0, t).permute(1, 0, 2)
                 output = model.latent2obs(latent_next)
 
-                # compute loss
-                noise_std = 3.
-                noise_std_ = torch.zeros(output[:,:,0].size()).to(device) + noise_std
-                noise_logvar = 2. * torch.log(noise_std_).to(device)
-                logpx = log_normal_pdf(input[:,:,0], output[:,:,0], noise_logvar).sum(-1).sum(-1)
-                pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
-                analytic_kl = normal_kl(qz0_mean, qz0_logvar,
-                                        pz0_mean, pz0_logvar).sum(-1)
-                loss = torch.mean(-logpx + analytic_kl, dim=0)
+                # # compute loss
+                # noise_std = 3.
+                # noise_std_ = torch.zeros(output[:,:,0].size()).to(device) + noise_std
+                # noise_logvar = 2. * torch.log(noise_std_).to(device)
+                # logpx = log_normal_pdf(input[:,:,0], output[:,:,0], noise_logvar).sum(-1).sum(-1)
+                # pz0_mean = pz0_logvar = torch.zeros(z0.size()).to(device)
+                # analytic_kl = normal_kl(qz0_mean, qz0_logvar,
+                #                         pz0_mean, pz0_logvar).sum(-1)
+                # loss = torch.mean(-logpx + analytic_kl, dim=0)
 
-                # loss = MSE_loss(output, target)
+                loss = MSE_loss(output, target)
 
                 # record results
                 outputs.append(output[0,:,0].cpu())
@@ -263,9 +251,9 @@ def train(tau, delta_t, is_print=False, random_seed=729):
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
                 
                 # plot total infomation one-step prediction curve
-                plt.figure(figsize=(16,4))
-                for j, item in enumerate(['c1','c2','c3', 'c4']):
-                    ax = plt.subplot(1,4,j+1)
+                plt.figure(figsize=(16,5))
+                for j, item in enumerate(['X','Y','Z']):
+                    ax = plt.subplot(1,3,j+1)
                     ax.set_title(item)
                     plt.plot(targets[:,j], label='true')
                     plt.plot(outputs[:,j], label='predict')
@@ -288,21 +276,21 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cuda:1')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/latent_ode/tau_{tau}/seed{random_seed}'
+    log_dir = f'logs/neural_ode/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
-    batch_size = 32
-    model = Latent_ODE(in_channels=1, input_1d_width=4, latent_dim=4)
+    batch_size = 1
+    model = Latent_ODE(in_channels=1, input_1d_width=3, latent_dim=4)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
     model = model.to(device)
     
     # dataset
-    test_dataset = JCP12Dataset(data_filepath, 'test', neural_ode=True)
+    test_dataset = PNASDataset(data_filepath, 'test', neural_ode=True)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # testing pipeline        
@@ -314,8 +302,8 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         dt = 0.01 # same with it in dataset
         sunsample = int(delta_t/dt)
         for t_step, (input, target) in enumerate(test_loader):
-            input = model.scale(input[:, ::sunsample].to(device))
-            target = model.scale(target[:, ::sunsample].to(device))
+            input = model.scale(input[0,:, ::sunsample].to(device))
+            target = model.scale(target[0,:, ::sunsample].to(device))
 
             # backward in time to infer q(z_0)
             h = model.initHidden(input.size(0)).to(device)
@@ -350,9 +338,9 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
     MAE = np.mean(np.abs(pred - true))
     
     # plot total infomation prediction curve
-    plt.figure(figsize=(16,4))
-    for j, item in enumerate(['c1','c2','c3', 'c4']):
-        ax = plt.subplot(1,4,j+1)
+    plt.figure(figsize=(16,5))
+    for j, item in enumerate(['X','Y','Z']):
+        ax = plt.subplot(1,3,j+1)
         ax.set_title(item)
         plt.plot(true[:,j], label='true')
         plt.plot(pred[:,j], label='predict')
@@ -368,7 +356,7 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
 
 def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     
-    seed_everything(729)
+    seed_everything(random_seed)
     set_cpu_num(1)
     
     if not long_test:
@@ -377,40 +365,42 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 2000
-        for i in tqdm(range(1, 6*n+1+2)):
+        for i in tqdm(range(1, 5*n+1)):
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, None, True, neural_ode=True)
             MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
-            with open(f'neuralODE_evolve_test_{tau}.txt','a') as f:
+            with open(f'nruralODE_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
 
 
 if __name__ == '__main__':
     
-    trace_num = 200
+    trace_num = 100
     
     workers = []
     
-    tau = 0.8
-    n = 8
+    tau = 3.0
+    n = 10
     
-    # train
-    sample_num = None
-    generate_dataset(trace_num, round(tau/n, 3), sample_num, True, neural_ode=True)
-    for seed in range(1,10+1):
-        is_print = True if len(workers)==0 else False
-        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
-        workers[-1].start()
-    while any([sub.exitcode==None for sub in workers]):
-        pass
-    workers = []
+    # # train
+    # sample_num = None
+    # generate_dataset(trace_num, round(tau/n, 3), sample_num, True, neural_ode=True)
+    # for seed in range(1,10+1):
+    #     is_print = True if len(workers)==0 else False
+    #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
+    #     workers[-1].start()
+    # while any([sub.exitcode==None for sub in workers]):
+    #     pass
+    # workers = []
     
     # test
-    # for seed in range(1,10+1):
-    #     main(trace_num, tau, n, True, True, seed)
+    for seed in range(1,10+1):
+        main(trace_num, tau, n, True, True, seed)
     #     is_print = True if len(workers)==0 else False
     #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
     #     workers[-1].start()
     # while any([sub.exitcode==None for sub in workers]):
     #     pass
     # workers = []
+
+    torch.cuda.empty_cache()

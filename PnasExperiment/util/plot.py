@@ -129,6 +129,7 @@ def plot_id_per_tau(tau_list, id_epoch):
     plt.yticks(fontsize=15)
     plt.legend()
     plt.xlabel(r'$\tau / s$', fontsize=17)
+    plt.ylabel('Intrinsic dimensionality', fontsize=17)
     plt.subplots_adjust(bottom=0.15)
     plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
 
@@ -167,18 +168,19 @@ def plot_pnas_autocorr():
     plt.plot(lag_list*1e-2, np.array(corrY), marker="^", markersize=6, label=r'$Y$')
     plt.plot(lag_list*1e-2, np.array(corrZ), marker="D", markersize=6, label=r'$Z$')
     plt.xlabel(r'$t/s$', fontsize=17)
+    plt.ylabel('Autocorrelation coefficient', fontsize=17)
     plt.xticks(fontsize=15)
     plt.yticks(fontsize=15)
     plt.legend()
-    plt.subplots_adjust(bottom=0.15)
+    plt.subplots_adjust(bottom=0.15, left=0.2)
     plt.savefig('corr.pdf', dpi=300)
 
 
 def plot_evolve(length):
     
-    our = open(f'evolve_test_{length}.txt', 'r')
-    lstm = open(f'lstm_evolve_test_{length}.txt', 'r')
-    tcn = open(f'tcn_evolve_test_{length/5}.txt', 'r')
+    our = open(f'results/evolve_test_{length}.txt', 'r')
+    lstm = open(f'results/lstm_evolve_test_{length}.txt', 'r')
+    tcn = open(f'results/tcn_evolve_test_{length/5}.txt', 'r')
     
     our_data = [[] for seed in range(10)]
     lstm_data = [[] for seed in range(10)]
