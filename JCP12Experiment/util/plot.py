@@ -138,6 +138,7 @@ def plot_id_per_tau(tau_list, id_epoch):
     plt.yticks(fontsize=15)
     plt.legend()
     plt.xlabel(r'$\tau / s$', fontsize=17)
+    plt.ylabel('Intrinsic dimensionality', fontsize=17)
     plt.subplots_adjust(bottom=0.15)
     plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
 
@@ -194,7 +195,7 @@ def plot_jcp12_autocorr():
 
         data = pd.DataFrame(np.concatenate((c1,c2,c3,c4), axis=-1), columns=['c1','c2','c3','c4'])
         
-        lag_list = np.arange(0, 5*100, 10)
+        lag_list = np.arange(0, 5*100, 15)
         for lag in tqdm(lag_list):
             corrC1[trace_id].append(data['c1'].autocorr(lag=lag))
             corrC2[trace_id].append(data['c2'].autocorr(lag=lag))
@@ -213,23 +214,27 @@ def plot_jcp12_autocorr():
     plt.plot(lag_list*1e-2, np.array(corrC3), marker="D", markersize=6, label=r'$c_3$')
     plt.plot(lag_list*1e-2, np.array(corrC4), marker="*", markersize=6, label=r'$c_4$')
     plt.xlabel(r'$t/s$', fontsize=17)
+    plt.ylabel('Autocorrelation coefficient', fontsize=17)
     plt.xticks(fontsize=15)
     plt.yticks(fontsize=15)
     plt.legend()
+    plt.subplots_adjust(bottom=0.15, left=0.2)
     plt.subplots_adjust(bottom=0.15)
     plt.savefig('corr.pdf', dpi=300)
     
     
 def plot_evolve(length):
     
-    our = open(f'pretrain100_evolve_test_{length}.txt', 'r')
-    lstm = open(f'lstm_evolve_test_{length}.txt', 'r')
-    tcn = open(f'tcn_evolve_test_{length}.txt', 'r')
+    our = open(f'results/pretrain100_evolve_test_{length}.txt', 'r')
+    lstm = open(f'results/lstm_evolve_test_{length}.txt', 'r')
+    tcn = open(f'results/tcn_evolve_test_{length}.txt', 'r')
+    ode = open(f'results/neuralODE_evolve_test_{length}.txt', 'r')
     
     our_data = [[] for seed in range(10)]
     lstm_data = [[] for seed in range(10)]
     tcn_data = [[] for seed in range(10)]
-    for i, data in enumerate([our, lstm, tcn]):
+    ode_data = [[] for seed in range(10)]
+    for i, data in enumerate([our, lstm, tcn, ode]):
         for line in data.readlines():
             tau = float(line.split(',')[0])
             seed = int(line.split(',')[1])
@@ -246,10 +251,13 @@ def plot_evolve(length):
                 lstm_data[seed-1].append([tau,mse,rmse,mae,mape,np.mean([c1_mae,c2_mae])])
             elif i==2:
                 tcn_data[seed-1].append([tau,mse,rmse,mae,mape,np.mean([c1_mae,c2_mae])])
+            elif i==3:
+                ode_data[seed-1].append([tau,mse,rmse,mae,mape,np.mean([c1_mae,c2_mae])])
     
     our_data = np.mean(np.array(our_data), axis=0)
     lstm_data = np.mean(np.array(lstm_data), axis=0)
     tcn_data = np.mean(np.array(tcn_data), axis=0)
+    ode_data = np.mean(np.array(ode_data), axis=0)
     
     plt.figure(figsize=(16,16))
     for i, item in enumerate(['mse', 'rmse', 'mae', 'mape']):
@@ -257,22 +265,24 @@ def plot_evolve(length):
         ax.plot(our_data[:,0], our_data[:,i+1], label='our')
         ax.plot(lstm_data[:,0], lstm_data[:,i+1], label='lstm')
         ax.plot(tcn_data[:,0], tcn_data[:,i+1], label='tcn')
+        ax.plot(ode_data[:,0], ode_data[:,i+1], label='ode')
         ax.set_title(item)
         ax.set_xlabel('t / s')
         ax.legend()
-    plt.savefig(f'evolve_test_{length}.pdf', dpi=300)
+    plt.savefig(f'results/evolve_test_{length}.pdf', dpi=300)
 
     plt.figure(figsize=(6,6))
     plt.rcParams.update({'font.size':15})
     plt.plot(our_data[::2,0], our_data[::2,5], marker="o", markersize=6, label='Our Model')
     plt.plot(lstm_data[::2,0], lstm_data[::2,5], marker="^", markersize=6, label='LSTM')
     plt.plot(tcn_data[::2,0], tcn_data[::2,5], marker="D", markersize=6, label='TCN')
+    plt.plot(ode_data[::2,0], ode_data[::2,5], marker="+", markersize=6, label='Neural ODE')
     plt.xlabel(r'$t / s$', fontsize=17)
     plt.subplots_adjust(bottom=0.15)
     plt.legend()
     plt.xticks(fontsize=15)
     plt.yticks(fontsize=15)
-    plt.savefig(f'slow_evolve_mae.pdf', dpi=300)
+    plt.savefig(f'results/slow_evolve_mae.pdf', dpi=300)
 
     plt.figure(figsize=(4,4))
     plt.rcParams.update({'font.size':15})
@@ -284,10 +294,10 @@ def plot_evolve(length):
     plt.legend()
     plt.xticks(fontsize=15)
     plt.yticks(fontsize=15)
-    plt.savefig(f'our_slow_evolve_mae.pdf', dpi=300)
+    plt.savefig(f'results/our_slow_evolve_mae.pdf', dpi=300)
     
-    item = ['our','lstm','tcn']
-    for i, data in enumerate([our_data, lstm_data, tcn_data]):
+    item = ['our','lstm','tcn', 'ode']
+    for i, data in enumerate([our_data, lstm_data, tcn_data, ode_data]):
         print(f'{item[i]} | tau[{data[0,0]:.3f}] RMSE={data[0,2]:.4f}, MAE={data[0,3]:.4f}, MAPE={100*data[0,4]:.2f}% | tau[{data[9,0]:.3f}] RMSE={data[9,2]:.4f}, MAE={data[9,3]:.4f}, MAPE={100*data[9,4]:.2f}% | tau[{data[49,0]:.3f}] RMSE={data[49,2]:.4f}, MAE={data[49,3]:.4f}, MAPE={100*data[49,4]:.2f}%')
     
 

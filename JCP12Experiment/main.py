@@ -790,7 +790,7 @@ def worker_2(tau, pretrain_epoch, slow_id, n, random_seed=729, cpu_num=1, is_pri
         for i in tqdm(range(1, 6*n+1+2)):
             delta_t = round(tau/n*i, 3)
             MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, i, is_print, random_seed)
-            with open(f'pretrain{pretrain_epoch}_evolve_test_{tau}.txt','a') as f:
+            with open(f'results/pretrain{pretrain_epoch}_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
     
     

@@ -98,7 +98,7 @@ def plot_c3_c4_trajectory():
         plt.subplots_adjust(bottom=0., top=1.)
         plt.savefig(f"Data/origin/c{2+i+1}.pdf", dpi=300)
         plt.close()
-plot_c3_c4_trajectory()
+# plot_c3_c4_trajectory()
     
 def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None, neural_ode=False):
 
@@ -135,19 +135,14 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     ##################################
     # Create [train,val,test] dataset
     ##################################
-    if neural_ode:
-        train_num = int(trace_num/3)
-        val_num = int(trace_num/3)
-        test_num = int(trace_num/3)
-    else:
-        train_num = int(0.7*trace_num)
-        val_num = int(0.1*trace_num)
-        test_num = int(0.2*trace_num)
+    train_num = int(0.7*trace_num)
+    val_num = int(0.1*trace_num)
+    test_num = int(0.2*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
                 
         # select trace num
-        N_TRACE = len(trace_list[item])
+        N_TRACE = len(trace_list[item]) if not neural_ode else 1
         data_item = data[trace_list[item]]
 
         # subsampling
@@ -165,11 +160,13 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
 
         # generator item dataset
         sequences = []
+        parallel_sequences = [[] for _ in range(N_TRACE)]
         for bn in range(len(idxs_timestep)):
             idx_ic = idxs_ic[bn]
             idx_timestep = idxs_timestep[bn]
             tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(sequence_length-1)+1 : step_length]
             sequences.append(tmp)
+            parallel_sequences[idx_ic].append(tmp)
             if is_print: print(f'\rtau[{tau}] sliding window for {item} data [{bn+1}/{len(idxs_timestep)}]', end='')
         if is_print: print()
 
@@ -193,7 +190,10 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
 
         # save
         if neural_ode:
-            np.savez(data_dir+f'/neural_ode_{item}.npz', data=sequences[:,0])
+            for i in range(len(parallel_sequences)):
+                parallel_sequences[i] = np.array(parallel_sequences[i])
+            parallel_sequences = np.array(parallel_sequences)
+            np.savez(data_dir+f'/neural_ode_{item}.npz', data=parallel_sequences[:,:,0]) # （trace_num, time_step, 1, 4）
         else:
             if not seq_none:
                 np.savez(data_dir+f'/{item}_{sequence_length}.npz', data=sequences)
