@@ -45,10 +45,11 @@ class Koopman_OPT(nn.Module):
 
 class LSTM_OPT(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num, device):
+    def __init__(self, in_channels, input_1d_width, hidden_dim, layer_num, tau_s, device):
         super(LSTM_OPT, self).__init__()
         
         self.device = device
+        self.tau_s = tau_s
         
         # (batchsize,1,1,3)-->(batchsize,1,3)
         self.flatten = nn.Flatten(start_dim=2)
@@ -66,9 +67,13 @@ class LSTM_OPT(nn.Module):
         
         # (batchsize, hidden_dim)-->(batchsize, 3)
         self.fc = nn.Linear(hidden_dim, in_channels*input_1d_width)
+
+        # mechanism new
+        self.a_head = nn.Linear(hidden_dim, 1)
+        self.b_head = nn.Linear(hidden_dim, in_channels*input_1d_width)
         
         # (batchsize, 3)-->(batchsize,1,1,3)
-        self.unflatten = nn.Unflatten(-1, (1, in_channels, input_1d_width))
+        self.unflatten = nn.Unflatten(-1, (in_channels, input_1d_width))
     
     def forward(self, x):
         
@@ -77,7 +82,13 @@ class LSTM_OPT(nn.Module):
         
         x = self.flatten(x)
         _, (h, c)  = self.cell(x, (h0, c0))
-        y = self.fc(h[-1])
+        
+        # y = self.fc(h[-1])
+
+        a = self.a_head(h[-1]).unsqueeze(-2) # (batch_size, 1, 1)
+        b = self.b_head(h[-1]).unsqueeze(-2) # (batch_size, 1, in_channels*input_1d_width)
+        y = torch.abs(x) * torch.exp(-(a+self.tau_s)) * b # (batch_size, 1, in_channels*input_1d_width)
+
         y = self.unflatten(y)
                 
         return y
@@ -85,7 +96,7 @@ class LSTM_OPT(nn.Module):
 
 class EVOLVER(nn.Module):
     
-    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, device):
+    def __init__(self, in_channels, input_1d_width, embed_dim, slow_dim, tau_s, device):
         super(EVOLVER, self).__init__()
         
         # (batchsize,1,1,3)-->(batchsize, embed_dim)
@@ -124,7 +135,7 @@ class EVOLVER(nn.Module):
         
         self.K_opt = Koopman_OPT(slow_dim)
         
-        self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, device=device)
+        self.lstm = LSTM_OPT(in_channels, input_1d_width, hidden_dim=64, layer_num=2, tau_s=tau_s, device=device)
 
         # scale inside the model
         self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))

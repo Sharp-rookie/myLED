@@ -85,7 +85,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = PNASDataset(data_filepath, 'train')
+    train_dataset = PNASDataset(data_filepath, 'train', length=n)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
     val_dataset = PNASDataset(data_filepath, 'val')
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
@@ -99,13 +99,24 @@ def train(tau, delta_t, is_print=False, random_seed=729):
         
         # train
         model.train()
-        for input, target in train_loader:
+        # for input, target in train_loader:
+        for input, _, internl_units in train_loader:
             
             input = model.scale(input.to(device)) # (batchsize,1,1,3)
-            target = model.scale(target.to(device))
+            # target = model.scale(target.to(device))
+
+            loss = 0
+            for i in range(1, len(internl_units)):
+                
+                unit = model.scale(internl_units[i].to(device)) # t+i
+                output = model(input, device)
+                for _ in range(1,i):
+                    output = model(output, device)
+                
+                loss += MSE_loss(output, unit)
             
-            output = model(input, device)
-            loss = MSE_loss(output, target)
+            # output = model(input, device)
+            # loss = MSE_loss(output, target)
             
             optimizer.zero_grad()
             loss.backward()

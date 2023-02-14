@@ -64,9 +64,9 @@ class Exp_Informer(Exp_Basic):
             'JCP_0.1':Dataset_JCP_hour,
             'JCP_1.0':Dataset_JCP_hour,
             'JCP_5.0':Dataset_JCP_hour,
-            'PNAS_0.25':Dataset_PNAS_hour,
-            'PNAS_2.5':Dataset_PNAS_hour,
-            'PNAS_12.5':Dataset_PNAS_hour,
+            'PNAS_0.3':Dataset_PNAS_hour,
+            'PNAS_3.0':Dataset_PNAS_hour,
+            'PNAS_15.0':Dataset_PNAS_hour,
             'ETTh1':Dataset_ETT_hour,
             'ETTh2':Dataset_ETT_hour,
             'ETTm1':Dataset_ETT_minute,
@@ -234,22 +234,22 @@ class Exp_Informer(Exp_Basic):
         np.save(folder_path+'true.npy', trues)
 
         import matplotlib.pyplot as plt
-        # plt.figure(figsize=(16,4))
-        # for i, item in enumerate(['X','Y','Z']):
-        #     ax = plt.subplot(1,3,i+1)
-        #     ax.plot(preds[:,0,i], label='pred')
-        #     ax.plot(trues[:,0,i], label='true')
-        #     ax.set_title(item)
-        #     ax.legend()
-        # plt.savefig('result.jpg', dpi=300)
         plt.figure(figsize=(16,4))
-        for i, item in enumerate(['c1','c2','c3', 'c4']):
-            ax = plt.subplot(1,4,i+1)
+        for i, item in enumerate(['X','Y','Z']):
+            ax = plt.subplot(1,3,i+1)
             ax.plot(preds[:,0,i], label='pred')
             ax.plot(trues[:,0,i], label='true')
             ax.set_title(item)
             ax.legend()
         plt.savefig('result.jpg', dpi=300)
+        # plt.figure(figsize=(16,4))
+        # for i, item in enumerate(['c1','c2','c3', 'c4']):
+        #     ax = plt.subplot(1,4,i+1)
+        #     ax.plot(preds[:,0,i], label='pred')
+        #     ax.plot(trues[:,0,i], label='true')
+        #     ax.set_title(item)
+        #     ax.legend()
+        # plt.savefig('result.jpg', dpi=300)
 
         return
 

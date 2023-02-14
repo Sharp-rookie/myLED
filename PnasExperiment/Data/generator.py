@@ -50,21 +50,23 @@ def time_discretization(seed, total_t, dt=None, is_print=False):
 
         if is_print == 1: print(f'\rSeed[{seed}] interpolating {current_t:.6f}/{total_t}', end='')
 
+    import scienceplots
+    plt.style.use(['science'])
     plt.figure(figsize=(16,5))
-    plt.rcParams.update({'font.size':15})
+    plt.rcParams.update({'font.size':16})
     # plt.title(f'dt = {dt}')
-    ax1 = plt.subplot(1,3,1)
-    ax1.set_title(r'$X$', fontsize=17)
+    plt.subplot(1,3,1)
     plt.plot(t, X, label=r'$X$')
-    plt.xlabel(r'$t / s$', fontsize=17)
-    ax2 = plt.subplot(1,3,2)
-    ax2.set_title(r'$Y$', fontsize=17)
+    plt.xlabel(r'$t / s$', fontsize=18)
+    plt.ylabel(r'$X$', fontsize=18)
+    plt.subplot(1,3,2)
     plt.plot(t, Y, label=r'$Y$')
-    plt.xlabel(r'$time / s$', fontsize=17)
-    ax3 = plt.subplot(1,3,3)
-    ax3.set_title(r'$Z$', fontsize=17)
+    plt.xlabel(r'$t / s$', fontsize=18)
+    plt.ylabel(r'$Y$', fontsize=18)
+    plt.subplot(1,3,3)
     plt.plot(t, Z, label=r'$Z$')
-    plt.xlabel(r'$time / s$', fontsize=17)
+    plt.xlabel(r'$t / s$', fontsize=18)
+    plt.ylabel(r'$Z$', fontsize=18)
 
     plt.xticks(fontsize=15)
     plt.yticks(fontsize=15)
@@ -78,7 +80,7 @@ def time_discretization(seed, total_t, dt=None, is_print=False):
     plt.savefig(f'Data/origin/{seed}/data.pdf', dpi=300)
 
     np.savez(f'Data/origin/{seed}/data.npz', dt=dt, t=t, X=X, Y=Y, Z=Z)
-
+# time_discretization(1, total_t=15.1, dt=0.01)
 
 def generate_original_data(trace_num, total_t):
 

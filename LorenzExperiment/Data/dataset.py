@@ -3,7 +3,7 @@ import numpy as np
 from torch.utils.data import Dataset
 
 
-class JCP12Dataset(Dataset):
+class PolluDataset(Dataset):
 
     def __init__(self, file_path, mode='train', length=None, model=None):
         super().__init__()
@@ -63,5 +63,5 @@ class JCP12Dataset(Dataset):
 #         plt.savefig('data.pdf', dpi=300)
 
 # data_path = 'Data/data/tau_' + str(0.15)
-# j = JCP12Dataset(data_path, 'val', length=10)
+# j = PolluDataset(data_path, 'val', length=10)
 # j.plot()

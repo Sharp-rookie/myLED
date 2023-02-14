@@ -106,7 +106,7 @@ class TCN(nn.Module):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -127,7 +127,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = JCP12Dataset(data_filepath, 'train')
+    train_dataset = JCP12Dataset(data_filepath, 'train', length=n)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
     val_dataset = JCP12Dataset(data_filepath, 'val')
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
@@ -141,13 +141,25 @@ def train(tau, delta_t, is_print=False, random_seed=729):
         
         # train
         model.train()
-        for input, target in train_loader:
+        # for input, target in train_loader:
+        for input, _, internl_units in train_loader:
             
             input = model.scale(input.to(device)) # (batchsize,1,1,3)
-            target = model.scale(target.to(device))
+            # target = model.scale(target.to(device))
+
+            loss = 0
+            for i in range(1, len(internl_units)):
+                
+                unit = model.scale(internl_units[i].to(device)) # t+i
+                output = model(input)
+                for _ in range(1, n):
+                    input = torch.concat([input[:,1:], output[:,0].unsqueeze(1)], dim=1)
+                    output = model(input)
+                
+                loss += MSE_loss(output, unit)
             
-            output = model(input)
-            loss = MSE_loss(output, target)
+            # output = model(input)
+            # loss = MSE_loss(output, target)
             
             optimizer.zero_grad()
             loss.backward()
@@ -220,7 +232,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -300,7 +312,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
     else:
         # test evolve
         ckpt_epoch = 50
-        for i in tqdm(range(1, 25*n+1)):
+        for i in tqdm(range(1, 6*n+1+2)):
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, False)
             MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
@@ -314,26 +326,26 @@ if __name__ == '__main__':
     
     workers = []
     
-    tau = 0.2
-    n = 2
+    tau = 0.8
+    n = 8
     
-    # train
-    sample_num = None
-    generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
-    for seed in range(1,10+1):
-        is_print = True if len(workers)==0 else False
-        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
-        workers[-1].start()
-    while any([sub.exitcode==None for sub in workers]):
-        pass
-    workers = []
-    
-    # test
-    for seed in range(1,10+1):
-        main(trace_num, tau, n, True, True, seed)
+    # # train
+    # sample_num = None
+    # generate_dataset(trace_num, round(tau/n, 3), sample_num, False)
+    # for seed in range(1,10+1):
     #     is_print = True if len(workers)==0 else False
-    #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
+    #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, False, seed), daemon=True))
     #     workers[-1].start()
     # while any([sub.exitcode==None for sub in workers]):
     #     pass
     # workers = []
+    
+    # test
+    for seed in range(1,10+1):
+        # main(trace_num, tau, n, True, True, seed)
+        is_print = True if len(workers)==0 else False
+        workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
+        workers[-1].start()
+    while any([sub.exitcode==None for sub in workers]):
+        pass
+    workers = []

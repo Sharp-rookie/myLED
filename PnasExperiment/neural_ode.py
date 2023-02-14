@@ -110,10 +110,12 @@ def train(tau, delta_t, is_print=False, random_seed=729):
             target = model.scale(target.to(device)) # (batchsize,1,1,3)
 
             # loss = 0
+            # t = torch.tensor([delta_t], device=device) # delta_t
             # for i in range(1, len(internl_units)):
             #     unit = model.scale(internl_units[i].to(device)) # t+i           
-            #     t = torch.tensor([delta_t * i], device=device) # delta_t
             #     output = model.evolve(input, t)
+            #     for _ in range(1, i):
+            #         output = model.evolve(output, t)
             #     loss += MSE_loss(output, unit)
             loss = 0
             t = torch.tensor([delta_t], device=device) # delta_t
