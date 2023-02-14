@@ -5,10 +5,11 @@ from torch.utils.data import Dataset
 
 class PNASDataset(Dataset):
 
-    def __init__(self, file_path, mode='train', length=None):
+    def __init__(self, file_path, mode='train', length=None, model=None):
         super().__init__()
         
         self.length = length
+        self.model = model
 
         # Search for txt files
         if length is None:
@@ -20,6 +21,13 @@ class PNASDataset(Dataset):
     def __getitem__(self, index):
 
         trace = self.data[index]
+
+        if self.model == 'cde':
+            input = trace[:self.length-1]
+            target = trace[self.length-1:]
+            input = torch.from_numpy(input).float() # (1, channel, feature_dim)
+            target = torch.from_numpy(target).float()
+            return input, target
 
         input = trace[0]
         if self.length is None:

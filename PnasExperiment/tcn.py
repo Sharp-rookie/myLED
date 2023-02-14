@@ -106,7 +106,7 @@ class TCN(nn.Module):
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
@@ -127,7 +127,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = PNASDataset(data_filepath, 'train')
+    train_dataset = PNASDataset(data_filepath, 'train', length=n)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
     val_dataset = PNASDataset(data_filepath, 'val')
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
@@ -141,13 +141,25 @@ def train(tau, delta_t, is_print=False, random_seed=729):
         
         # train
         model.train()
-        for input, target in train_loader:
+        # for input, target in train_loader:
+        for input, _, internl_units in train_loader:
             
             input = model.scale(input.to(device)) # (batchsize,1,1,3)
-            target = model.scale(target.to(device))
+            # target = model.scale(target.to(device))
+
+            loss = 0
+            for i in range(1, len(internl_units)):
+                
+                unit = model.scale(internl_units[i].to(device)) # t+i
+                output = model(input)
+                for _ in range(1, n):
+                    input = torch.concat([input[:,1:], output[:,0].unsqueeze(1)], dim=1)
+                    output = model(input)
+                
+                loss += MSE_loss(output, unit)
             
-            output = model(input)
-            loss = MSE_loss(output, target)
+            # output = model(input)
+            # loss = MSE_loss(output, target)
             
             optimizer.zero_grad()
             loss.backward()
@@ -220,7 +232,7 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:0')
+    device = torch.device('cpu')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/tcn/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
@@ -299,7 +311,7 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
         ckpt_epoch = 50
         for i in tqdm(range(1, 25*n+1)):
             delta_t = round(tau/n*i, 3)
-            generate_dataset(trace_num, delta_t, sample_num, False, n+i)
+            generate_dataset(trace_num, delta_t, sample_num, False)
             MSE, RMSE, MAE, MAPE = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
             with open(f'results/tcn_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{round(tau/n*i, 3)}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
@@ -311,8 +323,8 @@ if __name__ == '__main__':
     
     workers = []
     
-    tau = 0.6
-    n = 2
+    tau = 3.0
+    n = 10
     
     # train
     sample_num = None
@@ -326,8 +338,8 @@ if __name__ == '__main__':
     workers = []
     
     # test
-    for seed in range(1,10+1):
-        main(trace_num, tau, n, True, True, seed)
+    # for seed in range(1,10+1):
+    #     main(trace_num, tau, n, True, True, seed)
     #     is_print = True if len(workers)==0 else False
     #     workers.append(Process(target=main, args=(trace_num, tau, n, is_print, True, seed), daemon=True))
     #     workers[-1].start()

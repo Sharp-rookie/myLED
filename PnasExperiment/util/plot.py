@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 
@@ -119,17 +120,19 @@ def plot_id_per_tau(tau_list, id_epoch):
         round_id_per_tau.append([round(id[0]),round(id[1]),round(id[2]),round(id[3])])
     round_id_per_tau = np.array(round_id_per_tau)
 
-    plt.figure()
-    plt.rcParams.update({'font.size':15})
+    import scienceplots
+    plt.style.use(['science'])
+    plt.figure(figsize=(6,6))
+    plt.rcParams.update({'font.size':16})
     # for i, item in enumerate(['MLE','MiND','MADA','PCA']):
     for i, item in enumerate(['MLE']):
         plt.plot(tau_list, id_per_tau[:,i], marker="o", markersize=6, label="ID")
         plt.plot(tau_list, round_id_per_tau[:,i], marker="^", markersize=6, label="ID-rounding")
-    plt.xticks(fontsize=15)
-    plt.yticks(fontsize=15)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
     plt.legend()
-    plt.xlabel(r'$\tau / s$', fontsize=17)
-    plt.ylabel('Intrinsic dimensionality', fontsize=17)
+    plt.xlabel(r'$\tau / s$', fontsize=18)
+    plt.ylabel('Intrinsic dimensionality', fontsize=18)
     plt.subplots_adjust(bottom=0.15)
     plt.savefig('logs/time-lagged/id_per_tau.pdf', dpi=300)
 
@@ -157,23 +160,86 @@ def plot_pnas_autocorr():
     
     corrX, corrY, corrZ = [], [], []
     lag_list = np.arange(0, 7*100, 30)
-    from tqdm import tqdm
     for lag in tqdm(lag_list):
         corrX.append(data['X'].autocorr(lag=lag))
         corrY.append(data['Y'].autocorr(lag=lag))
         corrZ.append(data['Z'].autocorr(lag=lag))
+    import scienceplots
+    plt.style.use(['science'])
     plt.figure(figsize=(6,6))
-    plt.rcParams.update({'font.size':15})
+    plt.rcParams.update({'font.size':16})
     plt.plot(lag_list*1e-2, np.array(corrX), marker="o", markersize=6, label=r'$X$')
     plt.plot(lag_list*1e-2, np.array(corrY), marker="^", markersize=6, label=r'$Y$')
     plt.plot(lag_list*1e-2, np.array(corrZ), marker="D", markersize=6, label=r'$Z$')
-    plt.xlabel(r'$t/s$', fontsize=17)
-    plt.ylabel('Autocorrelation coefficient', fontsize=17)
-    plt.xticks(fontsize=15)
-    plt.yticks(fontsize=15)
+    plt.xlabel(r'$t/s$', fontsize=18)
+    plt.ylabel('Autocorrelation coefficient', fontsize=18)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
     plt.legend()
-    plt.subplots_adjust(bottom=0.15, left=0.2)
+    # plt.subplots_adjust(bottom=0.15, left=0.2)
     plt.savefig('corr.pdf', dpi=300)
+
+
+def plot_pnas_MutualInfo():
+
+    data = np.load('Data/origin/1/data.npz')
+    X = np.array(data['X'])[:, np.newaxis]
+    Y = np.array(data['Y'])[:, np.newaxis]
+    Z = np.array(data['Z'])[:, np.newaxis]
+
+    import pyinform
+    import torch
+    import sys
+    sys.path.append('/home/lrk/myLED-code/PnasExperiment/')
+    import models
+    from Data.dataset import PNASDataset
+
+    MI_tau = []
+    delta_t_list = [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.2, 4.5, 4.8, 5.1, 5.4, 5.7, 6.0]
+    # delta_t_list = [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0]
+    for delta_t in tqdm(delta_t_list):
+
+        data_filepath = 'Data/data/tau_' + str(delta_t)
+        train_dataset = PNASDataset(data_filepath, 'train')
+        train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=128, shuffle=False, drop_last=False)
+
+        model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=1, tau_s=3.0, device='cpu')
+        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
+        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
+        
+        X_MI, Y_MI, Z_MI = [], [], []
+        for input, target in train_loader:
+            input = model.scale(input)
+            target = model.scale(target)
+
+            X_in = input[:,0,0,0].numpy()
+            Y_in = input[:,0,0,1].numpy()
+            Z_in = input[:,0,0,2].numpy()
+            X_tar = target[:,0,0,0].numpy()
+            Y_tar = target[:,0,0,1].numpy()
+            Z_tar = target[:,0,0,2].numpy()
+
+            X_MI.append(pyinform.mutual_info(X_in, X_tar))
+            Y_MI.append(pyinform.mutual_info(Y_in, Y_tar))
+            Z_MI.append(pyinform.mutual_info(Z_in, Z_tar))
+        MI_tau.append([np.mean(X_MI), np.mean(Y_MI), np.mean(Z_MI)])
+    MI_tau = np.array(MI_tau)
+    np.savetxt('MI.txt', MI_tau)
+
+    import scienceplots
+    plt.style.use(['science'])
+    plt.figure(figsize=(6,6))
+    plt.rcParams.update({'font.size':16})
+    plt.plot(delta_t_list, MI_tau[:,0], marker="o", markersize=6, label=r'$X$')
+    plt.plot(delta_t_list, MI_tau[:,1], marker="^", markersize=6, label=r'$Y$')
+    plt.plot(delta_t_list, MI_tau[:,2], marker="D", markersize=6, label=r'$Z$')
+    plt.xlabel(r'$t/s$', fontsize=18)
+    plt.ylabel('Mutual Information', fontsize=18)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.legend()
+    plt.savefig('MI.pdf', dpi=300)
+plot_pnas_MutualInfo()
 
 
 def plot_evolve(length):
@@ -181,11 +247,13 @@ def plot_evolve(length):
     our = open(f'results/evolve_test_{length}.txt', 'r')
     lstm = open(f'results/lstm_evolve_test_{length}.txt', 'r')
     tcn = open(f'results/tcn_evolve_test_{length/5}.txt', 'r')
+    ode = open(f'results/neuralODE_evolve_test_{length}.txt', 'r')
     
     our_data = [[] for seed in range(10)]
     lstm_data = [[] for seed in range(10)]
     tcn_data = [[] for seed in range(10)]
-    for i, data in enumerate([our, lstm, tcn]):
+    ode_data = [[] for seed in range(10)]
+    for i, data in enumerate([our, lstm, tcn, ode]):
         for line in data.readlines():
             tau = float(line.split(',')[0])
             seed = int(line.split(',')[1])
@@ -200,10 +268,13 @@ def plot_evolve(length):
                 lstm_data[seed-1].append([tau,mse,rmse,mae,mape])
             elif i==2:
                 tcn_data[seed-1].append([tau,mse,rmse,mae,mape])
+            elif i==3:
+                ode_data[seed-1].append([tau,mse,rmse,mae,mape])
     
     our_data = np.mean(np.array(our_data), axis=0)
     lstm_data = np.mean(np.array(lstm_data), axis=0)
     tcn_data = np.mean(np.array(tcn_data), axis=0)
+    ode_data = np.mean(np.array(ode_data), axis=0)
     
     plt.figure(figsize=(16,16))
     for i, item in enumerate(['mse', 'rmse', 'mae', 'mape']):
@@ -211,13 +282,14 @@ def plot_evolve(length):
         ax.plot(our_data[:,0], our_data[:,i+1], label='our')
         ax.plot(lstm_data[:,0], lstm_data[:,i+1], label='lstm')
         ax.plot(tcn_data[:,0], tcn_data[:,i+1], label='tcn')
+        ax.plot(ode_data[:,0], ode_data[:,i+1], label='ode')
         ax.set_title(item)
         ax.set_xlabel('t / s')
         ax.legend()
-    plt.savefig(f'evolve_test_{length}.pdf', dpi=300)
+    plt.savefig(f'results/evolve_test_{length}.pdf', dpi=300)
     
-    item = ['our','lstm','tcn']
-    for i, data in enumerate([our_data, lstm_data, tcn_data]):
+    item = ['our','lstm','tcn', 'ode']
+    for i, data in enumerate([our_data, lstm_data, tcn_data, ode_data]):
         print(f'{item[i]} | tau[{data[0,0]:.3f}] RMSE={data[0,2]:.4f}, MAE={data[0,3]:.4f}, MAPE={100*data[0,4]:.2f}% | tau[{data[9,0]:.3f}] RMSE={data[9,2]:.4f}, MAE={data[9,3]:.4f}, MAPE={100*data[9,4]:.2f}% | tau[{data[49,0]:.3f}] RMSE={data[49,2]:.4f}, MAE={data[49,3]:.4f}, MAPE={100*data[49,4]:.2f}%')
 
 

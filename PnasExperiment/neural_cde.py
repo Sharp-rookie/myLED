@@ -7,74 +7,83 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 from multiprocessing import Process
 from pytorch_lightning import seed_everything
-if True:
-    from torchdiffeq import odeint_adjoint as odeint
-else:
-    from torchdiffeq import odeint
+import torchcde
 
 from util import set_cpu_num
-from Data.dataset import JCP12Dataset
+from Data.dataset import PNASDataset
 from Data.generator import generate_dataset
 
 
-class NeuralODEfunc(nn.Module):
+class CDEFunc(torch.nn.Module):
+    def __init__(self, input_channels, hidden_channels):
+        super(CDEFunc, self).__init__()
+        self.input_channels = input_channels
+        self.hidden_channels = hidden_channels
 
-    def __init__(self, obs_dim, nhidden=64):
-        super(NeuralODEfunc, self).__init__()
-        self.tanh = nn.Tanh()
-        self.fc1 = nn.Linear(obs_dim, nhidden)
-        self.fc2 = nn.Linear(nhidden, nhidden)
-        self.fc3 = nn.Linear(nhidden, obs_dim)
-        self.nfe = 0
+        self.linear1 = torch.nn.Linear(hidden_channels, 128)
+        self.linear2 = torch.nn.Linear(128, input_channels * hidden_channels)
 
-    def forward(self, t, x):
-        self.nfe += 1
-        out = self.fc1(x)
-        out = self.tanh(out)
-        out = self.fc2(out)
-        out = self.tanh(out)
-        out = self.fc3(out)
-        return out
+    def forward(self, t, z):
+        # z has shape (batch, hidden_channels)
+        z = self.linear1(z)
+        z = z.relu()
+        z = self.linear2(z)
+        z = z.tanh()
+        z = z.view(z.size(0), self.hidden_channels, self.input_channels)
+        return z
 
 
-class Neural_ODE(nn.Module):
+class NeuralCDE(torch.nn.Module):
+    def __init__(self, input_channels, hidden_channels, output_channels, interpolation="cubic"):
+        super(NeuralCDE, self).__init__()
 
-    def __init__(self, in_channels, input_1d_width, nhidden=64):
-        super(Neural_ODE, self).__init__()
-
-        self.ode = NeuralODEfunc(in_channels*input_1d_width, nhidden)
-
-        self.flatten = nn.Flatten(start_dim=-2)
-        self.unflatten = nn.Unflatten(-1, (in_channels, input_1d_width))
+        self.func = CDEFunc(input_channels, hidden_channels)
+        self.initial = torch.nn.Linear(input_channels, hidden_channels)
+        self.readout = torch.nn.Linear(hidden_channels, output_channels)
+        self.interpolation = interpolation
 
         # scale inside the model
-        self.register_buffer('min', torch.zeros(in_channels, input_1d_width, dtype=torch.float32))
-        self.register_buffer('max', torch.ones(in_channels, input_1d_width, dtype=torch.float32))
-    
-    def evolve(self, x0, t):
-        x0 = self.flatten(x0)[:,0]
-        out = odeint(self.ode, x0, t).permute(1, 0, 2)
-        out = self.unflatten(out)
-        return out
+        self.register_buffer('min', torch.zeros(1, input_channels-1, dtype=torch.float32))
+        self.register_buffer('max', torch.ones(1, input_channels-1, dtype=torch.float32))
+
+    def evolve(self, coeffs):
+        if self.interpolation == 'cubic':
+            X = torchcde.CubicSpline(coeffs)
+        elif self.interpolation == 'linear':
+            X = torchcde.LinearInterpolation(coeffs)
+        else:
+            raise ValueError("Only 'linear' and 'cubic' interpolation methods are implemented.")
+
+        X0 = X.evaluate(X.interval[0])
+        z0 = self.initial(X0)
+
+        z_T = torchcde.cdeint(X=X,
+                              z0=z0,
+                              func=self.func,
+                              t=X.interval)
+
+        z_T = z_T[:, 1]
+        pred_y = self.readout(z_T)
+        return pred_y
 
     def scale(self, x):
         return (x-self.min) / (self.max-self.min+1e-6)
     
     def descale(self, x):
         return x * (self.max-self.min+1e-6) + self.min
-
+    
 
 def train(tau, delta_t, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/neural_ode/tau_{tau}/seed{random_seed}'
+    log_dir = f'logs/neural_cde/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = Neural_ODE(in_channels=1, input_1d_width=4)
+    model = NeuralCDE(input_channels=4, hidden_channels=64, output_channels=3)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
     model.to(device)
@@ -82,17 +91,15 @@ def train(tau, delta_t, is_print=False, random_seed=729):
     # training params
     lr = 0.001
     batch_size = 128
-    max_epoch = 5
+    max_epoch = 50
     weight_decay = 0.001
     MSE_loss = nn.MSELoss()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     
     # dataset
-    train_dataset = JCP12Dataset(data_filepath, 'train', length=n)
-    # train_dataset = JCP12Dataset(data_filepath, 'train')
+    train_dataset = PNASDataset(data_filepath, 'train', length=n, model='cde')
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = JCP12Dataset(data_filepath, 'val', length=n)
-    # val_dataset = JCP12Dataset(data_filepath, 'val')
+    val_dataset = PNASDataset(data_filepath, 'val', length=n, model='cde')
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # training pipeline
@@ -103,30 +110,24 @@ def train(tau, delta_t, is_print=False, random_seed=729):
         
         # train
         model.train()
-        for input, _, internl_units in train_loader:
-        # for input, target in train_loader:
+        for t_step, (input, target) in enumerate(train_loader):
             
-            input = model.scale(input.to(device)) # (batchsize,1,1,3)
-            # target = model.scale(target.to(device)) # (batchsize,1,1,3)
+            input = model.scale(input.to(device)) # (batchsize,2,1,3)
+            target = model.scale(target.to(device)) # (batchsize,1,1,3)
 
-            loss = 0
-            t = torch.tensor([delta_t], device=device) # delta_t
-            for i in range(1, len(internl_units)):
-                unit = model.scale(internl_units[i].to(device)) # t+i           
-                output = model.evolve(input, t)
-                for _ in range(1, i):
-                    output = model.evolve(output, t)
-                loss += MSE_loss(output, unit)
-            # t = torch.tensor([delta_t], device=device) # delta_t
-            # output = model.evolve(input, t)
-            # loss = MSE_loss(output, target)
+            t = torch.tensor([[(t_step)*delta_t], [(t_step+1)*delta_t]], device=device) # delta_t: (2,1)
+            input = torch.concat((torch.repeat_interleave(t.unsqueeze(0), len(input), dim=0), input[:,:,0]), dim=-1)
+            x = torchcde.hermite_cubic_coefficients_with_backward_differences(input)
+            output = model.evolve(x).unsqueeze(1).unsqueeze(1)
+            
+            loss = MSE_loss(output, target)
             
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
             # record loss
-            losses.append((loss/n).detach().item())
+            losses.append(loss.detach().item())
             
         train_loss.append(np.mean(losses[0]))
         
@@ -136,15 +137,15 @@ def train(tau, delta_t, is_print=False, random_seed=729):
             outputs = []
             
             model.eval()
-            for input, target, _ in val_loader:
-            # for input, target in val_loader:
+            for t_step, (input, target) in enumerate(val_loader):
                 
-                input = model.scale(input.to(device)) # (batchsize,1,1,4)
-                target = model.scale(target.to(device))
+                input = model.scale(input.to(device)) # (batchsize,2,1,4)
+                target = model.scale(target.to(device)) # (batchsize,1,1,4)
                 
-                t = torch.tensor([tau-delta_t], dtype=torch.float32, device=device)
-                # t = torch.tensor([delta_t], dtype=torch.float32, device=device)
-                output = model.evolve(input, t)
+                t = torch.tensor([[(t_step)*delta_t], [(t_step+1)*delta_t]], device=device) # delta_t: (2,1)
+                input = torch.concat((torch.repeat_interleave(t.unsqueeze(0), len(input), dim=0), input[:,:,0]), dim=-1)
+                x = torchcde.hermite_cubic_coefficients_with_backward_differences(input)
+                output = model.evolve(x).unsqueeze(1).unsqueeze(1)
 
                 # record results
                 outputs.append(output.cpu())
@@ -165,8 +166,8 @@ def train(tau, delta_t, is_print=False, random_seed=729):
                 
                 # plot total infomation one-step prediction curve
                 plt.figure(figsize=(16,4))
-                for j, item in enumerate(['c1','c2','c3', 'c4']):
-                    ax = plt.subplot(1,4,j+1)
+                for j, item in enumerate(['X','Y','Z']):
+                    ax = plt.subplot(1,3,j+1)
                     ax.set_title(item)
                     plt.plot(targets[:,0,0,j], label='true')
                     plt.plot(outputs[:,0,0,j], label='predict')
@@ -189,21 +190,21 @@ def train(tau, delta_t, is_print=False, random_seed=729):
 def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
-    log_dir = f'logs/neural_ode/tau_{tau}/seed{random_seed}'
+    log_dir = f'logs/neural_cde/tau_{tau}/seed{random_seed}'
     os.makedirs(log_dir+f"/test/", exist_ok=True)
 
     # load model
     batch_size = 128
-    model = Neural_ODE(in_channels=1, input_1d_width=4)
+    model = NeuralCDE(input_channels=4, hidden_channels=64, output_channels=3)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
     model = model.to(device)
     
     # dataset
-    test_dataset = JCP12Dataset(data_filepath, 'test')
+    test_dataset = PNASDataset(data_filepath, 'test', length=n, model='cde')
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
     
     # testing pipeline        
@@ -212,14 +213,15 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
         outputs = []
         
         model.eval()
-        for input, target in test_loader:
-            input = model.scale(input.to(device))
-            target = model.scale(target.to(device))
+        for t_step, (input, target) in enumerate(test_dataset):
+            
+            input = model.scale(input.to(device)) # (batchsize,2,1,3)
+            target = model.scale(target.to(device)) # (batchsize,1,1,3)
 
-            t = torch.tensor([delta_t/n], dtype=torch.float32, device=device)
-            output = model.evolve(input, t)
-            for _ in range(1, n):
-                output = model.evolve(output, t)
+            t = torch.tensor([[(t_step)*delta_t], [(t_step+1)*delta_t]], device=device) # delta_t: (2,1)
+            input = torch.concat((torch.repeat_interleave(t.unsqueeze(0), len(input), dim=0), input[:,:,0]), dim=-1)
+            x = torchcde.hermite_cubic_coefficients_with_backward_differences(input)
+            output = model.evolve(x).unsqueeze(1).unsqueeze(1)
             
             targets.append(target)
             outputs.append(output)
@@ -241,8 +243,8 @@ def test_evolve(tau, ckpt_epoch, delta_t, n, is_print=False, random_seed=729):
     
     # plot total infomation prediction curve
     plt.figure(figsize=(16,4))
-    for j, item in enumerate(['c1','c2','c3', 'c4']):
-        ax = plt.subplot(1,4,j+1)
+    for j, item in enumerate(['X','Y','Z']):
+        ax = plt.subplot(1,3,j+1)
         ax.set_title(item)
         plt.plot(true[:,0,0,j], label='true')
         plt.plot(pred[:,0,0,j], label='predict')
@@ -266,22 +268,23 @@ def main(trace_num, tau, n, is_print=False, long_test=False, random_seed=729):
         train(tau, round(tau/n,3), is_print=is_print, random_seed=random_seed)
     else:
         # test evolve
-        ckpt_epoch = 5
-        for i in tqdm(range(1, 6*n+1+2)):
+        ckpt_epoch = 10
+        for i in tqdm(range(1, 16*n+1+2)):
             delta_t = round(tau/n*i, 3)
-            MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
-            with open(f'results/neuralODE_evolve_test_{tau}.txt','a') as f:
+            # MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, ckpt_epoch, delta_t, i, is_print, random_seed)
+            MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(tau, ckpt_epoch, delta_t, n, is_print, random_seed)
+            with open(f'results/neuralCDE_evolve_test_{tau}.txt','a') as f:
                 f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
 
 
 if __name__ == '__main__':
     
-    trace_num = 200
+    trace_num = 100
     
     workers = []
     
-    tau = 0.8
-    n = 8
+    tau = 0.9
+    n = 3
     
     # # train
     # sample_num = None
@@ -300,7 +303,7 @@ if __name__ == '__main__':
     print('data:')
     for i in tqdm(range(1, 6*n+1+2)):
         delta_t = round(tau/n*i, 3)
-        generate_dataset(trace_num, delta_t, sample_num, False)
+        generate_dataset(trace_num, delta_t, sample_num, False, n)
     print('test:')
     for seed in range(1,10+1):
         # main(trace_num, tau, n, True, True, seed)

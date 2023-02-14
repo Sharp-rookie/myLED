@@ -8,14 +8,68 @@ from pytorch_lightning import seed_everything
 import warnings;warnings.simplefilter('ignore')
 
 
-def system_4d(y0, t, para=(0.025,3)):
-    epsilon, omega =  para
-    c1, c2, c3, c4 = y0
-    dc1 = -c1
-    dc2 = -2 * c2
-    dc3 = -(c3-np.sin(omega*c1)*np.sin(omega*c2))/epsilon - c1*omega*np.cos(omega*c1)*np.sin(omega*c2) - c2*omega*np.cos(omega*c2)*np.sin(omega*c1)
-    dc4 = -(c4-1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2))))/epsilon - c1*omega*np.exp(-omega*c1)/((1+np.exp(-omega*c2))*((1+np.exp(-omega*c1))**2)) - c2*omega*np.exp(-omega*c2)/((1+np.exp(-omega*c1))*((1+np.exp(-omega*c2))**2))
-    return [dc1, dc2, dc3, dc4]
+K = [0.35, 0.266e2, 0.123e5, 0.86e-3, 0.82e-3,\
+     0.15e5, 0.13e-3, 0.24e5, 0.165e5, 0.9e4,\
+     0.22e-1, 0.12e5, 0.188e1, 0.163e5, 0.48e7,\
+     0.35e-3, 0.175e-1, 0.1e9, 0.444e12, 0.124e4,\
+     0.210e1, 0.578e1, 0.474e-1, 0.178e4, 0.312e1
+     ]
+class ODE():
+    def __init__(self, species_count):
+        self.species_count = species_count
+        self.dx_dt = np.zeros(species_count)
+        self.r = np.zeros(25)
+        
+    def __call__(self, y0, t):
+        
+        self.r[0] = K[0] * y0[0]
+        self.r[1] = K[1] * y0[1] * y0[3]
+        self.r[2] = K[2] * y0[4] * y0[1]
+        self.r[3] = K[3] * y0[6]
+        self.r[4] = K[4] * y0[6]
+        self.r[5] = K[5] * y0[5] * y0[6]
+        self.r[6] = K[6] * y0[8]
+        self.r[7] = K[7] * y0[5] * y0[8]
+        self.r[8] = K[8] * y0[1] * y0[10]
+        self.r[9] = K[9] * y0[0] * y0[10]
+        self.r[10] = K[10] * y0[12]
+        self.r[11] = K[11] * y0[1] * y0[9]
+        self.r[12] = K[12] * y0[13]
+        self.r[13] = K[13] * y0[0] * y0[5]
+        self.r[14] = K[14] * y0[2]
+        self.r[15] = K[15] * y0[3]
+        self.r[16] = K[16] * y0[3]
+        self.r[17] = K[17] * y0[15] 
+        self.r[18] = K[18] * y0[15]
+        self.r[19] = K[19] * y0[5] * y0[16]
+        self.r[20] = K[20] * y0[18]
+        self.r[21] = K[21] * y0[18] 
+        self.r[22] = K[22] * y0[0] * y0[3]
+        self.r[23] = K[23] * y0[0] * y0[18]
+        self.r[24] = K[24] * y0[19]
+          
+        self.dx_dt[0] = -self.r[0] - self.r[9] - self.r[13] - self.r[22] - self.r[23] + self.r[1] + self.r[2] + self.r[8] + self.r[10] + self.r[11] + self.r[21] + self.r[24]
+        self.dx_dt[1] = - self.r[1] - self.r[2] - self.r[8] - self.r[11] + self.r[0] + self.r[20]
+        self.dx_dt[2] = - self.r[14] + self.r[0] + self.r[16] + self.r[18] + self.r[21] 
+        self.dx_dt[3] = - self.r[1] - self.r[15] - self.r[16] - self.r[22] + self.r[14] 
+        self.dx_dt[4] = - self.r[2] + 2 * self.r[3] + self.r[5] + self.r[6] + self.r[12] + self.r[19]
+        self.dx_dt[5] = - self.r[5] - self.r[7] - self.r[13] - self.r[19] + self.r[2] + 2 * self.r[17]
+        self.dx_dt[6] = - self.r[3] - self.r[4] - self.r[5] + self.r[12] 
+        self.dx_dt[7] = self.r[3] + self.r[4] + self.r[5] + self.r[6] 
+        self.dx_dt[8] = - self.r[6] - self.r[7] 
+        self.dx_dt[9] = - self.r[11] + self.r[6] + self.r[8] 
+        self.dx_dt[10] = - self.r[8] - self.r[9] + self.r[7] + self.r[10] 
+        self.dx_dt[11] = self.r[8] 
+        self.dx_dt[12] = - self.r[10] + self.r[9] 
+        self.dx_dt[13] = - self.r[12] + self.r[11] 
+        self.dx_dt[14] = self.r[13] 
+        self.dx_dt[15] = - self.r[17] - self.r[18] + self.r[15] 
+        self.dx_dt[16] = - self.r[19]
+        self.dx_dt[17] = self.r[19] 
+        self.dx_dt[18] = - self.r[20] - self.r[21] - self.r[23] + self.r[22] + self.r[24]
+        self.dx_dt[19] = - self.r[24] + self.r[23] 
+
+        return self.dx_dt
 
 
 def generate_original_data(trace_num, total_t=5, dt=0.0001, save=True):
@@ -24,83 +78,97 @@ def generate_original_data(trace_num, total_t=5, dt=0.0001, save=True):
         
         seed_everything(trace_id)
         
-        y0 = [np.random.uniform(-3,3) for _ in range(4)]
-        t  =np.arange(0, total_t, dt)
-        sol = odeint(system_4d, y0, t)
+        y0 = np.random.uniform(0.0, 0.5, 20)
+        # y0 = np.zeros(20)
+        # y0[1]  = 0.2
+        # y0[3]  = 0.04
+        # y0[6]  = 0.1
+        # y0[7]  = 0.3
+        # y0[8]  = 0.01
+        # y0[16] = 0.007
 
-        # plt.figure()
-        # plt.plot(t, sol[:,0], label='c1')
-        # plt.plot(t, sol[:,1], label='c2')
-        # plt.plot(t, sol[:,2], label='c3')
-        # plt.plot(t, sol[:,3], label='c4')
-        # plt.legend()
-        # plt.savefig(f'Data/origin/jcp12_{trace_id}.pdf', dpi=300)
+        t  =np.arange(0, total_t, dt)
+        sol = odeint(ODE(20), y0, t)
+
+        # import scienceplots
+        # plt.style.use(['science'])
+        # plt.rcParams.update({'font.size':16})
+        # plt.figure(figsize=(10,21))
+        # for i in range(20):
+        #     ax = plt.subplot(7,3,i+1)
+        #     ax.plot(t, sol[:,i], linewidth=1.5)
+        #     ax.set_xlabel('t / s')
+        #     ax.set_ylabel(f'y{i+1}')
+        #     ax.ticklabel_format(style='sci', scilimits=(0.01,1), axis='y')
+        # plt.subplots_adjust(wspace=0.45, hspace=0.45)
+        # os.makedirs('Data/origin/', exist_ok=True)
+        # plt.savefig(f'Data/origin/pollu_{trace_id}.pdf', dpi=300)
         
         return sol
     
     if save and os.path.exists('Data/origin/origin.npz'): return
-    
-    os.makedirs('Data/origin', exist_ok=True)
     
     trace = []
     for trace_id in tqdm(range(1, trace_num+1)):
         sol = solve_1_trace(trace_id, total_t, dt)
         trace.append(sol)
     
-    if save: np.savez('Data/origin/origin.npz', trace=trace, dt=dt, T=total_t)
+    if save: 
+        os.makedirs('Data/origin', exist_ok=True)
+        np.savez('Data/origin/origin.npz', trace=trace, dt=dt, T=total_t)
 
     print(f'save origin data form seed 1 to {trace_num} at Data/origin/')
 
     return trace
-# generate_original_data(1, total_t=2.5, dt=0.0001, save=False)
+# generate_original_data(5, total_t=0.05, dt=0.001, save=False)
 
 
-def plot_c3_c4_trajectory():
+# def plot_c3_c4_trajectory():
     
-    c1, c2 = np.meshgrid(np.linspace(-1, 1, 20), np.linspace(-1, 1, 20))
+#     c1, c2 = np.meshgrid(np.linspace(-1, 1, 20), np.linspace(-1, 1, 20))
 
-    omega = 3
-    c3 = np.sin(omega*c1)*np.sin(omega*c2)
-    c4 = 1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2)))
+#     omega = 3
+#     c3 = np.sin(omega*c1)*np.sin(omega*c2)
+#     c4 = 1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2)))
 
-    y0 = [1.,1.,2.,1.5]
-    t  =np.arange(0, 5.1, 0.05)
-    sol = odeint(system_4d, y0, t)
-    c1_trace = sol[:, 0]
-    c2_trace = sol[:, 1]
-    c3_trace = sol[:, 2]
-    c4_trace = sol[:, 3]
+#     y0 = [1.,1.,2.,1.5]
+#     t  =np.arange(0, 5.1, 0.05)
+#     sol = odeint(system_4d, y0, t)
+#     c1_trace = sol[:, 0]
+#     c2_trace = sol[:, 1]
+#     c3_trace = sol[:, 2]
+#     c4_trace = sol[:, 3]
     
-    # Picture 1
-    import scienceplots
-    plt.style.use(['science'])
-    for i, c in enumerate([c3, c4]):
-        fig = plt.figure(figsize=(6,6))
-        plt.rcParams.update({'font.size':16})
-        ax = fig.gca(projection='3d')
-        # plot the surface.
-        ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
-        ax.plot(c1_trace, c2_trace, c3_trace, linewidth=2, color="r", label=rf'Solution  trajectory')
-        ax.scatter(c1_trace[::6], c2_trace[::6], c3_trace[::6], linewidth=2, color="b", marker='o')
-        ax.set_xlabel(r"$c_2$", labelpad=10, fontsize=18)
-        ax.set_ylabel(r"$c_1$", labelpad=10, fontsize=18)
-        ax.zaxis.set_rotate_label(False)  # disable automatic rotation
-        ax.set_zlabel(r"$c_3$", labelpad=10, fontsize=18)
-        ax.invert_xaxis()
-        ax.invert_yaxis()
-        ax.grid(False)
-        ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-        ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-        ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-        ax.view_init(elev=25. if i==0 else 15., azim=-100 if i==0 else -15.) # view direction: elve=vertical angle ,azim=horizontal angle
-        plt.tick_params(labelsize=16)
-        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
-        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
-        ax.zaxis.set_major_locator(plt.MultipleLocator(1))
-        plt.legend()
-        plt.subplots_adjust(bottom=0., top=1.)
-        plt.savefig(f"Data/origin/c{2+i+1}.pdf", dpi=300)
-        plt.close()
+#     # Picture 1
+#     import scienceplots
+#     plt.style.use(['science'])
+#     for i, c in enumerate([c3, c4]):
+#         fig = plt.figure(figsize=(6,6))
+#         plt.rcParams.update({'font.size':16})
+#         ax = fig.gca(projection='3d')
+#         # plot the surface.
+#         ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
+#         ax.plot(c1_trace, c2_trace, c3_trace, linewidth=2, color="r", label=rf'Solution  trajectory')
+#         ax.scatter(c1_trace[::6], c2_trace[::6], c3_trace[::6], linewidth=2, color="b", marker='o')
+#         ax.set_xlabel(r"$c_2$", labelpad=10, fontsize=18)
+#         ax.set_ylabel(r"$c_1$", labelpad=10, fontsize=18)
+#         ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+#         ax.set_zlabel(r"$c_3$", labelpad=10, fontsize=18)
+#         ax.invert_xaxis()
+#         ax.invert_yaxis()
+#         ax.grid(False)
+#         ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+#         ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+#         ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+#         ax.view_init(elev=25. if i==0 else 15., azim=-100 if i==0 else -15.) # view direction: elve=vertical angle ,azim=horizontal angle
+#         plt.tick_params(labelsize=16)
+#         ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+#         ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+#         ax.zaxis.set_major_locator(plt.MultipleLocator(1))
+#         plt.legend()
+#         plt.subplots_adjust(bottom=0., top=1.)
+#         plt.savefig(f"Data/origin/c{2+i+1}.pdf", dpi=300)
+#         plt.close()
 # plot_c3_c4_trajectory()
     
 def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None, neural_ode=False):
@@ -114,7 +182,7 @@ def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_l
     
     # load original data
     if is_print: print('loading original trace data:')
-    tmp = np.load(f"Data/origin/origin.npz")
+    tmp = np.load(f"Data/origin/origin.npz", allow_pickle=True)
     dt = tmp['dt']
     data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')

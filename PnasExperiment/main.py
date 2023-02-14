@@ -241,14 +241,14 @@ def test_and_save_embeddings_of_time_lagged(tau, checkpoint_filepath=None, is_pr
 def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
 
     # init model
-    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, device=device)
+    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, tau_s=3.0, device=device)
     model.apply(models.weights_normal_init)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
@@ -528,13 +528,13 @@ def train_slow_extract_and_evolve(tau, pretrain_epoch, slow_id, delta_t, n, is_p
 def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=False, random_seed=729):
         
     # prepare
-    device = torch.device('cuda:1')
+    device = torch.device('cuda:0')
     data_filepath = 'Data/data/tau_' + str(delta_t)
     log_dir = f'logs/slow_extract_and_evolve/tau_{tau}/pretrain_epoch{pretrain_epoch}/id{slow_id}/seed{random_seed}'
 
     # load model
     batch_size = 32
-    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, device=device)
+    model = models.EVOLVER(in_channels=1, input_1d_width=3, embed_dim=64, slow_dim=slow_id, tau_s=3.0, device=device)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
@@ -605,80 +605,80 @@ def test_evolve(tau, pretrain_epoch, ckpt_epoch, slow_id, delta_t, n, is_print=F
         
     os.makedirs(log_dir+f"/test/{delta_t}/", exist_ok=True)
 
+    import scienceplots
+    plt.style.use(['science'])
 
-    # plot slow extract from original data
-    start = 4300 - 1
-    end = 10300 - 1
-    sample = 20
-    plt.rcParams.update({'font.size':15})
-    plt.figure(figsize=(16,5))
-    for j, item in enumerate([r'$X$', r'$Y$', r'$Z$']):
-        ax = plt.subplot(1,3,j+1)
-        ax.set_title(item, fontsize=17)
-        t = torch.range(0,end-start-1)*delta_t
-        ax.plot(t[::sample], inputs[start:end:sample,0,0,j], label=r'$X$')
-        ax.plot(t[::sample], slow_obses[start:end:sample,0,0,j], marker="^", markersize=4, label=r'$X_s$')
-        ax.legend()
-        plt.xticks(fontsize=15)
-        plt.yticks(fontsize=15)
-        plt.xlabel('t / s', fontsize=17)
-    plt.subplots_adjust(wspace=0.35)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.pdf", dpi=300)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.jpg", dpi=300)
-    plt.close()
+    # # plot slow extract from original data
+    # start = 4300 - 1
+    # end = 10300 - 1
+    # sample = 20
+    # plt.rcParams.update({'font.size':16})
+    # plt.figure(figsize=(16,5))
+    # for j, item in enumerate([r'$X$', r'$Y$', r'$Z$']):
+    #     ax = plt.subplot(1,3,j+1)
+    #     t = torch.range(0,end-start-1)*delta_t
+    #     ax.plot(t[::sample], inputs[start:end:sample,0,0,j], label=r'$X$')
+    #     ax.plot(t[::sample], slow_obses[start:end:sample,0,0,j], marker="^", markersize=4, label=r'$X_s$')
+    #     ax.legend()
+    #     plt.xticks(fontsize=16)
+    #     plt.yticks(fontsize=16)
+    #     plt.xlabel('t / s', fontsize=18)
+    #     plt.ylabel(item, fontsize=18)
+    # plt.subplots_adjust(wspace=0.35)
+    # plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.pdf", dpi=300)
+    # plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.jpg", dpi=300)
+    # plt.close()
 
     # plot slow variable vs input
-    sample = 1
-    plt.figure(figsize=(16,5))
+    sample = 4
+    plt.figure(figsize=(16,4))
     for id_var in range(slow_id):
         for index, item in enumerate([r'$X$', r'$Y$', r'$Z$']):
             ax = plt.subplot(slow_id, 3, index+1+4*(id_var))
             ax.scatter(inputs[::sample,0,0,index], slow_vars[::sample, id_var], s=2)
-            plt.xlabel(item, fontsize=17)
-            plt.ylabel(rf'$U$', fontsize=17)
+            plt.xlabel(item, fontsize=18)
+            plt.ylabel(rf'$u$', fontsize=18)
+            plt.xticks(fontsize=16)
+            plt.yticks(fontsize=16)
             if index==2:
                 ax.xaxis.set_major_locator(plt.MultipleLocator(5000))
-    plt.xticks(fontsize=15)
-    plt.yticks(fontsize=15)
     plt.subplots_adjust(wspace=0.55, hspace=0.35, bottom=0.15)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=300)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.jpg", dpi=300)
-    plt.close()
-
-    exit(0)
-    
-    # plot slow infomation prediction curve
-    plt.figure(figsize=(16,5))
-    for j, item in enumerate(['X','Y','Z']):
-        ax = plt.subplot(1,3,j+1)
-        ax.set_title(item)
-        plt.plot(true[:,0,0,j], label='true')
-        plt.plot(slow_infos_next[:,0,0,j], label='predict')
-    plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.pdf", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=150)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.jpg", dpi=150)
     plt.close()
     
-    # plot fast infomation prediction curve
-    plt.figure(figsize=(16,5))
-    for j, item in enumerate(['X','Y','Z']):
-        ax = plt.subplot(1,3,j+1)
-        ax.set_title(item)
-        plt.plot(true[:,0,0,j], label='true')
-        plt.plot(fast_infos_next[:,0,0,j], label='predict')
-    plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.pdf", dpi=300)
-    plt.close()
+    # # plot slow infomation prediction curve
+    # plt.figure(figsize=(16,5))
+    # for j, item in enumerate(['X','Y','Z']):
+    #     ax = plt.subplot(1,3,j+1)
+    #     ax.set_title(item)
+    #     plt.plot(true[:,0,0,j], label='true')
+    #     plt.plot(slow_infos_next[:,0,0,j], label='predict')
+    # plt.subplots_adjust(wspace=0.2)
+    # plt.savefig(log_dir+f"/test/{delta_t}/slow_pred.pdf", dpi=300)
+    # plt.close()
     
-    # plot total infomation prediction curve
-    plt.figure(figsize=(16,5))
-    for j, item in enumerate(['X','Y','Z']):
-        ax = plt.subplot(1,3,j+1)
-        ax.set_title(item)
-        plt.plot(true[:,0,0,j], label='true')
-        plt.plot(pred[:,0,0,j], label='predict')
-    plt.subplots_adjust(wspace=0.2)
-    plt.savefig(log_dir+f"/test/{delta_t}/total.pdf", dpi=300)
-    plt.close()
+    # # plot fast infomation prediction curve
+    # plt.figure(figsize=(16,5))
+    # for j, item in enumerate(['X','Y','Z']):
+    #     ax = plt.subplot(1,3,j+1)
+    #     ax.set_title(item)
+    #     plt.plot(true[:,0,0,j], label='true')
+    #     plt.plot(fast_infos_next[:,0,0,j], label='predict')
+    # plt.subplots_adjust(wspace=0.2)
+    # plt.savefig(log_dir+f"/test/{delta_t}/fast_pred.pdf", dpi=300)
+    # plt.close()
+    
+    # # plot total infomation prediction curve
+    # plt.figure(figsize=(16,5))
+    # for j, item in enumerate(['X','Y','Z']):
+    #     ax = plt.subplot(1,3,j+1)
+    #     ax.set_title(item)
+    #     plt.plot(true[:,0,0,j], label='true')
+    #     plt.plot(pred[:,0,0,j], label='predict')
+    # plt.subplots_adjust(wspace=0.2)
+    # plt.savefig(log_dir+f"/test/{delta_t}/total.pdf", dpi=300)
+    # plt.close()
     
     return MSE, RMSE, MAE, MAPE
         
@@ -764,7 +764,7 @@ def slow_evolve_pipeline(trace_num=256+32+32, n=10, cpu_num=1, long_test=False):
         
         # dataset for testing
         for i in range(1, 5*n+1):
-            print(f'processing testing dataset [{i}/{n}]')
+            print(f'processing testing dataset [{i}/{5*n}]')
             delta_t = round(tau/n*i, 3)
             generate_dataset(trace_num, delta_t, sample_num, True)
             # workers.append(Process(target=generate_dataset, args=(trace_num, delta_t, sample_num, False), daemon=True))

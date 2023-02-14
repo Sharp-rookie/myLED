@@ -72,7 +72,7 @@ def LBM(f1_act, f_1_act, f0_act, f1_in, f_1_in, f0_in, omegas, a1, a0, epsilon, 
     return f1_act_next, f_1_act_next, f0_act_next, f1_in_next, f_1_in_next, f0_in_next
 
 
-def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt):
+def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt, epsilon=0.006, a1=2.):
     ###########################################
     ## Simulation of the Lattice Boltzman Method
     ## for the FitzHugh-Nagumo
@@ -86,14 +86,16 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt):
     Dx = 1 # Dact (activator)
     Dy = 4 # Din  (inhibitor)
 
+    # a0 = -0.03
+    # a1 = 2.0
     a0 = -0.03
-    a1 = 2.0
+    # a1 = 2.
 
     omegas = [2/(1+3*Dx*dt/(dx*dx)), 2/(1+3*Dy*dt/(dx*dx))]
     n1 = 1/3
 
-    # Bifurcation parameter
-    epsilon = 0.006
+    # # Bifurcation parameter
+    # epsilon = 0.006
 
     t = 0
     it = 0

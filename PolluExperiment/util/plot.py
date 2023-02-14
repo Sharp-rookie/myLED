@@ -10,10 +10,7 @@ def plot_epoch_test_log(tau, max_epoch):
     class MSE():
         def __init__(self, tau):
             self.tau = tau
-            self.mse_c1 = [[] for _ in range(max_epoch)]
-            self.mse_c2 = [[] for _ in range(max_epoch)]
-            self.mse_c3 = [[] for _ in range(max_epoch)]
-            self.mse_c4 = [[] for _ in range(max_epoch)]
+            self.each_mse = [[[] for _ in range(max_epoch)] for __ in range(20)]
             self.LB_id = [[] for _ in range(max_epoch)]
             self.MiND_id = [[] for _ in range(max_epoch)]
             self.MADA_id = [[] for _ in range(max_epoch)]
@@ -24,23 +21,20 @@ def plot_epoch_test_log(tau, max_epoch):
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
         seed = int(line[:-1].split(',')[1])
-        mse_c1 = float(line[:-1].split(',')[2])
-        mse_c2 = float(line[:-1].split(',')[3])
-        mse_c3 = float(line[:-1].split(',')[4])
-        mse_c4 = float(line[:-1].split(',')[5])
-        epoch = int(line[:-1].split(',')[6])
-        LB_id = float(line[:-1].split(',')[7])
-        MiND_id = float(line[:-1].split(',')[8])
-        MADA_id = float(line[:-1].split(',')[9])
-        PCA_id = float(line[:-1].split(',')[10])
+        mse = []
+        for i in range(20):
+            mse.append(float(line[:-1].split(',')[i+2]))
+        epoch = int(line[:-1].split(',')[22])
+        LB_id = float(line[:-1].split(',')[23])
+        MiND_id = float(line[:-1].split(',')[24])
+        MADA_id = float(line[:-1].split(',')[25])
+        PCA_id = float(line[:-1].split(',')[26])
 
         find = False
         for M in items:
             if M.tau == tau:
-                M.mse_c1[epoch].append(mse_c1)
-                M.mse_c2[epoch].append(mse_c2)
-                M.mse_c3[epoch].append(mse_c3)
-                M.mse_c4[epoch].append(mse_c4)
+                for i in range(20):
+                    M.each_mse[i][epoch].append(mse[i])
                 M.LB_id[epoch].append(LB_id)
                 M.MiND_id[epoch].append(MiND_id)
                 M.MADA_id[epoch].append(MADA_id)
@@ -49,10 +43,8 @@ def plot_epoch_test_log(tau, max_epoch):
                     
         if not find:
             M = MSE(tau)
-            M.mse_c1[epoch].append(mse_c1)
-            M.mse_c2[epoch].append(mse_c2)
-            M.mse_c3[epoch].append(mse_c3)
-            M.mse_c4[epoch].append(mse_c4)
+            for i in range(20):
+                M.each_mse[i][epoch].append(mse[i])
             M.LB_id[epoch].append(LB_id)
             M.MiND_id[epoch].append(MiND_id)
             M.MADA_id[epoch].append(MADA_id)
@@ -61,19 +53,14 @@ def plot_epoch_test_log(tau, max_epoch):
     fp.close()
 
     for M in items:
-        mse_c1_list = []
-        mse_c2_list = []
-        mse_c3_list = []
-        mse_c4_list = []
+        mse_list = [[] for _ in range(20)]
         LB_id_list = []
         MiND_id_list = []
         MADA_id_list = []
         PCA_id_list = []
         for epoch in range(max_epoch):
-            mse_c1_list.append(np.mean(M.mse_c1[epoch]))
-            mse_c2_list.append(np.mean(M.mse_c2[epoch]))
-            mse_c3_list.append(np.mean(M.mse_c3[epoch]))
-            mse_c4_list.append(np.mean(M.mse_c4[epoch]))
+            for i in range(20):
+                mse_list[i].append(np.mean(M.each_mse[i][epoch]))
             LB_id_list.append(np.mean(M.LB_id[epoch]))
             MiND_id_list.append(np.mean(M.MiND_id[epoch]))
             MADA_id_list.append(np.mean(M.MADA_id[epoch]))
@@ -92,10 +79,8 @@ def plot_epoch_test_log(tau, max_epoch):
     ax2 = plt.subplot(2,1,2)
     plt.xlabel('epoch')
     plt.ylabel('MSE')
-    plt.plot(range(max_epoch), mse_c1_list, label='c1')
-    plt.plot(range(max_epoch), mse_c2_list, label='c2')
-    plt.plot(range(max_epoch), mse_c3_list, label='c3')
-    plt.plot(range(max_epoch), mse_c4_list, label='c4')
+    for i in range(20):
+        plt.plot(range(max_epoch), mse_list[i], label=f'y{i+1}')
     # plt.ylim((0., 1.05*max(np.max(mse_c1_list), np.max(mse_c2_list), np.max(mse_c3_list))))
     plt.legend()
     plt.savefig(f'logs/time-lagged/tau_{tau}/ID_per_epoch.pdf', dpi=300)
@@ -109,11 +94,11 @@ def plot_id_per_tau(tau_list, id_epoch):
         fp = open(f'logs/time-lagged/tau_{round(tau,2)}/test_log.txt', 'r')
         for line in fp.readlines():
             seed = int(line[:-1].split(',')[1])
-            epoch = int(line[:-1].split(',')[6])
-            LB_id = float(line[:-1].split(',')[7])
-            MiND_id = float(line[:-1].split(',')[8])
-            MADA_id = float(line[:-1].split(',')[9])
-            PCA_id = float(line[:-1].split(',')[10])
+            epoch = int(line[:-1].split(',')[22])
+            LB_id = float(line[:-1].split(',')[23])
+            MiND_id = float(line[:-1].split(',')[24])
+            MADA_id = float(line[:-1].split(',')[25])
+            PCA_id = float(line[:-1].split(',')[26])
 
             if epoch in id_epoch:
                 id_per_tau[i].append([LB_id, MiND_id, MADA_id, PCA_id])
@@ -183,47 +168,37 @@ def plot_pnas_autocorr():
     plt.savefig('corr.pdf', dpi=300)
     
 
-def plot_jcp12_autocorr():
+def plot_pollu_autocorr():
 
     simdata = np.load('Data/origin/origin.npz')
     
     trace_num = 3
-    corrC1, corrC2, corrC3, corrC4 = [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)]
+    corr = [[[] for _ in range(trace_num)] for _ in range(20)]
     for trace_id in range(trace_num):
         tmp = np.array(simdata['trace'])[trace_id]
-        c1 = tmp[:,0][:,np.newaxis]
-        c2 = tmp[:,1][:,np.newaxis]
-        c3 = tmp[:,2][:,np.newaxis]
-        c4 = tmp[:,3][:,np.newaxis]
+        data = []
+        for i in range(20):
+            data.append(tmp[:,i][:,np.newaxis])
 
-        data = pd.DataFrame(np.concatenate((c1,c2,c3,c4), axis=-1), columns=['c1','c2','c3','c4'])
+        data = pd.DataFrame(np.concatenate(data, axis=-1), columns=[f'y{i}' for i in range(20)])
         
-        lag_list = np.arange(0, 5*100, 15)
+        lag_list = np.arange(0, int(2.5*100), 1)
         for lag in tqdm(lag_list):
-            corrC1[trace_id].append(data['c1'].autocorr(lag=lag))
-            corrC2[trace_id].append(data['c2'].autocorr(lag=lag))
-            corrC3[trace_id].append(data['c3'].autocorr(lag=lag))
-            corrC4[trace_id].append(data['c4'].autocorr(lag=lag))
+            for i in range(20):
+                corr[i][trace_id].append(data[f'y{i}'].autocorr(lag=lag))
     
-    corrC1 = np.mean(corrC1, axis=0)
-    corrC2 = np.mean(corrC2, axis=0)
-    corrC3 = np.mean(corrC3, axis=0)
-    corrC4 = np.mean(corrC4, axis=0)
+    corr = np.mean(corr, axis=1)
 
     import scienceplots
     plt.style.use(['science'])
-    plt.figure(figsize=(6,6))
-    plt.rcParams.update({'font.size':16})
-    plt.plot(lag_list*1e-2, np.array(corrC1), marker="o", markersize=6, label=r'$c_1$')
-    plt.plot(lag_list*1e-2, np.array(corrC2), marker="^", markersize=6, label=r'$c_2$')
-    plt.plot(lag_list*1e-2, np.array(corrC3), marker="D", markersize=6, label=r'$c_3$')
-    plt.plot(lag_list*1e-2, np.array(corrC4), marker="*", markersize=6, label=r'$c_4$')
-    plt.xlabel(r'$t/s$', fontsize=18)
-    plt.ylabel('Autocorrelation coefficient', fontsize=18)
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
-    plt.legend()
-    # plt.subplots_adjust(bottom=0.15, left=0.2)
+    plt.figure(figsize=(20,16))
+    for i in range(20):
+        ax = plt.subplot(4,5,i+1)
+        ax.plot(lag_list*1e-2, np.array(corr[i]))
+        ax.set_xlabel(r'$t/s$')
+        ax.set_ylabel(f'y{i}')
+    # plt.legend()
+    plt.subplots_adjust(wspace=0.45, hspace=0.45)
     plt.savefig('corr.pdf', dpi=300)
     
     
@@ -341,5 +316,5 @@ def plot_evolve(length):
 
 if __name__ == '__main__':
     
-    # plot_jcp12_autocorr()
-    plot_evolve(0.8)
+    plot_pollu_autocorr()
+    # plot_evolve(0.8)
