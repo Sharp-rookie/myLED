@@ -1,7 +1,6 @@
 import os
 import numpy as np
 from tqdm import tqdm
-from matplotlib import cm
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 from pytorch_lightning import seed_everything
@@ -43,7 +42,7 @@ def generate_original_data(trace_num, total_t=5, dt=0.01, save=True):
         y0 = np.random.uniform(-1., 1., 6)
 
         t  =np.arange(0, total_t, dt)
-        c = 0.0
+        c = 0.15
         sol = odeint(CoupledLorenz(10.,0.1,1.,8/3,c,c,28.,0.), y0, t)
 
         import scienceplots
@@ -52,7 +51,7 @@ def generate_original_data(trace_num, total_t=5, dt=0.01, save=True):
         fig = plt.figure(figsize=(10,21))
         for i in range(2):
             ax = plt.subplot(1, 2, i+1, projection='3d')
-            ax.plot(sol[:,0+i], sol[:,1+i], sol[:,2+i], linewidth=1)
+            ax.plot(sol[:,0+3*i], sol[:,1+3*i], sol[:,2+3*i], linewidth=1, color='blue' if i==0 else 'red')
             ax.set_xlabel('x' if i==0 else 'X')
             ax.set_ylabel('y' if i==0 else 'Y')
             ax.set_zlabel('z' if i==0 else 'Z')
