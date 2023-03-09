@@ -31,8 +31,7 @@ def generate_original_data(trace_num, total_t=6280, dt=0.1, save=True, plot=Fals
         
         seed_everything(trace_id)
         
-        # sde = SDE_1S1F(a1 = 1e-3, a2 = 1e-3, a3 = 1e-1, a4 = 1e-1)
-        sde = SDE_1S1F(a1 = 1e-3, a2 = 1e-3, a3 = 2.5e-2, a4 = 2.5e-2)
+        sde = SDE_1S1F(a1 = 1e-3, a2 = 1e-3, a3 = 1e-1, a4 = 1e-1)
         y0 = [1., 0.]
         tspan  =np.arange(0, total_t, dt)
         
@@ -41,8 +40,6 @@ def generate_original_data(trace_num, total_t=6280, dt=0.1, save=True, plot=Fals
 
         x = sol[:, 1] * np.cos(sol[:, 0]+sol[:, 1]-1)
         y = sol[:, 1] * np.sin(sol[:, 0]+sol[:, 1]-1)
-        # x = np.cos(sol[:, 0]+sol[:, 1]-1)
-        # y = np.sin(sol[:, 0]+sol[:, 1]-1)
         result = np.concatenate((x[...,np.newaxis],y[...,np.newaxis],sol), axis=1)
 
         if plot:
@@ -66,7 +63,7 @@ def generate_original_data(trace_num, total_t=6280, dt=0.1, save=True, plot=Fals
             ax1.legend()
             plt.savefig(f'Data/1S1F/origin/1s1f_{trace_id}.pdf', dpi=100)
         
-        return result
+        return np.array(result)
     
     if save and os.path.exists('Data/1S1F/origin/origin.npz'): return
     
@@ -80,11 +77,75 @@ def generate_original_data(trace_num, total_t=6280, dt=0.1, save=True, plot=Fals
         np.savez('Data/1S1F/origin/origin.npz', trace=trace, dt=dt, T=total_t)
         print(f'save origin data form seed 1 to {trace_num} at Data/1S1F/origin/')
     
-    return trace
+    return np.array(trace)
 # generate_original_data(1, total_t=31400, dt=1, save=False, plot=True)
 
+
+def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=False, parallel=False):
+
+    if os.path.exists(f"Data/1S1F/data/tau_{tau}/train_static.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/val_static.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/test_static.npz"):
+        return
     
-def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
+    # generate simulation data
+    if not os.path.exists(f"Data/1S1F/data/static_{max_tau:.2f}.npz"):
+        if is_print: print('generating simulation trajectories:')
+        data = generate_original_data(trace_num, total_t=max_tau+101*dt, dt=dt, save=False, plot=False, parallel=parallel)
+        data = data[:,:,np.newaxis] # add channel dim
+        np.savez(f"Data/1S1F/data/static_{max_tau:.2f}.npz", data=data)
+        if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
+    else:
+        data = np.load(f"Data/1S1F/data/static_{max_tau:.2f}.npz")['data']
+
+    if is_print: print(f"\r[{tau}/{max_tau}]", end='')
+
+    # save statistic information
+    data_dir = f"Data/1S1F/data/tau_{tau}"
+    os.makedirs(data_dir, exist_ok=True)
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)))
+    np.savetxt(data_dir + "/tau_static.txt", [tau]) # Save the timestep
+
+    ##################################
+    # Create [train,val,test] dataset
+    ##################################
+    train_num = int(0.7*trace_num)
+    val_num = int(0.1*trace_num)
+    test_num = int(0.2*trace_num)
+    trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
+    for item in ['train','val','test']:
+                
+        # select trace num
+        data_item = data[trace_list[item]]
+
+        # subsampling
+        step_length = int(tau/dt) if tau!=0. else 1
+
+        assert step_length<data_item.shape[1], f"Tau {tau} is larger than the simulation time length{dt*data_item.shape[1]}"
+        sequences = data_item[:, 100::step_length]
+        sequences = sequences[:, :2]
+        
+        # save
+        np.savez(data_dir+f'/{item}_static.npz', data=sequences)
+
+        # plot
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,0,0,0], label='x')
+        plt.plot(sequences[:,0,0,1], label='y')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_static_input.pdf', dpi=300)
+
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,1,0,0], label='x')
+        plt.plot(sequences[:,1,0,1], label='y')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_static_target.pdf', dpi=300)
+
+    
+def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
     if (sequence_length is not None) and os.path.exists(f"Data/1S1F/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/test_{sequence_length}.npz"):
         return

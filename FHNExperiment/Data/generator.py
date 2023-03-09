@@ -6,6 +6,7 @@ import warnings;warnings.simplefilter('ignore')
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib import rc
+import matplotlib.animation as animation
 rc('text', usetex=True)
 plt.rcParams["text.usetex"] = True
 plt.rcParams['xtick.major.pad']='10'
@@ -14,7 +15,7 @@ font = {'weight':'normal', 'size':16}
 plt.rc('font', **font)
 
 import sys
-sys.path.append('/home/lrk/myLED-code/FHNExperiment/')
+sys.path.append('/home/lrk/myLED/FHNExperiment/')
 from lattice_boltzmann import run_lb_fhn_ic
 from util.plot import plot_contourf_fhn
 
@@ -120,7 +121,7 @@ def generate_origin_data(tf=451, dt=0.001, epsilon=0.006):
         x = np.loadtxt("Data/ICs/y0x.txt", delimiter="\n")
         
         # simulate by LBM
-        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf, dt, epsilon)
+        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf, dt, epsilon)
 
         # record
         rho_act_all.append(rho_act)
@@ -139,47 +140,29 @@ def generate_origin_data(tf=451, dt=0.001, epsilon=0.006):
     
 def analysis_noise_data(tf=451, dt=0.001, epsilon=0.006, a1=2.):
 
-    file_name = "y00"
+    file_names = ["y00"]
 
     rho_act_all = []
     rho_in_all = []
         
-    # load inital-condition file
-    rho_act_0 = np.loadtxt(f"Data/ICs/{file_name}u.txt", delimiter="\n")
-    rho_in_0 = np.loadtxt(f"Data/ICs/{file_name}v.txt", delimiter="\n")
-    x = np.loadtxt("Data/ICs/y0x.txt", delimiter="\n")
+    for f_id, file_name in enumerate(file_names):
         
-    for f_id in range(2):
-        
-        # intinal noise
-        # if f_id != 0:
-        #     # rho_act_0 += np.random.normal(0, 0.5, rho_act.shape[-1])
-        #     # rho_in_0 += np.random.normal(0, 0.1, rho_in.shape[-1])
-        #     # rho_act_0 += np.random.normal(0, 1)
-        #     # rho_in_0 += np.random.normal(0, 1)
-        #     rho_act_0 /= 32
-        #     rho_in_0 /= 32
+        # load inital-condition file
+        rho_act_0 = np.loadtxt(f"Data/ICs/{file_name}u.txt", delimiter="\n")
+        rho_in_0 = np.loadtxt(f"Data/ICs/{file_name}v.txt", delimiter="\n")
+        x = np.loadtxt("Data/ICs/y0x.txt", delimiter="\n")
         
         # simulate by LBM
-        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf, a0 = run_lb_fhn_ic(f_id, 2, rho_act_0, rho_in_0, tf, dt, epsilon, a1)
-
-        # # global noise
-        # if f_id != 0:
-        #     rho_act += np.random.normal(0, 0.1, rho_act.shape)
-        #     rho_in += np.random.normal(0, 0.1, rho_in.shape)
+        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf = run_lb_fhn_ic(f_id, 2, rho_act_0, rho_in_0, tf, dt, epsilon, a1)
 
         # record
         rho_act_all.append(rho_act)
         rho_in_all.append(rho_in)
     
-    # diff
-    rho_act_all.append(rho_act_all[1]-rho_act_all[0])
-    rho_in_all.append(rho_in_all[1]-rho_in_all[0])
-    
     rho_act_all = np.array(rho_act_all)
     rho_in_all = np.array(rho_in_all)
     
-    # plot
+    # plot ICs
     fig, (ax1, ax2) = plt.subplots(1,2,figsize=(15,6))
     for ic in range(len(rho_act_all)-1):
         ax1.plot(x, rho_act_all[ic,0,:], label=f"ic[{ic}]", linewidth=2)
@@ -202,93 +185,77 @@ def analysis_noise_data(tf=451, dt=0.001, epsilon=0.006, a1=2.):
     
     np.savez("Data/analysis/lattice_boltzmann.npz", rho_act_all=rho_act_all, rho_in_all=rho_in_all, t_vec_all=t_vec, dt=dt, x=x, tf=tf)
 
-    # for ic in tqdm(range(len(rho_act_all))):
-    for ic in tqdm(range(1)):
+    for ic in range(len(rho_act_all)):
 
-        rho_act = rho_act_all[ic][::500]
-        rho_in = rho_in_all[ic][::500]
-                
         os.makedirs(f"Data/analysis/{ic}/", exist_ok=True)
+        
+        rho_act = rho_act_all[ic]
+        rho_in = rho_in_all[ic]
+        for index, item in enumerate(['act', 'in']):
+            N_end = int(tf / dt)
+            X = x
+            Y = t_vec[:N_end]
+            X, Y = np.meshgrid(X, Y)
+            Z = rho_act[:N_end] if index==0 else rho_in[:N_end]
+            
+            # Picture 1
+            plt.figure(figsize=(12,10))
+            ax = plt.subplot(111, projection='3d')
+            # plot the surface.
+            surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm, rasterized=True)
+            ax.set_xlabel(r"$x$", labelpad=20)
+            ax.set_ylabel(r"$t$", labelpad=20)
+            ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+            ax.set_zlabel(r"$u(x,t)$" if index==0 else r"$v(x,t)$", rotation=0, labelpad=20)
+            # ax.set_zlim(-1.5, 1.5)
+            # fig.colorbar(surf, orientation="horizontal")
+            ax.invert_xaxis()
+            ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
+            plt.savefig("Data/analysis/{:}/surface_{:}.jpg".format(ic, item), dpi=300)
+            plt.close()
 
-        import matplotlib.animation as animation
+            # Picture 2
+            fig = plt.figure()
+            ax = fig.gca()
+            mp = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("seismic"),zorder=-9)
+            ax.set_ylabel(r"$t$")
+            ax.set_xlabel(r"$x$")
+            fig.colorbar(mp)
+            plt.gca().set_rasterization_zorder(-1)
+            plt.savefig("Data/analysis/{:}/contourf_{:}.jpg".format(ic, item), bbox_inches="tight", dpi=300)
+            plt.close()
+
+        # rho_act = rho_act_all[ic][::500]
+        # rho_in = rho_in_all[ic][::500]
         # fig, ax = plt.subplots()
         # fig.set_tight_layout(True)
         # print('fig size: {0} DPI, size in inches {1}'.format(fig.get_dpi(), fig.get_size_inches()))
-        # line, = ax.plot(rho_in[0], rho_act[0], color='blue')
+        # line, = ax.plot(np.linspace(0,20,101), rho_act[0], color='green')
         # def update(i):
         #     print(f'\rframe[{i}]', end='')
         #     label = 'timestep {0}'.format(i)
         #     line.set_ydata(rho_act[i])
         #     ax.set_title(f't = {i*5}s')
         #     ax.set_ylabel('activator')
-        #     ax.set_xlabel('inhibitor')
+        #     ax.set_xlabel('x')
         #     return line, ax
         # anim = animation.FuncAnimation(fig, update, frames=np.arange(0, 200), interval=1)
-        # anim.save(f'fhn_eps{epsilon}_a{a1}.gif', dpi=100, writer='Pillow')
+        # anim.save(f'act_eps{epsilon}_a{a1}.gif', dpi=100, writer='pillow')
 
-        fig, ax = plt.subplots()
-        fig.set_tight_layout(True)
-        print('fig size: {0} DPI, size in inches {1}'.format(fig.get_dpi(), fig.get_size_inches()))
-        line, = ax.plot(np.linspace(0,20,101), rho_act[0], color='green')
-        def update(i):
-            print(f'\rframe[{i}]', end='')
-            label = 'timestep {0}'.format(i)
-            line.set_ydata(rho_act[i])
-            ax.set_title(f't = {i*5}s')
-            ax.set_ylabel('activator')
-            ax.set_xlabel('x')
-            return line, ax
-        anim = animation.FuncAnimation(fig, update, frames=np.arange(0, 200), interval=1)
-        anim.save(f'act_eps{epsilon}_a{a1}.gif', dpi=100, writer='Pillow')
-
-        fig, ax = plt.subplots()
-        fig.set_tight_layout(True)
-        print('fig size: {0} DPI, size in inches {1}'.format(fig.get_dpi(), fig.get_size_inches()))
-        line, = ax.plot(np.linspace(0,20,101), rho_in[0], color='red')
-        def update(i):
-            print(f'\rframe[{i}]', end='')
-            label = 'timestep {0}'.format(i)
-            line.set_ydata(rho_in[i])
-            ax.set_title(f't = {i*5}s')
-            ax.set_ylabel('inhibitor')
-            ax.set_xlabel('x')
-            return line, ax
-        anim = animation.FuncAnimation(fig, update, frames=np.arange(0, 200), interval=1)
-        anim.save(f'in_eps{epsilon}_a{a1}.gif', dpi=100, writer='Pillow')
-        
-        # for index, item in enumerate(['act', 'in']):
-        #     N_end = int(tf / dt)
-        #     X = x
-        #     Y = t_vec[:N_end]
-        #     X, Y = np.meshgrid(X, Y)
-        #     Z = rho_act[:N_end] if index==0 else rho_in[:N_end]
-            
-        #     # Picture 1
-        #     fig = plt.figure(figsize=(12,10))
-        #     ax = fig.gca(projection='3d')
-        #     # plot the surface.
-        #     surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm, rasterized=True)
-        #     ax.set_xlabel(r"$x$", labelpad=20)
-        #     ax.set_ylabel(r"$t$", labelpad=20)
-        #     ax.zaxis.set_rotate_label(False)  # disable automatic rotation
-        #     ax.set_zlabel(r"$u(x,t)$" if index==0 else r"$v(x,t)$", rotation=0, labelpad=20)
-        #     # ax.set_zlim(-1.5, 1.5)
-        #     # fig.colorbar(surf, orientation="horizontal")
-        #     ax.invert_xaxis()
-        #     ax.view_init(elev=30., azim=30.) # view direction: elve=vertical angle ,azim=horizontal angle
-        #     plt.savefig("Data/analysis/{:}/surface_{:}.jpg".format(ic, item), dpi=300)
-        #     plt.close()
-
-        #     # Picture 2
-        #     fig = plt.figure()
-        #     ax = fig.gca()
-        #     mp = ax.contourf(X, Y, Z, 100, cmap=plt.get_cmap("seismic"),zorder=-9)
-        #     ax.set_ylabel(r"$t$")
-        #     ax.set_xlabel(r"$x$")
-        #     fig.colorbar(mp)
-        #     plt.gca().set_rasterization_zorder(-1)
-        #     plt.savefig("Data/analysis/{:}/contourf_{:}.jpg".format(ic, item), bbox_inches="tight", dpi=300)
-        #     plt.close()
+        # fig, ax = plt.subplots()
+        # fig.set_tight_layout(True)
+        # print('fig size: {0} DPI, size in inches {1}'.format(fig.get_dpi(), fig.get_size_inches()))
+        # line, = ax.plot(np.linspace(0,20,101), rho_in[0], color='red')
+        # def update(i):
+        #     print(f'\rframe[{i}]', end='')
+        #     label = 'timestep {0}'.format(i)
+        #     line.set_ydata(rho_in[i])
+        #     ax.set_title(f't = {i*5}s')
+        #     ax.set_ylabel('inhibitor')
+        #     ax.set_xlabel('x')
+        #     return line, ax
+        # anim = animation.FuncAnimation(fig, update, frames=np.arange(0, 200), interval=1)
+        # anim.save(f'in_eps{epsilon}_a{a1}.gif', dpi=100, writer='pillow')
 analysis_noise_data(tf=1000.1, dt=0.01, epsilon=0.006, a1=2.)
 
 

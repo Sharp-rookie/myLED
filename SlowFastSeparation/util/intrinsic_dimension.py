@@ -22,6 +22,7 @@ class ID_Estimator:
 
         dims = []
         for k in k_list:
+            assert k>0, "k must be larger than 0"
             if self.method == 'MiND_ML':
                 dims.append(np.mean(skdim.id.MiND_ML().fit_pw(X, n_neighbors=k).dimension_pw_))
             elif self.method == 'MLE':

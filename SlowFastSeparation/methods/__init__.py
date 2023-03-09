@@ -1,3 +1,5 @@
-from .time_lagged import train_time_lagged, test_and_save_embeddings_of_time_lagged
-from .learn_fast_slow import train_slow_extract_and_evolve, test_evolve
+from .time_lagged_new import train_time_lagged, test_and_save_embeddings_of_time_lagged
+# from .time_lagged_old import train_time_lagged, test_and_save_embeddings_of_time_lagged
+from .learn_fast_slow_new import train_slow_extract_and_evolve, test_evolve
+# from .learn_fast_slow_old import train_slow_extract_and_evolve, test_evolve
 from .baseline import baseline_train, baseline_test

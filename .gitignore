@@ -3,7 +3,6 @@
 *.h5
 *.png
 *.pth
-*.txt
 *.gif
 *.h5
 *.npz

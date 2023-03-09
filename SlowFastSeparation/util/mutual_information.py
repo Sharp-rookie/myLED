@@ -115,7 +115,7 @@ def cal_mi_of_tau(tau, system, obs_dim, data_dim, result_filepath, max_iters=102
         # combined vector(observated variables) MI
         if tau == 0.0:
             x0 = data[:, :obs_dim]
-            x1 = x0
+            x1 = data[:, :obs_dim]
         else:
             x0 = data[:, 0, :obs_dim]
             x1 = data[:, 1, :obs_dim]

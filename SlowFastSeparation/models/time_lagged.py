@@ -6,10 +6,16 @@ from .weight_init import normal_init
 
 class EncodeCell(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, flatten=False):
+    def __init__(self, input_dim, hidden_dim, flatten=False, dropout=False, net='MLP', act=True):
         super(EncodeCell, self).__init__()
 
+        assert net in ['MLP', 'GRU1', 'GRU2', 'LSTM', 'LSTM-changed'], f"Encoder Net Error, {net} not implemented!"
+
+        self.net = net
+
+        self.act = act
         self.flatten = nn.Flatten() if flatten else None
+        self.dropout = nn.Dropout(p=0.01) if dropout else None
 
         self.w1 = nn.Parameter(torch.rand(input_dim, hidden_dim))
         self.w2 = nn.Parameter(torch.rand(input_dim, hidden_dim))
@@ -25,80 +31,72 @@ class EncodeCell(nn.Module):
 
         if self.flatten:
             x = self.flatten(x)
+        
+        if self.net == 'MLP':
+            if self.act:
+                y = self.tanh(x @ self.w1 + self.b1)
+            else:
+                y = x @ self.w1 + self.b1
+        elif self.net == 'GRU1':
+            z = self.sigmoid(x @ self.w1 + self.b1)
+            h = self.tanh(x @ self.w2 + self.b2)
+            y = (1 - z) * h
+        elif self.net == 'GRU2':
+            z = self.sigmoid(x @ self.w1 + self.b1)
+            r = self.sigmoid(x @ self.w2 + self.b2)
+            h = self.tanh(x @ self.w3 + self.b3 + r * self.b4)
+            y = (1 - z) * h
+        elif self.net == 'LSTM':
+            O = self.sigmoid(x @ self.w1 + self.b1)
+            I = self.sigmoid(x @ self.w2 + self.b2)
+            C = self.tanh(x @ self.w3 + self.b3)
+            y = O * self.tanh(I * C)
+        elif self.net == 'LSTM-changed':
+            O = self.sigmoid(x @ self.w1 + self.b1)
+            I = self.sigmoid(x @ self.w2 + self.b2)
+            C = self.tanh(x @ self.w3 + self.b3)
+            y = (1-O) * self.tanh(I * C)
 
-        # # GRU1
-        # p1 = self.sigmoid(x @ self.w1 + self.b1)
-        # p2 = self.tanh(x @ self.w2 + self.b2)
-        # y = (1 - p1) * p2
-
-        # GRU2
-        p1 = self.sigmoid(x @ self.w1 + self.b1)
-        p2 = self.tanh(x @ self.w3 + self.b3 + self.sigmoid(x@self.w2+self.b2) * self.b4)
-        y = (1 - p1) * p2
-
-        # # LSTM
-        # p1 = self.sigmoid(x @ self.w1 + self.b1)
-        # p2 = self.sigmoid(x @ self.w2 + self.b2)
-        # p3 = self.tanh(x @ self.w3 + self.b3)
-        # y = p1 * self.tanh(p2 * p3)
-        # # y = (1-p1) * self.tanh(p2 * p3)
+        if self.dropout:
+            y = self.dropout(y)
 
         return y
 
 
 class TimeLaggedAE(nn.Module):
     
-    def __init__(self, in_channels, feature_dim, embed_dim, data_dim):
+    def __init__(self, in_channels, feature_dim, embed_dim, data_dim, enc_net='MLP'):
         super(TimeLaggedAE, self).__init__()
                 
-        # # (batchsize,1,1,4)-->(batchsize, embed_dim)
+        # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)
+        self.encoder = nn.Sequential(
+            EncodeCell(in_channels*feature_dim, 64, True, True, enc_net),
+            EncodeCell(64, 64, False, True, enc_net),
+            EncodeCell(64, embed_dim, False, False, enc_net, False),
+        )
         # self.encoder = nn.Sequential(
         #     nn.Flatten(),
         #     nn.Linear(in_channels*feature_dim, 64, bias=True),
         #     nn.Tanh(),
         #     nn.Dropout(p=0.01),
         #     nn.Linear(64, embed_dim, bias=True),
-        #     nn.Tanh(),
         # )
-        # self.layer_num = 3
-        # self.hidden_dim = embed_dim
-        # # self.encoder = nn.LSTM(
-        # #     input_size=in_channels*feature_dim, 
-        # #     hidden_size=self.hidden_dim, 
-        # #     num_layers=self.layer_num, 
-        # #     dropout=0.01, 
-        # #     batch_first=True # input: (batch_size, squences, features)
-        # #     )
-        # self.encoder = nn.GRU(
-        #     input_size=in_channels*feature_dim, 
-        #     hidden_size=self.hidden_dim, 
-        #     num_layers=self.layer_num, 
-        #     dropout=0.01, 
-        #     batch_first=True # input: (batch_size, squences, features)
-        #     )
-        self.encoder = nn.Sequential(
-            EncodeCell(in_channels*feature_dim, 64, True),
-            EncodeCell(64, 64),
-            EncodeCell(64, embed_dim),
-        )
         
-        # (batchsize, embed_dim)-->(batchsize,1,1,4)
+        # (batchsize, embed_dim)-->(batchsize,1,channel_num,feature_dim)
         self.decoder_prior = nn.Sequential(
             nn.Linear(embed_dim, 64, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
             nn.Linear(64, in_channels*feature_dim, bias=True),
-            nn.Tanh(),
             nn.Unflatten(-1, (1, in_channels, feature_dim))
         )
 
-        # (batchsize, embed_dim)-->(batchsize,1,1,4)
+        # (batchsize, embed_dim)-->(batchsize,1,channel_num,feature_dim)
         self.decoder_reverse = nn.Sequential(
             nn.Linear(embed_dim, 64, bias=True),
             nn.Tanh(),
             nn.Dropout(p=0.01),
             nn.Linear(64, in_channels*feature_dim, bias=True),
-            nn.Tanh(),
             nn.Unflatten(-1, (1, in_channels, feature_dim))
         )
         
@@ -111,16 +109,14 @@ class TimeLaggedAE(nn.Module):
         
     def forward(self, x, direct='prior'):
         embed = self.encoder(x)
-
-        # h0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device='cpu')
-        # c0 = torch.zeros(self.layer_num * 1, len(x), self.hidden_dim, dtype=torch.float32, device='cpu')
-        # x = nn.Flatten(start_dim=2)(x)
-        # _, (h, c)  = self.encoder(x, (h0, c0))
-        # _, h  = self.encoder(x, h0)
-        # embed = h[-1]
-        
         out = self.decoder_prior(embed) if direct=='prior' else self.decoder_reverse(embed)
         return out, embed
+    
+    def enc(self, x):
+        return self.encoder(x)
+    
+    def dec(self, embed, direct='prior'):
+        return self.decoder_prior(embed) if direct=='prior' else self.decoder_reverse(embed)
 
     def scale(self, x):
         return (x-self.min) / (self.max-self.min+1e-6)
