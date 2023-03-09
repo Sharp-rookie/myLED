@@ -5,15 +5,17 @@ from torch.utils.data import Dataset
 
 class Dataset(Dataset):
 
-    def __init__(self, file_path, mode='train', length=None, model=None):
+    def __init__(self, file_path, mode='train', length=None, model=None, sliding_window=True):
         super().__init__()
         
         self.length = length
         self.model = model
 
         # Search for txt files
-        if length is None:
-            self.data = np.load(file_path+f'/{mode}.npz')['data'] # (N, 2, 1, 3) or (N, 1, 1, 3)
+        if not sliding_window:
+            self.data = np.load(file_path+f'/{mode}_static.npz')['data'] # (N, sequence_length, channel, feature_dim)
+        elif length is None:
+            self.data = np.load(file_path+f'/{mode}.npz')['data']
         else:
             self.data = np.load(file_path+f'/{mode}_{length}.npz')['data']
 

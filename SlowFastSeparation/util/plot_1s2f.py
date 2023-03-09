@@ -1,11 +1,12 @@
 import os
+import math
 import numpy as np
 import pandas as pd
 import scienceplots
 import matplotlib.pyplot as plt;plt.style.use(['science']);plt.rcParams.update({'font.size':16})
 
 
-def plot_epoch_test_log(tau, max_epoch):
+def plot_epoch_test_log(tau, max_epoch, log_dir):
 
     class MSE():
         def __init__(self, tau):
@@ -15,8 +16,9 @@ def plot_epoch_test_log(tau, max_epoch):
             self.mse_z = [[] for _ in range(max_epoch)]
             self.LB_id = [[] for _ in range(max_epoch)]
 
-    fp = open(f'logs/1S2F/TimeSelection/tau_{tau}/test_log.txt', 'r')
+    fp = open(log_dir + f'tau_{tau}/test_log.txt', 'r')
     items = []
+    epoches = []
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
         seed = int(line[:-1].split(',')[1])
@@ -42,6 +44,9 @@ def plot_epoch_test_log(tau, max_epoch):
             M.mse_z[epoch].append(mse_z)
             M.LB_id[epoch].append(LB_id)
             items.append(M)
+
+        if epoch not in epoches:
+            epoches.append(epoch)
     fp.close()
 
     for M in items:
@@ -52,7 +57,7 @@ def plot_epoch_test_log(tau, max_epoch):
         MiND_id_list = []
         MADA_id_list = []
         PCA_id_list = []
-        for epoch in range(max_epoch):
+        for epoch in epoches:
             mse_x_list.append(np.mean(M.mse_x[epoch]))
             mse_y_list.append(np.mean(M.mse_y[epoch]))
             mse_z_list.append(np.mean(M.mse_z[epoch]))
@@ -63,24 +68,24 @@ def plot_epoch_test_log(tau, max_epoch):
     ax1 = plt.subplot(2,1,1)
     plt.xlabel('epoch')
     plt.ylabel('ID')
-    plt.plot(range(max_epoch), LB_id_list)
+    plt.plot(epoches, LB_id_list)
     ax2 = plt.subplot(2,1,2)
     plt.xlabel('epoch')
     plt.ylabel('MSE')
-    plt.plot(range(max_epoch), mse_x_list, label='x')
-    plt.plot(range(max_epoch), mse_y_list, label='y')
-    plt.plot(range(max_epoch), mse_z_list, label='z')
+    plt.plot(epoches, mse_x_list, label='x')
+    plt.plot(epoches, mse_y_list, label='y')
+    plt.plot(epoches, mse_z_list, label='z')
     # plt.ylim((0., 1.05*max(np.max(mse_x_list), np.max(mse_y_list), np.max(mse_z_list))))
     plt.legend()
-    plt.savefig(f'logs/1S2F/TimeSelection/tau_{tau}/ID_per_epoch.pdf', dpi=300)
+    plt.savefig(log_dir + f'tau_{tau}/ID_per_epoch.pdf', dpi=300)
     plt.close()
 
 
-def plot_id_per_tau(tau_list, id_epoch):
+def plot_id_per_tau(tau_list, id_epoch, log_dir):
 
     id_per_tau = [[] for _ in tau_list]
     for i, tau in enumerate(tau_list):
-        fp = open(f'logs/1S2F/TimeSelection/tau_{round(tau,2)}/test_log.txt', 'r')
+        fp = open(log_dir + f'tau_{round(tau,2)}/test_log.txt', 'r')
         for line in fp.readlines():
             seed = int(line[:-1].split(',')[1])
             epoch = int(line[:-1].split(',')[5])
@@ -95,6 +100,8 @@ def plot_id_per_tau(tau_list, id_epoch):
 
     round_id_per_tau = []
     for id in id_per_tau:
+        if math.isnan(id[0]):
+            id[0] = 0.
         round_id_per_tau.append([round(id[0])])
     round_id_per_tau = np.array(round_id_per_tau)
 
@@ -108,7 +115,7 @@ def plot_id_per_tau(tau_list, id_epoch):
     plt.xlabel(r'$\tau / s$', fontsize=18)
     plt.ylabel('Intrinsic dimensionality', fontsize=18)
     plt.subplots_adjust(bottom=0.15)
-    plt.savefig('logs/1S2F/TimeSelection/id_per_tau.pdf', dpi=300)
+    plt.savefig(log_dir + 'id_per_tau.pdf', dpi=300)
 
         
 def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3,4]):

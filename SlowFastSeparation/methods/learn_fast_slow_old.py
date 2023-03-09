@@ -71,7 +71,6 @@ def train_slow_extract_and_evolve(
     
     # training pipeline
     train_loss = []
-    val_loss = []
     lambda_curve = [[] for _ in range(slow_dim)]
     for epoch in range(1, learn_max_epoch+1):
         
@@ -228,19 +227,16 @@ def train_slow_extract_and_evolve(
             total_obses_next = torch.concat(total_obses_next, axis=0)
             embeds = torch.concat(embeds, axis=0)
             embed_from_obses = torch.concat(embed_from_obses, axis=0)
-            hidden_slow = torch.concat(hidden_slow, axis=0)
+            if system == 'FHN' or system == '1S1F':
+                hidden_slow = torch.concat(hidden_slow, axis=0)
             
             # cal loss
             adiabatic_loss = L1_loss(embeds, embed_from_obses)
             # slow_reconstruct_loss = MSE_loss(slow_obses, inputs)
             evolve_loss = MSE_loss(total_obses_next, targets)
-            # all_loss = 0.5*slow_reconstruct_loss + 0.5*evolve_loss + 0.1*adiabatic_loss
-            all_loss = evolve_loss + 0.1*adiabatic_loss
             # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, recons_loss={slow_reconstruct_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
             if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiab_loss={adiabatic_loss:.5f}, evol_loss={evolve_loss:.5f}', end='')
-            
-            val_loss.append(all_loss.detach().item())
-            
+                        
             # plot per 5 epoch
             if epoch % 1 == 0:
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
@@ -329,7 +325,6 @@ def train_slow_extract_and_evolve(
     plt.legend()
     plt.title('Training Loss Curve')
     plt.savefig(log_dir+'/train_loss_curve.pdf', dpi=300)
-    np.save(log_dir+'/val_loss_curve.npy', val_loss)
 
     # plot Koopman Lambda curve
     plt.figure(figsize=(6,6))

@@ -3,6 +3,7 @@ import numpy as np
 from tqdm import tqdm
 import scienceplots
 import matplotlib.pyplot as plt;plt.style.use(['science']);plt.rcParams.update({'font.size':16})
+import multiprocessing
 from multiprocessing import Process
 import warnings;warnings.simplefilter('ignore')
 
@@ -27,10 +28,12 @@ def findNearestPoint(data_t, start=0, object_t=10.0):
     return index
 
 
-def time_discretization(seed, total_t, dt=None, is_print=False):
+def time_discretization(seed, total_t, dt=None, is_print=False, data=None, save=True):
     """Time-forward NearestNeighbor interpolate to discretizate the time"""
 
-    data = np.load(f'Data/1S2F/origin/{seed}/origin.npz')
+    if not data:
+        data = np.load(f'Data/1S2F/origin/{seed}/origin.npz')
+    
     data_t = data['t']
     data_X = data['X']
     data_Y = data['Y']
@@ -51,36 +54,36 @@ def time_discretization(seed, total_t, dt=None, is_print=False):
 
         if is_print == 1: print(f'\rSeed[{seed}] interpolating {current_t:.6f}/{total_t}', end='')
 
-    import scienceplots
-    plt.style.use(['science'])
-    plt.figure(figsize=(16,5))
-    plt.rcParams.update({'font.size':16})
-    # plt.title(f'dt = {dt}')
-    plt.subplot(1,3,1)
-    plt.plot(t, X, label=r'$X$')
-    plt.xlabel(r'$t / s$', fontsize=18)
-    plt.ylabel(r'$X$', fontsize=18)
-    plt.subplot(1,3,2)
-    plt.plot(t, Y, label=r'$Y$')
-    plt.xlabel(r'$t / s$', fontsize=18)
-    plt.ylabel(r'$Y$', fontsize=18)
-    plt.subplot(1,3,3)
-    plt.plot(t, Z, label=r'$Z$')
-    plt.xlabel(r'$t / s$', fontsize=18)
-    plt.ylabel(r'$Z$', fontsize=18)
+    if save:
+        plt.figure(figsize=(16,5))
+        # plt.title(f'dt = {dt}')
+        plt.subplot(1,3,1)
+        plt.plot(t, X, label=r'$X$')
+        plt.xlabel(r'$t / s$', fontsize=18)
+        plt.ylabel(r'$X$', fontsize=18)
+        plt.subplot(1,3,2)
+        plt.plot(t, Y, label=r'$Y$')
+        plt.xlabel(r'$t / s$', fontsize=18)
+        plt.ylabel(r'$Y$', fontsize=18)
+        plt.subplot(1,3,3)
+        plt.plot(t, Z, label=r'$Z$')
+        plt.xlabel(r'$t / s$', fontsize=18)
+        plt.ylabel(r'$Z$', fontsize=18)
 
-    plt.xticks(fontsize=15)
-    plt.yticks(fontsize=15)
-    plt.subplots_adjust(
-        left=0.05,
-        right=0.95,
-        top=0.9,
-        bottom=0.15,
-        wspace=0.2
-    )
-    plt.savefig(f'Data/1S2F/origin/{seed}/data.pdf', dpi=300)
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.subplots_adjust(
+            left=0.05,
+            right=0.95,
+            top=0.9,
+            bottom=0.15,
+            wspace=0.2
+        )
+        plt.savefig(f'Data/1S2F/origin/{seed}/data.pdf', dpi=300)
 
-    np.savez(f'Data/1S2F/origin/{seed}/data.npz', dt=dt, t=t, X=X, Y=Y, Z=Z)
+        np.savez(f'Data/1S2F/origin/{seed}/data.npz', dt=dt, t=t, X=X, Y=Y, Z=Z)
+    else:
+        return np.array([X, Y, Z])
 
 
 def generate_original_data(trace_num, total_t, dt, save=True, plot=False, parallel=False):
@@ -93,10 +96,11 @@ def generate_original_data(trace_num, total_t, dt, save=True, plot=False, parall
         if not os.path.exists(f'Data/1S2F/origin/{seed}/origin.npz'):
             IC = [np.random.randint(5,200), np.random.randint(5,100), np.random.randint(0,5000)]
             if parallel:
-                subprocess.append(Process(target=generate_origin, args=(total_t, seed, IC), daemon=True))
+                is_print = len(subprocess)==0
+                subprocess.append(Process(target=generate_origin, args=(total_t, seed, IC, True, is_print), daemon=True))
                 subprocess[-1].start()
             else:
-                generate_origin(total_t, seed, IC)
+                generate_origin(total_t, seed, IC, is_print=True)
     while any([subp.exitcode == None for subp in subprocess]):
         pass
     
@@ -114,9 +118,110 @@ def generate_original_data(trace_num, total_t, dt, save=True, plot=False, parall
         pass
 
     print(f'save origin data form seed 1 to {trace_num} at Data/1S2F/origin/')
+
+
+def generate_original_data2(trace_num, total_t, dt, parallel=False):
+
+    def unit(queue, total_t, seed, dt, IC, is_print):
+        simdata = generate_origin(total_t=total_t, seed=seed, IC=IC, save=False, is_print=is_print)
+        data = time_discretization(seed=seed, total_t=total_t, dt=dt, is_print=False, data=simdata, save=False)
+        queue.put_nowait(data)
+
+    parallel_batch = 90 # max parallel subprocess num at same time
+
+    queue = multiprocessing.Manager().Queue()
+    
+    sol = []
+    for batch_id in range(int(trace_num/parallel_batch)+1):
+        print(f'[{batch_id+1}/{int(trace_num/parallel_batch)+1}] parallel batch')
+        subprocess = []
+
+        for i in range(batch_id*parallel_batch+1, (batch_id+1)*parallel_batch+1):
+            if i > trace_num: break
+            IC = [np.random.randint(5,200), np.random.randint(5,100), np.random.randint(0,5000)]
+            if parallel:
+                is_print = len(subprocess)==0
+                subprocess.append(Process(target=unit, args=(queue, total_t, i, dt, IC, is_print)))
+                subprocess[-1].start()
+            else: 
+                sol.append(unit(queue, total_t, i, dt, IC, True))
+        
+        while any([subp.exitcode == None for subp in subprocess]):
+            if not queue.empty():
+                data = queue.get_nowait()
+                sol.append(data)
+    
+    return np.array(sol).transpose((0,2,1))
+
+
+def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=False, parallel=False):
+    
+    if os.path.exists(f"Data/1S2F/data/tau_{tau}/train_static.npz") and os.path.exists(f"Data/1S2F/data/tau_{tau}/val_static.npz") and os.path.exists(f"Data/1S2F/data/tau_{tau}/test_static.npz"):
+        return
+    
+    # generate simulation data
+    if not os.path.exists(f"Data/1S2F/data/static_{max_tau:.2f}.npz"):
+        if is_print: print('generating simulation trajectories:')
+        data = generate_original_data2(trace_num, total_t=max_tau+dt, dt=dt, parallel=parallel)
+        data = data[:,:,np.newaxis] # add channel dim
+        np.savez(f"Data/1S2F/data/static_{max_tau:.2f}.npz", data=data)
+        if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
+    else:
+        data = np.load(f"Data/1S2F/data/static_{max_tau:.2f}.npz")['data']
+
+    if is_print: print(f"\r[{tau}/{max_tau}]", end='')
+
+    # save statistic information
+    data_dir = f"Data/1S2F/data/tau_{tau}"
+    os.makedirs(data_dir, exist_ok=True)
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)))
+    np.savetxt(data_dir + "/tau_static.txt", [tau]) # Save the timestep
+
+    ##################################
+    # Create [train,val,test] dataset
+    ##################################
+    train_num = int(0.7*trace_num)
+    val_num = int(0.1*trace_num)
+    test_num = int(0.2*trace_num)
+    trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
+    for item in ['train','val','test']:
+                
+        # select trace num
+        data_item = data[trace_list[item]]
+
+        # subsampling
+        step_length = int(tau/dt) if tau!=0. else 1
+        squence_length = 2 if tau!=0. else 1
+
+        assert step_length<=data_item.shape[1], f"Tau {tau} is larger than the simulation time length {dt*data_item.shape[1]}"
+        sequences = data_item[:, ::step_length]
+        sequences = sequences[:, :squence_length]
+        
+        # save
+        np.savez(data_dir+f'/{item}_static.npz', data=sequences)
+
+        # plot
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,0,0,0], label='X')
+        plt.plot(sequences[:,0,0,1], label='Y')
+        plt.plot(sequences[:,0,0,2], label='Z')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_static_input.pdf', dpi=300)
+
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,squence_length-1,0,0], label='X')
+        plt.plot(sequences[:,squence_length-1,0,1], label='Y')
+        plt.plot(sequences[:,squence_length-1,0,2], label='Z')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_static_target.pdf', dpi=300)
     
     
-def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
+def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
     if (sequence_length is not None) and os.path.exists(f"Data/1S2F/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/1S2F/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/1S2F/data/tau_{tau}/test_{sequence_length}.npz"):
         return

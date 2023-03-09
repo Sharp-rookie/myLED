@@ -25,7 +25,9 @@ def train_time_lagged(
         device=torch.device('cpu'),
         data_dim=4,
         lr=0.001,
-        batch_size=128
+        batch_size=128,
+        enc_net='MLP',
+        sliding_window=True
         ):
     
     # prepare
@@ -35,10 +37,11 @@ def train_time_lagged(
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
     
     # init model
-    model = models.TimeLaggedAE(in_channels=1, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim)
+    model = models.TimeLaggedAE(in_channels=1, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net)
     model.apply(models.weights_normal_init)
-    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
-    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
+    tmp = '' if sliding_window else '_static'
+    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
+    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
     model.to(device)
     
     # training params
@@ -48,9 +51,9 @@ def train_time_lagged(
     l1_loss = nn.L1Loss()
 
     # dataset
-    train_dataset = Dataset(data_filepath, 'train')
+    train_dataset = Dataset(data_filepath, 'train', sliding_window=sliding_window)
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True, drop_last=False)
-    val_dataset = Dataset(data_filepath, 'val')
+    val_dataset = Dataset(data_filepath, 'val', sliding_window=sliding_window)
     val_loader = torch.utils.data.DataLoader(dataset=val_dataset, batch_size=len(val_dataset), shuffle=False, drop_last=False)
     
     # training pipeline
@@ -65,18 +68,15 @@ def train_time_lagged(
             x_t1 = model.scale(x_t1.to(device))[..., :obs_dim]
             
             prior, embed1 = model.forward(x_t0, direct='prior')
-            reverse, embed2 = model.forward(x_t1, direct='reverse')
             
             prior_loss = mse_loss(prior, x_t1)
-            reverse_loss = mse_loss(reverse, x_t0)
-            symmetry_loss = l1_loss(embed1, embed2)
-            loss = prior_loss + reverse_loss + symmetry_loss
+            loss = prior_loss
             
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             
-            losses.append([prior_loss.detach().item(), reverse_loss.detach().item(), symmetry_loss.detach().item()])
+            losses.append([prior_loss.detach().item()])
             
         loss_curve.append(np.mean(losses, axis=0))
         
@@ -89,12 +89,9 @@ def train_time_lagged(
                 x_t1 = model.scale(x_t1.to(device))[..., :obs_dim]
             
                 prior, embed1 = model.forward(x_t0, direct='prior')
-                reverse, embed2 = model.forward(x_t1, direct='reverse')
                 
             prior_loss = mse_loss(prior, x_t1)
-            reverse_loss = mse_loss(reverse, x_t0)
-            symmetry_loss = l1_loss(embed1, embed2)
-            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE: prior={prior_loss:.5f}, reverse={reverse_loss:.5f}, symmetry={symmetry_loss:.5f}', end='')
+            if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE: prior={prior_loss:.5f}', end='')
         
         # save each epoch model
         model.train()
@@ -103,8 +100,6 @@ def train_time_lagged(
     # plot loss curve
     plt.figure()
     plt.plot(np.array(loss_curve)[:,0], label='prior')
-    plt.plot(np.array(loss_curve)[:,1], label='reverse')
-    plt.plot(np.array(loss_curve)[:,2], label='symmetry')
     plt.legend()
     plt.xlabel('epoch')
     plt.title('Training Loss Curve')
@@ -126,7 +121,9 @@ def test_and_save_embeddings_of_time_lagged(
         log_dir='logs/2S2F/TimeSelection/', 
         device=torch.device('cpu'),
         data_dim=4,
-        batch_size=128
+        batch_size=128,
+        enc_net='MLP',
+        sliding_window=True
         ):
     
     # prepare
@@ -136,19 +133,21 @@ def test_and_save_embeddings_of_time_lagged(
     loss_func = nn.MSELoss()
     
     # init model
-    model = models.TimeLaggedAE(in_channels=1, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim)
+    model = models.TimeLaggedAE(in_channels=1, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net)
     if checkpoint_filepath is None: # not trained
         model.apply(models.weights_normal_init)
-        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
-        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
+        tmp = '' if sliding_window else '_static'
+        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
+        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
 
     # dataset
-    test_dataset = Dataset(data_filepath, 'test')
+    test_dataset = Dataset(data_filepath, 'test', sliding_window=sliding_window)
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
 
     # testing pipeline
     fp = open(log_dir + 'tau_' + str(tau) + '/test_log.txt', 'a')
-    for ep in range(1,max_epoch):
+    interval = 5
+    for ep in range(1, max_epoch, interval):
         
         # load weight file
         epoch = ep
@@ -220,6 +219,8 @@ def test_and_save_embeddings_of_time_lagged(
         elif system == 'FHN':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         elif system == '1S1F':
+            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
+        elif system == 'SC':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         fp.flush()
 

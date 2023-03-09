@@ -21,9 +21,9 @@ def system_4d(y0, t, para=(0.025,3)):
     return [dc1, dc2, dc3, dc4]
 
 
-def generate_original_data(trace_num, total_t=5, dt=0.0001, save=True, plot=False, parallel=False):
+def generate_original_data(trace_num, total_t=5., dt=0.01, save=True, plot=False, parallel=False):
     
-    def solve_1_trace(trace_id=0, total_t=5, dt=0.001):
+    def solve_1_trace(trace_id=0, total_t=5., dt=0.001):
         
         seed_everything(trace_id)
         
@@ -55,23 +55,93 @@ def generate_original_data(trace_num, total_t=5, dt=0.0001, save=True, plot=Fals
         np.savez('Data/2S2F/origin/origin.npz', trace=trace, dt=dt, T=total_t)
         print(f'save origin data form seed 1 to {trace_num} at Data/2S2F/origin/')
     
-    plot_c3_c4_trajectory() # plot c3,c4 trajectory
+    if save: plot_c3_c4_trajectory() # plot c3,c4 trajectory
 
-    return trace
+    return np.array(trace)
+
+
+def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=False, parallel=False):
+
+    if os.path.exists(f"Data/2S2F/data/tau_{tau}/train_static.npz") and os.path.exists(f"Data/2S2F/data/tau_{tau}/val_static.npz") and os.path.exists(f"Data/2S2F/data/tau_{tau}/test_static.npz"):
+        return
+    
+    # generate simulation data
+    if not os.path.exists(f"Data/2S2F/data/static_{max_tau:.2f}.npz"):
+        if is_print: print('generating simulation trajectories:')
+        data = generate_original_data(trace_num, total_t=max_tau+dt, dt=dt, save=False, plot=False, parallel=parallel)
+        data = data[:,:,np.newaxis] # add channel dim
+        np.savez(f"Data/2S2F/data/static_{max_tau:.2f}.npz", data=data)
+        if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
+    else:
+        data = np.load(f"Data/2S2F/data/static_{max_tau:.2f}.npz")['data']
+
+    if is_print: print(f"\r[{tau}/{max_tau}]", end='')
+
+    # save statistic information
+    data_dir = f"Data/2S2F/data/tau_{tau}"
+    os.makedirs(data_dir, exist_ok=True)
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)))
+    np.savetxt(data_dir + "/tau_static.txt", [tau]) # Save the timestep
+
+    ##################################
+    # Create [train,val,test] dataset
+    ##################################
+    train_num = int(0.7*trace_num)
+    val_num = int(0.1*trace_num)
+    test_num = int(0.2*trace_num)
+    trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
+    for item in ['train','val','test']:
+                
+        # select trace num
+        data_item = data[trace_list[item]]
+
+        # subsampling
+        step_length = int(tau/dt) if tau!=0. else 1
+        squence_length = 2 if tau!=0. else 1
+
+        assert step_length<=data_item.shape[1], f"Tau {tau} is larger than the simulation time length {dt*data_item.shape[1]}"
+        sequences = data_item[:, ::step_length]
+        sequences = sequences[:, :squence_length]
+        
+        # save
+        np.savez(data_dir+f'/{item}_static.npz', data=sequences)
+
+        # plot
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,0,0,0], label='c1')
+        plt.plot(sequences[:,0,0,1], label='c2')
+        plt.plot(sequences[:,0,0,2], label='c3')
+        plt.plot(sequences[:,0,0,3], label='c4')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_static_input.pdf', dpi=300)
+
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,squence_length-1,0,0], label='c1')
+        plt.plot(sequences[:,squence_length-1,0,1], label='c2')
+        plt.plot(sequences[:,squence_length-1,0,2], label='c3')
+        plt.plot(sequences[:,squence_length-1,0,3], label='c4')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_static_target.pdf', dpi=300)
 
     
-def generate_dataset(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
+def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
     if (sequence_length is not None) and os.path.exists(f"Data/2S2F/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/2S2F/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/2S2F/data/tau_{tau}/test_{sequence_length}.npz"):
         return
     elif (sequence_length is None) and os.path.exists(f"Data/2S2F/data/tau_{tau}/train.npz") and os.path.exists(f"Data/2S2F/data/tau_{tau}/val.npz") and os.path.exists(f"Data/2S2F/data/tau_{tau}/test.npz"):
         return
     
-    # load original data
-    if is_print: print('loading original trace data:')
+    # load simulation data
+    if is_print: print('loading simulation trajectories:')
     tmp = np.load(f"Data/2S2F/origin/origin.npz")
     dt = tmp['dt']
-    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
+    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)        
+
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information

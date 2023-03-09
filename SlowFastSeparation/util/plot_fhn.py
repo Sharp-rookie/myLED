@@ -1,4 +1,5 @@
 import os
+import math
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
@@ -6,7 +7,7 @@ import scienceplots
 import matplotlib.pyplot as plt;plt.style.use(['science']);plt.rcParams.update({'font.size':16})
 
 
-def plot_epoch_test_log(tau, max_epoch):
+def plot_epoch_test_log(tau, max_epoch, log_dir):
 
     class MSE():
         def __init__(self, tau):
@@ -15,7 +16,7 @@ def plot_epoch_test_log(tau, max_epoch):
             self.mse_w = [[] for _ in range(max_epoch)]
             self.MLE_id = [[] for _ in range(max_epoch)]
 
-    fp = open(f'logs/FHN/TimeSelection/tau_{tau}/test_log.txt', 'r')
+    fp = open(log_dir + f'tau_{tau}/test_log.txt', 'r')
     items = []
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
@@ -63,15 +64,15 @@ def plot_epoch_test_log(tau, max_epoch):
     plt.plot(range(max_epoch), mse_w_list, label='w')
     # plt.ylim((0., 1.05*max(np.max(mse_v_list), np.max(mse_w_list), np.max(mse_b_list))))
     plt.legend()
-    plt.savefig(f'logs/FHN/TimeSelection/tau_{tau}/ID_per_epoch.pdf', dpi=300)
+    plt.savefig(log_dir + f'tau_{tau}/ID_per_epoch.pdf', dpi=300)
     plt.close()
 
 
-def plot_id_per_tau(tau_list, id_epoch):
+def plot_id_per_tau(tau_list, id_epoch, log_dir):
 
     id_per_tau = [[] for _ in tau_list]
     for i, tau in enumerate(tau_list):
-        fp = open(f'logs/FHN/TimeSelection/tau_{round(tau,2)}/test_log.txt', 'r')
+        fp = open(log_dir + f'tau_{round(tau,2)}/test_log.txt', 'r')
         for line in fp.readlines():
             seed = int(line[:-1].split(',')[1])
             epoch = int(line[:-1].split(',')[4])
@@ -86,6 +87,8 @@ def plot_id_per_tau(tau_list, id_epoch):
 
     round_id_per_tau = []
     for id in id_per_tau:
+        if math.isnan(id[0]):
+            id[0] = 0.
         round_id_per_tau.append([round(id[0])])
     round_id_per_tau = np.array(round_id_per_tau)
 
@@ -98,7 +101,7 @@ def plot_id_per_tau(tau_list, id_epoch):
     plt.xlabel(r'$\tau / s$', fontsize=18)
     plt.ylabel('Intrinsic dimensionality', fontsize=18)
     plt.subplots_adjust(bottom=0.15)
-    plt.savefig('logs/FHN/TimeSelection/id_per_tau.pdf', dpi=300)
+    plt.savefig(log_dir + 'id_per_tau.pdf', dpi=300)
 
         
 def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3,4]):
