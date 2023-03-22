@@ -31,7 +31,9 @@ def train_slow_extract_and_evolve(
         data_dim=4,
         lr=0.01,
         batch_size=128,
-        enc_net='MLP'
+        enc_net='MLP',
+        e1_layer_n=3,
+        sliding_window=True
         ):
         
     # prepare
@@ -42,10 +44,10 @@ def train_slow_extract_and_evolve(
 
     # init model
     assert koopman_dim>=slow_dim, f"Value Error, koopman_dim is smaller than slow_dim({koopman_dim}<{slow_dim})"
-    model = models.DynamicsEvolver(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, slow_dim=slow_dim, redundant_dim=koopman_dim-slow_dim, tau_s=tau_s, device=device, data_dim=data_dim, enc_net=enc_net)
-    model.apply(models.weights_normal_init)
-    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
-    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
+    model = models.DynamicsEvolver(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, slow_dim=slow_dim, redundant_dim=koopman_dim-slow_dim, tau_s=tau_s, device=device, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
+    tmp = '' if sliding_window else '_static'
+    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
+    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
     
     # load pretrained time-lagged AE
     ckpt = torch.load(ckpt_path)
@@ -58,15 +60,9 @@ def train_slow_extract_and_evolve(
     MSE_loss = nn.MSELoss()
     optimizer = torch.optim.AdamW(
         [{'params': model.encoder_2.parameters()},
-        #  {'params': model.encoder_2_1.parameters()},
-        #  {'params': model.encoder_2_2.parameters()},
          {'params': model.encoder_3.parameters()},
-        #  {'params': model.decoder_1_1.parameters()},
-        #  {'params': model.decoder_1_2.parameters()}, 
          {'params': model.decoder_1.parameters()}, 
-         {'params': model.decoder_2.parameters()}, 
-        #  {'params': model.decoder_2_1.parameters()},
-        #  {'params': model.decoder_2_2.parameters()},
+         {'params': model.decoder_2.parameters()},
          {'params': model.K_opt.parameters()},
          {'params': model.lstm.parameters()}],
         lr=lr, weight_decay=weight_decay) # not involve encoder_1 (freezen)
@@ -82,20 +78,18 @@ def train_slow_extract_and_evolve(
     lambda_curve = [[] for _ in range(slow_dim)]
     for epoch in range(1, learn_max_epoch+1):
         
-        losses = [[],[],[]]
+        losses = [[],[],[],[],[],[]]
         
         # train
         model.train()
         [lambda_curve[i].append(model.K_opt.Lambda[i].detach().cpu()) for i in range(slow_dim) ]
         for input, _, internl_units in train_loader:
             
-            input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,1,4)
+            input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel,obs_dim)
             
             # obs —— embedding —— slow representation —— embedding(reconstruction) —— obs(reconstruction)
             slow_var, embed = model.obs2slow(input)
-            # slow_var, embed = model.obs2slow_new2(input)
             recons_obs, recons_embed = model.slow2obs(slow_var)
-            # recons_obs, recons_embed = model.slow2obs_new2(slow_var)
             _, adiabatic_embed = model.obs2slow(recons_obs)
             
             # calculate loss value
@@ -103,22 +97,53 @@ def train_slow_extract_and_evolve(
             embed_reconstruct_loss = L1_loss(recons_embed, embed)
             obs_reconstruct_loss = MSE_loss(recons_obs, input)
 
-            # slow_var1, slow_var2, embed = model.obs2slow_new(input)
-            # recons_obs, recons_embed1, recons_embed2 = model.slow2obs_new(slow_var1, slow_var2)
-            # _, _, adiabatic_embed = model.obs2slow_new(recons_obs)
+            # ################
+            # # n-step evolve
+            # ################
+            # koopman_var = model.slow2koopman(slow_var)
+            # fast_obs = input - recons_obs
+            # obs_evol_loss, slow_evol_loss, koopman_evol_loss = 0, 0, 0
+            # for i in range(1, len(internl_units)):
+                
+            #     unit = model.scale(internl_units[i].to(device))[..., :obs_dim] # t+i
+                
+            #     #######################
+            #     # slow component evolve
+            #     #######################
+            #     # obs ——> slow ——> koopman
+            #     unit_slow_var, _ = model.obs2slow(unit)
+            #     unit_koopman_var = model.slow2koopman(unit_slow_var)
 
-            # adiabatic_loss = L1_loss(embed, adiabatic_embed)
-            # # embed_reconstruct_loss = L1_loss(recons_embed1, embed) + L1_loss(recons_embed1+recons_embed2, embed)
-            # # embed_reconstruct_loss = L1_loss(recons_embed1, embed) + L1_loss(recons_embed2, embed-recons_embed1.detach()) + L1_loss(recons_embed1+recons_embed2, embed)
-            # # embed_reconstruct_loss = L1_loss(recons_embed1, embed-recons_embed2.detach()) + L1_loss(recons_embed2, embed-recons_embed1.detach()) + L1_loss(recons_embed1+recons_embed2, embed)
-            # embed_reconstruct_loss = L1_loss(recons_embed1, embed) + L1_loss(recons_embed2, embed-recons_embed1.detach()) + L1_loss(recons_embed1+recons_embed2, embed)
-            # obs_reconstruct_loss = MSE_loss(recons_obs, input)
+            #     # slow evolve
+            #     t = torch.tensor([delta_t * i], device=device) # delta_t
+            #     unit_koopman_var_next = model.koopman_evolve(koopman_var, tau=t) # t ——> t + i*delta_t
+            #     unit_slow_var_next = model.koopman2slow(unit_koopman_var_next)
+
+            #     # koopman ——> slow ——> obs
+            #     unit_slow_obs_next, _ = model.slow2obs(unit_slow_var_next)
+                
+            #     #######################
+            #     # fast component evolve
+            #     #######################
+            #     # fast obs evolve
+            #     unit_fast_obs_next, _ = model.lstm_evolve(fast_obs, T=i) # t ——> t + i*delta_t
+                
+            #     ################
+            #     # calculate loss
+            #     ################
+            #     # total obs evolve
+            #     unit_obs_next = unit_slow_obs_next + unit_fast_obs_next
+                
+            #     # evolve loss
+            #     koopman_evol_loss += MSE_loss(unit_koopman_var_next, unit_koopman_var)
+            #     slow_evol_loss += MSE_loss(unit_slow_var_next, unit_slow_var)
+            #     obs_evol_loss += MSE_loss(unit_obs_next, unit)
             
             ###########
             # optimize
             ###########
-            # all_loss = (slow_reconstruct_loss + 0.1*adiabatic_loss) + (koopman_evol_loss + slow_evol_loss + obs_evol_loss) / n
             all_loss = 0.1*adiabatic_loss + embed_reconstruct_loss + obs_reconstruct_loss
+            # all_loss = (0.1*adiabatic_loss + embed_reconstruct_loss + obs_reconstruct_loss) + (koopman_evol_loss + slow_evol_loss + obs_evol_loss) / n
             optimizer.zero_grad()
             all_loss.backward()
             optimizer.step()
@@ -127,8 +152,12 @@ def train_slow_extract_and_evolve(
             losses[0].append(adiabatic_loss.detach().item())
             losses[1].append(embed_reconstruct_loss.detach().item())
             losses[2].append(obs_reconstruct_loss.detach().item())
+            # losses[3].append(koopman_evol_loss.detach().item())
+            # losses[4].append(slow_evol_loss.detach().item())
+            # losses[5].append(obs_evol_loss.detach().item())
         
         train_loss.append([np.mean(losses[0]), np.mean(losses[1]), np.mean(losses[2])])
+        # train_loss.append([np.mean(losses[0]), np.mean(losses[1]), np.mean(losses[2]), np.mean(losses[3]), np.mean(losses[4]), np.mean(losses[5])])
         
         # validate 
         with torch.no_grad():
@@ -140,11 +169,13 @@ def train_slow_extract_and_evolve(
             recons_embeds = []
             adiabatic_embeds = []
             hidden_slow = []
+            # slow_obses_next = []
+            # total_obses_next = []
             
             model.eval()
             for input, target, _ in val_loader:
 
-                if system == 'FHN' or system == '1S1F':
+                if system == 'HalfMoon':
                     hidden_slow.append(input[..., obs_dim:].cpu())
                 
                 input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel_num,feature_dim)
@@ -153,13 +184,21 @@ def train_slow_extract_and_evolve(
                 # obs —— embedding —— slow representation —— embedding(reconstruction) —— obs(reconstruction)
                 slow_var, embed = model.obs2slow(input)
                 recons_obs, recons_embed = model.slow2obs(slow_var)
-                # recons_obs, recons_embed = model.slow2obs_new2(slow_var)
                 _, adiabatic_embed = model.obs2slow(recons_obs)
-                # slow_var1, slow_var2, embed = model.obs2slow_new(input)
-                # recons_obs, recons_embed1, recons_embed2 = model.slow2obs_new(slow_var1, slow_var2)
-                # _, _, adiabatic_embed = model.obs2slow_new(recons_obs)
-                # slow_var = torch.concat([slow_var1,slow_var2], dim=-1)
-                # recons_embed = recons_embed1 + recons_embed2
+
+                # # koopman evolve
+                # koopman_var = model.slow2koopman(slow_var)
+                # t = torch.tensor([tau_s-delta_t], device=device)
+                # koopman_var_next = model.koopman_evolve(koopman_var, tau=t)
+                # slow_var_next = model.koopman2slow(koopman_var_next)
+                # slow_obs_next, _ = model.slow2obs(slow_var_next)
+                
+                # # fast obs evolve
+                # fast_obs = input - recons_obs
+                # fast_obs_next, _ = model.lstm_evolve(fast_obs, T=n)
+                
+                # # total obs evolve
+                # total_obs_next = slow_obs_next + fast_obs_next
 
                 # record results
                 inputs.append(input.cpu())
@@ -169,6 +208,8 @@ def train_slow_extract_and_evolve(
                 embeds.append(embed.cpu())
                 recons_embeds.append(recons_embed.cpu())
                 adiabatic_embeds.append(adiabatic_embed.cpu())
+                # slow_obses_next.append(slow_obs_next.cpu())
+                # total_obses_next.append(total_obs_next.cpu())
             
             # trans to tensor
             inputs = torch.concat(inputs, axis=0)
@@ -178,7 +219,9 @@ def train_slow_extract_and_evolve(
             embeds = torch.concat(embeds, axis=0)
             recons_embeds = torch.concat(recons_embeds, axis=0)
             adiabatic_embeds = torch.concat(adiabatic_embeds, axis=0)
-            if system == 'FHN' or system == '1S1F':
+            # slow_obses_next = torch.concat(slow_obses_next, axis=0)
+            # total_obses_next = torch.concat(total_obses_next, axis=0)
+            if system == 'HalfMoon':
                 hidden_slow = torch.concat(hidden_slow, axis=0)
 
             # slow_var1 = slow_vars[:, :1]
@@ -189,29 +232,32 @@ def train_slow_extract_and_evolve(
             adiabatic_loss = L1_loss(embeds, adiabatic_embeds)
             embed_reconstruct_loss = L1_loss(recons_embeds, embeds)
             obs_reconstruct_loss = MSE_loss(recons_obses, inputs)
+            # obs_evol_loss = MSE_loss(total_obses_next, targets)
             if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}', end='')
             # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}, cosine_similarity={cos_sim:.5f}', end='')
+            # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}, obs_evol={obs_evol_loss:.5f}, cosine_similarity={cos_sim:.5f}', end='')
             
             
             # plot per 5 epoch
             if epoch % 1 == 0:
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
-                
                 sample = 10
+                input_data = model.descale(inputs)
+
                 # plot slow variable vs input
                 plt.figure(figsize=(16,5+2*(slow_dim-1)))
                 plt.title('Val Reconstruction Curve')
                 for id_var in range(slow_dim):
                     for index, item in enumerate([f'c{k}' for k in range(inputs.shape[-1])]):
                         plt.subplot(slow_dim, inputs.shape[-1], index+1+inputs.shape[-1]*(id_var))
-                        plt.scatter(inputs[::sample,0,0,index], slow_vars[::sample, id_var], s=5)
+                        plt.scatter(input_data[::sample,0,0,index], slow_vars[::sample, id_var], s=5)
                         plt.xlabel(item)
                         plt.ylabel(f'U{id_var+1}')
                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.pdf", dpi=300)
                 plt.close()
 
-                if system == 'FHN' or system == '1S1F':
+                if system == 'HalfMoon':
                     # plot slow variable vs hidden variable
                     plt.figure(figsize=(8*(hidden_slow.shape[-1]),5+2*(slow_dim-1)))
                     plt.title('Extracted VS Hidden Slow')
@@ -223,6 +269,16 @@ def train_slow_extract_and_evolve(
                             plt.ylabel(f'U{id_var+1}')
                     plt.subplots_adjust(wspace=0.35, hspace=0.35)
                     plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_hidden.pdf", dpi=300)
+                    plt.close()
+                
+                if system == '1S1F':
+                    # plot slow variable vs constant variable
+                    plt.figure(figsize=(9,9))
+                    plt.title('Extracted VS Constant')
+                    plt.scatter(input_data[::sample,0,0,0]+2*input_data[::sample,0,0,0], slow_vars[::sample, 0], s=5)
+                    plt.xlabel('X+2Y')
+                    plt.ylabel('U')
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_constant.pdf", dpi=300)
                     plt.close()
                 
                 # plot slow variable
@@ -250,6 +306,64 @@ def train_slow_extract_and_evolve(
                 plt.subplots_adjust(wspace=0.2)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_obs.pdf", dpi=300)
                 plt.close()
+
+                if system == '2S2F':
+
+                    # TODO: 有问题！！！
+
+                    np.savez(log_dir+f"/val/epoch-{epoch}/slow_vs_input.npz", slow_vars=slow_vars, inputs=inputs)
+
+                    num = int(5.1/0.01)
+                    
+                    c1, c2 = np.meshgrid(np.linspace(-3, 3, 60), np.linspace(-3, 3, 60))
+                    omega = 3
+                    c3 = np.sin(omega*c1)*np.sin(omega*c2)
+                    c4 = 1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2)))
+                    
+                    fig = plt.figure(figsize=(16,6))
+                    descale = model.descale(recons_obses)
+                    for i, (c, trace) in enumerate(zip([c3,c4], [descale[:num,0,0,2:3],descale[:num,0,0,3:4]])):
+                        ax = plt.subplot(1,2,i+1,projection='3d')
+
+                        # plot the slow manifold and c3,c4 trajectory
+                        ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
+                        ax.plot(descale[:num,0,0,:1], descale[:num,0,0,1:2], trace, linewidth=2, color="r", label=rf'Slow trajectory')
+                        ax.set_xlabel(r"$c_2$", labelpad=10, fontsize=18)
+                        ax.set_ylabel(r"$c_1$", labelpad=10, fontsize=18)
+                        ax.set_zlim(0, 2)
+                        ax.text2D(0.85, 0.65, rf"$c_{2+i+1}$", fontsize=18, transform=ax.transAxes)
+                        # ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+                        ax.invert_xaxis()
+                        ax.invert_yaxis()
+                        ax.grid(False)
+                        ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+                        ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+                        ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+                        # ax.view_init(elev=25., azim=-60.) # view direction: elve=vertical angle ,azim=horizontal angle
+                        ax.view_init(elev=0., azim=-90.) # view direction: elve=vertical angle ,azim=horizontal angle
+                        plt.tick_params(labelsize=16)
+                        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+                        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+                        ax.zaxis.set_major_locator(plt.MultipleLocator(1))
+                        if i == 1:
+                            plt.legend()
+                        plt.subplots_adjust(bottom=0., top=1.)
+                    
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_manifold.pdf", dpi=300)
+                    plt.close()
+
+                # # plot prediction vs true
+                # plt.figure(figsize=(16,5))
+                # plt.title('Prediction')
+                # for j, item in enumerate([f'c{k}' for k in range(targets.shape[-1])]):
+                #     ax = plt.subplot(1,targets.shape[-1],j+1)
+                #     ax.plot(targets[:,0,0,j], label='true')
+                #     ax.plot(total_obses_next[:,0,0,j], label='pred')
+                #     ax.set_title(item)
+                #     ax.legend()
+                # plt.subplots_adjust(wspace=0.2)
+                # plt.savefig(log_dir+f"/val/epoch-{epoch}/prediction.pdf", dpi=300)
+                # plt.close()
         
                 # save model
                 torch.save(model.state_dict(), log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
@@ -258,6 +372,7 @@ def train_slow_extract_and_evolve(
     train_loss = np.array(train_loss)
     plt.figure()
     for i, item in enumerate(['adiabatic','embed_reconstruct_loss','obs_reconstruct_loss']):
+    # for i, item in enumerate(['adiabatic','embed_reconstruct_loss','obs_reconstruct_loss', 'koopman_evol_loss', 'slow_evol_loss', 'obs_evol_loss']):
         plt.plot(train_loss[:, i], label=item)
     plt.xlabel('epoch')
     plt.legend()
@@ -265,7 +380,7 @@ def train_slow_extract_and_evolve(
     plt.savefig(log_dir+'/train_loss_curve.pdf', dpi=300)
 
     # plot Koopman Lambda curve
-    plt.figure(figsize=(6,6))
+    plt.figure(figsize=(10,10))
     marker = ['o', '^', '+', 's', '*', 'x']
     for i in range(slow_dim):
         plt.plot(lambda_curve[i], marker=marker[i%len(marker)], markersize=6, label=rf'$\lambda_{i}$')
@@ -297,7 +412,8 @@ def test_evolve(
         device='cpu',
         data_dim=4,
         batch_size=128,
-        enc_net='MLP'
+        enc_net='MLP',
+        e1_layer_n=3
         ):
         
     # prepare
@@ -305,7 +421,7 @@ def test_evolve(
     log_dir = log_dir + f'seed{random_seed}'
 
     # load model
-    model = models.DynamicsEvolver(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, slow_dim=slow_dim, redundant_dim=koopman_dim-slow_dim, tau_s=tau_s, device=device, data_dim=data_dim, enc_net=enc_net)
+    model = models.DynamicsEvolver(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, slow_dim=slow_dim, redundant_dim=koopman_dim-slow_dim, tau_s=tau_s, device=device, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     ckpt_path = log_dir+f'/checkpoints/epoch-{ckpt_epoch}.ckpt'
     ckpt = torch.load(ckpt_path)
     model.load_state_dict(ckpt)
@@ -337,16 +453,16 @@ def test_evolve(
         model.eval()
         for input, target in test_loader:
 
-            if system == 'FHN' or system == '1S1F':
+            if system == 'HalfMoon':
                 hidden_slow.append(input[..., obs_dim:].cpu())
             
             input = model.scale(input.to(device))[..., :obs_dim]
             target = model.scale(target.to(device))[..., :obs_dim]
         
-            # obs ——> slow ——> koopman
+            # obs —— embedding —— slow representation —— koopman
             slow_var, _ = model.obs2slow(input)
+            recons_obs, _ = model.slow2obs(slow_var)
             koopman_var = model.slow2koopman(slow_var)
-            slow_obs = model.slow2obs(slow_var)
             
             # koopman evolve
             t = torch.tensor([delta_t], device=device)
@@ -355,7 +471,7 @@ def test_evolve(
             slow_obs_next = model.slow2obs(slow_var_next)
             
             # fast obs evolve
-            fast_obs = input - slow_obs
+            fast_obs = input - recons_obs
             fast_obs_next, _ = model.lstm_evolve(fast_obs, T=n)
             
             # total obs evolve
@@ -364,7 +480,7 @@ def test_evolve(
             inputs.append(input)
             targets.append(target)
             slow_vars.append(slow_var)
-            recons_obses.append(slow_obs)
+            recons_obses.append(recons_obs)
             recons_obses_next.append(slow_obs_next)
             fast_obses_next.append(fast_obs_next)
             total_obses_next.append(total_obs_next)   
@@ -415,6 +531,8 @@ def test_evolve(
     plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.pdf", dpi=300)
     plt.close()
 
+    # TODO: 如果是2S2F，把slow extract画在慢流型上
+
     # plot slow variable vs input
     sample = 4
     plt.figure(figsize=(16,5+2*(slow_dim-1)))
@@ -430,7 +548,7 @@ def test_evolve(
     plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=150)
     plt.close()
 
-    if system == 'FHN' or system == '1S1F':
+    if system == 'HalfMoon':
         # plot slow variable vs hidden variable
         plt.figure(figsize=(8*(hidden_slow.shape[-1]),5+2*(slow_dim-1)))
         plt.title('Extracted VS Hidden Slow')
@@ -471,5 +589,5 @@ def test_evolve(
         c1_evolve_mae = torch.mean(torch.abs(recons_obses_next[:,0,0,0] - true[:,0,0,0]))
         c2_evolve_mae = torch.mean(torch.abs(recons_obses_next[:,0,0,1] - true[:,0,0,1]))
         return MSE, RMSE, MAE, MAPE, c1_evolve_mae.item(), c2_evolve_mae.item()
-    elif system == '1S2F' or system == 'FHN' or system == '1S1F':
+    elif system in ['1S1F', '1S2F', 'HalfMoon'] or 'FHN' in system:
         return MSE, RMSE, MAE, MAPE

@@ -80,10 +80,10 @@ def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=Fal
     # save statistic information
     data_dir = f"Data/2S2F/data/tau_{tau}"
     os.makedirs(data_dir, exist_ok=True)
-    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)).reshape(1,-1))
     np.savetxt(data_dir + "/tau_static.txt", [tau]) # Save the timestep
 
     ##################################
@@ -259,12 +259,9 @@ def plot_c3_c4_trajectory():
     c3_trace = sol[:, 2]
     c4_trace = sol[:, 3]
     
-    import scienceplots
-    plt.style.use(['science'])
-    plt.rcParams.update({'font.size':16})
+    fig = plt.figure(figsize=(16,6))
     for i, (c, trace) in enumerate(zip([c3,c4], [c3_trace,c4_trace])):
-        fig = plt.figure(figsize=(6,6))
-        ax = plt.subplot(111,projection='3d')
+        ax = plt.subplot(1,2,i+1,projection='3d')
 
         # plot the slow manifold and c3,c4 trajectory
         ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
@@ -289,5 +286,6 @@ def plot_c3_c4_trajectory():
         if i == 1:
             plt.legend()
         plt.subplots_adjust(bottom=0., top=1.)
-        plt.savefig(f"Data/2S2F/origin/c{2+i+1}.pdf", dpi=300)
-        plt.close()
+    
+    plt.savefig(f"Data/2S2F/origin/trace.pdf", dpi=300)
+    plt.close()

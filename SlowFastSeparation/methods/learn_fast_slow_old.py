@@ -42,7 +42,6 @@ def train_slow_extract_and_evolve(
     # init model
     assert koopman_dim>=slow_dim, f"Value Error, koopman_dim is smaller than slow_dim({koopman_dim}<{slow_dim})"
     model = models.DynamicsEvolver(in_channels=1, feature_dim=obs_dim, embed_dim=embedding_dim, slow_dim=slow_dim, redundant_dim=koopman_dim-slow_dim, tau_s=tau_s, device=device, data_dim=data_dim)
-    model.apply(models.weights_normal_init)
     model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min.txt").astype(np.float32)).unsqueeze(0)
     model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max.txt").astype(np.float32)).unsqueeze(0)
     
@@ -179,7 +178,7 @@ def train_slow_extract_and_evolve(
             model.eval()
             for input, target, _ in val_loader:
 
-                if system == 'FHN' or system == '1S1F':
+                if system == 'HalfMoon':
                     hidden_slow.append(input[..., obs_dim:].cpu())
                 
                 input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel_num,feature_dim)
@@ -227,7 +226,7 @@ def train_slow_extract_and_evolve(
             total_obses_next = torch.concat(total_obses_next, axis=0)
             embeds = torch.concat(embeds, axis=0)
             embed_from_obses = torch.concat(embed_from_obses, axis=0)
-            if system == 'FHN' or system == '1S1F':
+            if system == 'HalfMoon':
                 hidden_slow = torch.concat(hidden_slow, axis=0)
             
             # cal loss
@@ -255,7 +254,7 @@ def train_slow_extract_and_evolve(
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.pdf", dpi=300)
                 plt.close()
 
-                if system == 'FHN' or system == '1S1F':
+                if system == 'HalfMoon':
                     # plot slow variable vs hidden variable
                     plt.figure(figsize=(8*(hidden_slow.shape[-1]),5+2*(slow_dim-1)))
                     plt.title('Extracted VS Hidden Slow')
@@ -397,7 +396,7 @@ def test_evolve(
         model.eval()
         for input, target in test_loader:
 
-            if system == 'FHN' or system == '1S1F':
+            if system == 'HalfMoon':
                 hidden_slow.append(input[..., obs_dim:].cpu())
             
             input = model.scale(input.to(device))[..., :obs_dim]
@@ -490,7 +489,7 @@ def test_evolve(
     plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=150)
     plt.close()
 
-    if system == 'FHN' or system == '1S1F':
+    if system == 'HalfMoon':
         # plot slow variable vs hidden variable
         plt.figure(figsize=(8*(hidden_slow.shape[-1]),5+2*(slow_dim-1)))
         plt.title('Extracted VS Hidden Slow')
@@ -531,5 +530,5 @@ def test_evolve(
         c1_evolve_mae = torch.mean(torch.abs(slow_obses_next[:,0,0,0] - true[:,0,0,0]))
         c2_evolve_mae = torch.mean(torch.abs(slow_obses_next[:,0,0,1] - true[:,0,0,1]))
         return MSE, RMSE, MAE, MAPE, c1_evolve_mae.item(), c2_evolve_mae.item()
-    elif system == '1S2F' or system == 'FHN' or system == '1S1F':
+    elif system in ['1S1F', '1S2F', 'HalfMoon'] or 'FHN' in system:
         return MSE, RMSE, MAE, MAPE

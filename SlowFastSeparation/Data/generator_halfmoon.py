@@ -3,35 +3,69 @@ import numpy as np
 from tqdm import tqdm
 import scienceplots
 import matplotlib.pyplot as plt;plt.style.use(['science']);plt.rcParams.update({'font.size':16})
-from scipy.integrate import odeint
+from sdeint import itoSRI2, itoEuler
 import warnings;warnings.simplefilter('ignore')
 
 from util import seed_everything
 
 
-def generate_original_data(trace_num, total_t=20, dt=0.1, save=True, plot=False, parallel=False):
+class SDE_HalfMoon():
+    def __init__(self, a1, a2, a3, a4):
+        self.a1 = a1
+        self.a2 = a2
+        self.a3 = a3
+        self.a4 = a4
     
-    def solve_1_trace(trace_id=0, total_t=10, dt=0.1):
+    def f(self, x, t):
+        return np.array([self.a1 * 1, 
+                         self.a3 * (1-x[1])])
+    
+    def g(self, x, t):
+        return np.array([[self.a2*1., 0.*0.], 
+                        [0.*0., self.a4*1.]])
+
+
+def generate_original_data(trace_num, total_t=6280, dt=0.1, save=True, plot=False, parallel=False):
+    
+    def solve_1_trace(trace_id=0, total_t=5, dt=0.001):
         
         seed_everything(trace_id)
         
-        phase = [np.random.uniform(-np.pi, np.pi) for _ in range(2)]
-        t  =np.arange(0, total_t, dt)
-        var1 = np.sin(t + phase[0]).reshape(-1,1)
-        var2 = np.cos(t + phase[1]).reshape(-1,1)
-        sol = np.concatenate([var1, var2], axis=1)
+        sde = SDE_HalfMoon(a1 = 1e-3, a2 = 1e-3, a3 = 1e-1, a4 = 1e-1)
+        y0 = [1., 0.]
+        tspan  =np.arange(0, total_t, dt)
+        
+        sol = itoSRI2(sde.f, sde.g, y0, tspan) # Runge-Kutta algorithm
+        # sol = itoEuler(sde.f, sde.g, y0, tspan) # Euler-Maruyama algorithm
+
+        x = sol[:, 1] * np.cos(sol[:, 0]+sol[:, 1]-1)
+        y = sol[:, 1] * np.sin(sol[:, 0]+sol[:, 1]-1)
+        result = np.concatenate((x[...,np.newaxis],y[...,np.newaxis],sol), axis=1)
 
         if plot:
-            os.makedirs('Data/SC/origin', exist_ok=True)
-            plt.figure()
-            plt.plot(t, sol[:,0], label='c1')
-            plt.plot(t, sol[:,1], label='c2')
-            plt.legend()
-            plt.savefig(f'Data/SC/origin/SC_{trace_id}.pdf', dpi=100)
+            os.makedirs('Data/HalfMoon/origin', exist_ok=True)
+            plt.figure(figsize=(16, 16))
+            ax1 = plt.subplot(2,2,1)
+            ax1.plot(tspan, result[:, 2], label='u')
+            ax1.plot(tspan, result[:, 3], label='v')
+            ax1.set_xlabel('t')
+            ax1.set_ylabel('var')
+            ax1.legend()
+            ax2 = plt.subplot(2,2,2)
+            ax2.scatter(result[::5,0], result[::5,1], c=tspan[::5], cmap='viridis', linewidths=0.01)
+            ax2.set_xlabel('x')
+            ax2.set_ylabel('y')
+            ax3 = plt.subplot(2,2,3)
+            ax3.plot(tspan, result[:,0], label='x')
+            ax3.plot(tspan, result[:,1], label='y')
+            ax3.set_xlabel('t')
+            ax3.set_ylabel('var')
+            ax1.legend()
+            plt.savefig(f'Data/HalfMoon/origin/halfmoon_{trace_id}.pdf', dpi=100)
         
-        return sol
+        return np.array(result)
     
-    if save and os.path.exists('Data/SC/origin/origin.npz'): return
+    if save and os.path.exists('Data/HalfMoon/origin/origin.npz'): return
     
     trace = []
     for trace_id in tqdm(range(1, trace_num+1)):
@@ -39,38 +73,38 @@ def generate_original_data(trace_num, total_t=20, dt=0.1, save=True, plot=False,
         trace.append(sol)
     
     if save: 
-        os.makedirs('Data/SC/origin', exist_ok=True)
-        np.savez('Data/SC/origin/origin.npz', trace=trace, dt=dt, T=total_t)
-        print(f'save origin data form seed 1 to {trace_num} at Data/SC/origin/')
+        os.makedirs('Data/HalfMoon/origin', exist_ok=True)
+        np.savez('Data/HalfMoon/origin/origin.npz', trace=trace, dt=dt, T=total_t)
+        print(f'save origin data form seed 1 to {trace_num} at Data/HalfMoon/origin/')
     
     return np.array(trace)
-# generate_original_data(1, save=False, plot=True)
+# generate_original_data(1, total_t=31400, dt=1, save=False, plot=True)
 
 
 def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=False, parallel=False):
 
-    if os.path.exists(f"Data/SC/data/tau_{tau}/train_static.npz") and os.path.exists(f"Data/SC/data/tau_{tau}/val_static.npz") and os.path.exists(f"Data/SC/data/tau_{tau}/test_static.npz"):
+    if os.path.exists(f"Data/HalfMoon/data/tau_{tau}/train_static.npz") and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/val_static.npz") and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/test_static.npz"):
         return
     
     # generate simulation data
-    if not os.path.exists(f"Data/SC/data/static_{max_tau:.2f}.npz"):
+    if not os.path.exists(f"Data/HalfMoon/data/static_{max_tau:.2f}.npz"):
         if is_print: print('generating simulation trajectories:')
-        data = generate_original_data(trace_num, total_t=max_tau+dt, dt=dt, save=False, plot=False, parallel=parallel)
+        data = generate_original_data(trace_num, total_t=max_tau+101*dt, dt=dt, save=False, plot=False, parallel=parallel)
         data = data[:,:,np.newaxis] # add channel dim
-        np.savez(f"Data/SC/data/static_{max_tau:.2f}.npz", data=data)
+        np.savez(f"Data/HalfMoon/data/static_{max_tau:.2f}.npz", data=data)
         if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
     else:
-        data = np.load(f"Data/SC/data/static_{max_tau:.2f}.npz")['data']
+        data = np.load(f"Data/HalfMoon/data/static_{max_tau:.2f}.npz")['data']
 
     if is_print: print(f"\r[{tau}/{max_tau}]", end='')
 
     # save statistic information
-    data_dir = f"Data/SC/data/tau_{tau}"
+    data_dir = f"Data/HalfMoon/data/tau_{tau}"
     os.makedirs(data_dir, exist_ok=True)
-    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)))
     np.savetxt(data_dir + "/tau_static.txt", [tau]) # Save the timestep
 
     ##################################
@@ -89,7 +123,7 @@ def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=Fal
         step_length = int(tau/dt) if tau!=0. else 1
 
         assert step_length<data_item.shape[1], f"Tau {tau} is larger than the simulation time length{dt*data_item.shape[1]}"
-        sequences = data_item[:, ::step_length]
+        sequences = data_item[:, 100::step_length]
         sequences = sequences[:, :2]
         
         # save
@@ -98,40 +132,40 @@ def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=Fal
         # plot
         plt.figure(figsize=(16,10))
         plt.title(f'{item.capitalize()} Data')
-        plt.plot(sequences[:,0,0,0], label='c1')
-        plt.plot(sequences[:,0,0,1], label='c2')
+        plt.plot(sequences[:,0,0,0], label='x')
+        plt.plot(sequences[:,0,0,1], label='y')
         plt.legend()
         plt.savefig(data_dir+f'/{item}_static_input.pdf', dpi=300)
 
         plt.figure(figsize=(16,10))
         plt.title(f'{item.capitalize()} Data')
-        plt.plot(sequences[:,1,0,0], label='c1')
-        plt.plot(sequences[:,1,0,1], label='c2')
+        plt.plot(sequences[:,1,0,0], label='x')
+        plt.plot(sequences[:,1,0,1], label='y')
         plt.legend()
         plt.savefig(data_dir+f'/{item}_static_target.pdf', dpi=300)
 
     
 def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
-    if (sequence_length is not None) and os.path.exists(f"Data/SC/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/SC/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/SC/data/tau_{tau}/test_{sequence_length}.npz"):
+    if (sequence_length is not None) and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/test_{sequence_length}.npz"):
         return
-    elif (sequence_length is None) and os.path.exists(f"Data/SC/data/tau_{tau}/train.npz") and os.path.exists(f"Data/SC/data/tau_{tau}/val.npz") and os.path.exists(f"Data/SC/data/tau_{tau}/test.npz"):
+    elif (sequence_length is None) and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/train.npz") and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/val.npz") and os.path.exists(f"Data/HalfMoon/data/tau_{tau}/test.npz"):
         return
     
     # load original data
     if is_print: print('loading original trace data:')
-    tmp = np.load(f"Data/SC/origin/origin.npz")
+    tmp = np.load(f"Data/HalfMoon/origin/origin.npz")
     dt = tmp['dt']
     data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information
-    data_dir = f"Data/SC/data/tau_{tau}"
+    data_dir = f"Data/HalfMoon/data/tau_{tau}"
     os.makedirs(data_dir, exist_ok=True)
-    np.savetxt(data_dir + "/data_mean.txt", np.mean(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_std.txt", np.std(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_max.txt", np.max(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_min.txt", np.min(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_mean.txt", np.mean(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_std.txt", np.std(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_max.txt", np.max(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_min.txt", np.min(data, axis=(0,1)).reshape(1,-1))
     np.savetxt(data_dir + "/tau.txt", [tau]) # Save the timestep
 
     # single-sample time steps
@@ -207,14 +241,14 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
             if seq_none:
                 plt.figure(figsize=(16,10))
                 plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-                plt.plot(sequences[:,0,0,0], label='c1')
-                plt.plot(sequences[:,0,0,1], label='c2')
+                plt.plot(sequences[:,0,0,0], label='x')
+                plt.plot(sequences[:,0,0,1], label='y')
                 plt.legend()
                 plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
 
                 plt.figure(figsize=(16,10))
                 plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-                plt.plot(sequences[:,sequence_length-1,0,0], label='c1')
-                plt.plot(sequences[:,sequence_length-1,0,1], label='c2')
+                plt.plot(sequences[:,sequence_length-1,0,0], label='x')
+                plt.plot(sequences[:,sequence_length-1,0,1], label='y')
                 plt.legend()
                 plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)

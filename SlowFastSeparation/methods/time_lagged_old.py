@@ -15,6 +15,7 @@ from util.intrinsic_dimension import eval_id_embedding
 def train_time_lagged(
         system,
         embedding_dim,
+        channel_num,
         obs_dim,
         tau, 
         max_epoch, 
@@ -27,6 +28,7 @@ def train_time_lagged(
         lr=0.001,
         batch_size=128,
         enc_net='MLP',
+        e1_layer_n=3,
         sliding_window=True
         ):
     
@@ -37,11 +39,10 @@ def train_time_lagged(
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
     
     # init model
-    model = models.TimeLaggedAE(in_channels=1, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net)
-    model.apply(models.weights_normal_init)
+    model = models.TimeLaggedAE(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     tmp = '' if sliding_window else '_static'
-    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
-    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
+    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
+    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
     model.to(device)
     
     # training params
@@ -111,6 +112,7 @@ def train_time_lagged(
 def test_and_save_embeddings_of_time_lagged(
         system,
         embedding_dim,
+        channel_num,
         obs_dim,
         tau, 
         max_epoch, 
@@ -123,6 +125,7 @@ def test_and_save_embeddings_of_time_lagged(
         data_dim=4,
         batch_size=128,
         enc_net='MLP',
+        e1_layer_n=3,
         sliding_window=True
         ):
     
@@ -133,12 +136,11 @@ def test_and_save_embeddings_of_time_lagged(
     loss_func = nn.MSELoss()
     
     # init model
-    model = models.TimeLaggedAE(in_channels=1, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net)
+    model = models.TimeLaggedAE(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     if checkpoint_filepath is None: # not trained
-        model.apply(models.weights_normal_init)
         tmp = '' if sliding_window else '_static'
-        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
-        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").astype(np.float32)).unsqueeze(0)
+        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
+        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
 
     # dataset
     test_dataset = Dataset(data_filepath, 'test', sliding_window=sliding_window)
@@ -214,11 +216,13 @@ def test_and_save_embeddings_of_time_lagged(
         # logging
         if system == '2S2F':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{mse_[3]},{epoch},{MLE_id}\n")
+        elif system == '1S1F':
+            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         elif system == '1S2F':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{epoch},{MLE_id}\n")
-        elif system == 'FHN':
+        elif 'FHN' in system:
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
-        elif system == '1S1F':
+        elif system == 'HalfMoon':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         elif system == 'SC':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")

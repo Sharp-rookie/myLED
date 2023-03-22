@@ -7,7 +7,7 @@ import multiprocessing
 from multiprocessing import Process
 import warnings;warnings.simplefilter('ignore')
 
-from .gillespie import generate_origin
+from .gillespie import generate_1s2f_origin
 
 
 def findNearestPoint(data_t, start=0, object_t=10.0):
@@ -97,10 +97,10 @@ def generate_original_data(trace_num, total_t, dt, save=True, plot=False, parall
             IC = [np.random.randint(5,200), np.random.randint(5,100), np.random.randint(0,5000)]
             if parallel:
                 is_print = len(subprocess)==0
-                subprocess.append(Process(target=generate_origin, args=(total_t, seed, IC, True, is_print), daemon=True))
+                subprocess.append(Process(target=generate_1s2f_origin, args=(total_t, seed, IC, True, is_print), daemon=True))
                 subprocess[-1].start()
             else:
-                generate_origin(total_t, seed, IC, is_print=True)
+                generate_1s2f_origin(total_t, seed, IC, is_print=True)
     while any([subp.exitcode == None for subp in subprocess]):
         pass
     
@@ -123,7 +123,7 @@ def generate_original_data(trace_num, total_t, dt, save=True, plot=False, parall
 def generate_original_data2(trace_num, total_t, dt, parallel=False):
 
     def unit(queue, total_t, seed, dt, IC, is_print):
-        simdata = generate_origin(total_t=total_t, seed=seed, IC=IC, save=False, is_print=is_print)
+        simdata = generate_1s2f_origin(total_t=total_t, seed=seed, IC=IC, save=False, is_print=is_print)
         data = time_discretization(seed=seed, total_t=total_t, dt=dt, is_print=False, data=simdata, save=False)
         queue.put_nowait(data)
 
@@ -174,10 +174,10 @@ def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=Fal
     # save statistic information
     data_dir = f"Data/1S2F/data/tau_{tau}"
     os.makedirs(data_dir, exist_ok=True)
-    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)).reshape(1,-1))
     np.savetxt(data_dir + "/tau_static.txt", [tau]) # Save the timestep
 
     ##################################

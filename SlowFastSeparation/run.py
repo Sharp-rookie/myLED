@@ -24,11 +24,11 @@ def ID_subworker(args, tau, random_seed=729, is_print=False):
     sliding_window = True if args.sample_type=='sliding_window' else False
     
     # train
-    train_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, is_print, random_seed, args.data_dir, args.id_log_dir, args.device, args.data_dim, args.lr, args.batch_size, args.enc_net, sliding_window)
+    train_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, is_print, random_seed, args.data_dir, args.id_log_dir, args.device, args.data_dim, args.lr, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
 
     # test and calculating ID
-    test_and_save_embeddings_of_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, None, is_print, random_seed, args.data_dir, args.id_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, sliding_window)
-    test_and_save_embeddings_of_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, args.id_log_dir+f"tau_{tau}/seed{random_seed}", is_print, random_seed, args.data_dir, args.id_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, sliding_window)
+    test_and_save_embeddings_of_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, None, is_print, random_seed, args.data_dir, args.id_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
+    test_and_save_embeddings_of_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, args.id_log_dir+f"tau_{tau}/seed{random_seed}", is_print, random_seed, args.data_dir, args.id_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
 
  
 def learn_subworker(args, n, random_seed=729, is_print=False, mode='train'):
@@ -37,20 +37,22 @@ def learn_subworker(args, n, random_seed=729, is_print=False, mode='train'):
     seed_everything(random_seed)
     set_cpu_num(args.cpu_num)
 
+    sliding_window = True if args.sample_type=='sliding_window' else False
+
     if mode == 'train':
         # train
         ckpt_path = args.id_log_dir + f'tau_{args.tau_s}/seed1/checkpoints/epoch-{args.id_epoch}.ckpt'
-        train_slow_extract_and_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.slow_dim, args.koopman_dim, args.tau_unit, n, ckpt_path, is_print, random_seed, args.learn_epoch, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.lr, args.batch_size, args.enc_net)
+        train_slow_extract_and_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.slow_dim, args.koopman_dim, args.tau_unit, n, ckpt_path, is_print, random_seed, args.learn_epoch, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.lr, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
     elif mode == 'test':
         # test evolve
         for i in tqdm(range(1, 50+1)):
             delta_t = round(args.tau_unit*i, 3)
             if args.system == '2S2F':
-                MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.learn_epoch, args.slow_dim, args.koopman_dim, delta_t, i, is_print, random_seed, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net)
+                MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.learn_epoch, args.slow_dim, args.koopman_dim, delta_t, i, is_print, random_seed, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n)
                 with open(args.result_dir+f'ours_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
-            elif args.system == '1S2F' or args.system == 'FHN' or args.system == '1S1F':
-                MSE, RMSE, MAE, MAPE = test_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.learn_epoch, args.slow_dim, args.koopman_dim, delta_t, i, is_print, random_seed, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net)
+            elif args.system in ['1S1F', '1S2F', 'HalfMoon'] or 'FHN' in args.system:
+                MSE, RMSE, MAE, MAPE = test_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.learn_epoch, args.slow_dim, args.koopman_dim, delta_t, i, is_print, random_seed, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n)
                 with open(args.result_dir+f'ours_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
     else:
@@ -81,17 +83,17 @@ def baseline_subworker(args, is_print=False, random_seed=729, mode='train'):
                 MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = baseline_test(model, args.obs_dim, args.system, args.tau_s, args.baseline_epoch, delta_t, i, random_seed, args.data_dir, args.baseline_log_dir, args.device, args.batch_size)
                 with open(args.result_dir+f'{args.model}_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
-            elif args.system == '1S2F' or args.system == 'FHN' or args.system == '1S1F':
+            elif args.system in ['1S1F', '1S2F', 'HalfMoon'] or 'FHN' in args.system:
                 MSE, RMSE, MAE, MAPE = baseline_test(model, args.obs_dim, args.system, args.tau_s, args.baseline_epoch, delta_t, i, random_seed, args.data_dir, args.baseline_log_dir, args.device, args.batch_size)
                 with open(args.result_dir+f'{args.model}_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
-    
+
 
 def Data_Generate(args):
     
     # generate original data
     print('Generating original simulation data')
-    generate_original_data(args.trace_num, args.total_t, args.dt, save=True, plot=False, parallel=args.parallel)
+    generate_original_data(args.trace_num, args.total_t, args.dt, save=True, plot=True, parallel=args.parallel)
 
     # generate dataset for ID estimating
     print('Generating training data for ID estimating')
@@ -111,7 +113,10 @@ def Data_Generate(args):
     # generate dataset for lea rning fast-slow dynamics
     print('Generating training data for learning fast-slow dynamics')
     n = int(args.tau_s/args.tau_unit)
-    generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n) # traning data
+    if 'FHN' in args.system:
+        generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n, x_num=args.obs_dim) # traning data
+    else:
+        generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n) # traning data
     # for i in range(1, 50+1):
     #     delta_t = round(args.tau_unit*i, 3)
     #     generate_dataset_slidingwindow(args.trace_num, delta_t, None, True) # testing data
@@ -195,7 +200,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='ours', help='Model: [ours, lstm, tcn, neural_ode]')
-    parser.add_argument('--system', type=str, default='2S2F', help='Dynamical System: [1S2F, 2S2F]')
+    parser.add_argument('--system', type=str, default='2S2F', help='Dynamical System: [1S1F, 1S2F, HalfMoon, 2S2F, FHN, SC]')
     parser.add_argument('--channel_num', type=int, default=4, help='Overall featrue number')
     parser.add_argument('--obs_dim', type=int, default=4, help='Obervable feature dimension')
     parser.add_argument('--data_dim', type=int, default=4, help='Overall feature dimension')
@@ -212,6 +217,7 @@ if __name__ == '__main__':
     parser.add_argument('--slow_dim', type=int, default=2, help='Intrinsic dimension of slow dynamics')             
     parser.add_argument('--koopman_dim', type=int, default=4, help='Dimension of Koopman invariable space')
     parser.add_argument('--enc_net', type=str, default='MLP', help='Network type of the Encoder epsilon_1')
+    parser.add_argument('--e1_layer_n', type=int, default=3, help='Layer num of the Encoder epsilon_1')
     parser.add_argument('--id_epoch', type=int, default=100, help='Max training epoch of ID-driven Time Scale Selection')
     parser.add_argument('--learn_epoch', type=int, default=100, help='Max training epoch of Fast-Slow Learning')
     parser.add_argument('--baseline_epoch', type=int, default=100, help='Max training epoch of Baseline Algorithm')
@@ -233,14 +239,18 @@ if __name__ == '__main__':
         assert args.obs_dim==4, f"Comflicting observable dimension: {args.obs_dim}(should be 4)"
         from Data.generator_2s2f import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
         from util.plot_2s2f import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
-    elif args.system == '1S2F':
-        assert args.obs_dim==3, f"Comflicting observable dimension: {args.obs_dim}(should be 3)"
-        from Data.generator_1s2f import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
-        from util.plot_1s2f import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
     elif args.system == '1S1F':
         assert args.obs_dim==2, f"Comflicting observable dimension: {args.obs_dim}(should be 2)"
         from Data.generator_1s1f import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
         from util.plot_1s1f import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
+    elif args.system == '1S2F':
+        assert args.obs_dim==3, f"Comflicting observable dimension: {args.obs_dim}(should be 3)"
+        from Data.generator_1s2f import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
+        from util.plot_1s2f import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
+    elif args.system == 'HalfMoon':
+        assert args.obs_dim==2, f"Comflicting observable dimension: {args.obs_dim}(should be 2)"
+        from Data.generator_halfmoon import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
+        from util.plot_halfmoon import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
     elif args.system == 'SC':
         assert args.obs_dim==2, f"Comflicting observable dimension: {args.obs_dim}(should be 2)"
         from Data.generator_SC import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
@@ -255,6 +265,9 @@ if __name__ == '__main__':
     if not args.parallel and args.cpu_num==1:
         print('Not recommand to limit the cpu num when non-parallellism!')
     
+    if args.enc_net != 'MLP' and args.e1_layer_n == 2:
+        print('RNN layer num should be larger than 2!')
+    
     # main pipeline
     Data_Generate(args)
 
@@ -268,8 +281,8 @@ if __name__ == '__main__':
         plot_mi(T, args.obs_dim, args.data_dim, args.system)
 
     if args.model == 'ours':
-        ID_Estimate(args)
-        # Learn_Slow_Fast(args, 'train')
+        # ID_Estimate(args)
+        Learn_Slow_Fast(args, 'train')
         # Learn_Slow_Fast(args, 'test')
     else:
         Baseline(args, 'train')

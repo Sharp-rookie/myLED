@@ -3,93 +3,160 @@ import numpy as np
 from tqdm import tqdm
 import scienceplots
 import matplotlib.pyplot as plt;plt.style.use(['science']);plt.rcParams.update({'font.size':16})
-from sdeint import itoSRI2, itoEuler
+import multiprocessing
+from multiprocessing import Process
 import warnings;warnings.simplefilter('ignore')
 
-from util import seed_everything
+from .gillespie import generate_1s1f_origin
 
 
-class SDE_1S1F():
-    def __init__(self, a1, a2, a3, a4):
-        self.a1 = a1
-        self.a2 = a2
-        self.a3 = a3
-        self.a4 = a4
+def findNearestPoint(data_t, start=0, object_t=10.0):
+    """Find the nearest time point to object time"""
+
+    index = start
+
+    if index >= len(data_t):
+        return index
+
+    while not (data_t[index] <= object_t and data_t[index+1] > object_t):
+        if index < len(data_t)-2:
+            index += 1
+        elif index == len(data_t)-2: # last one
+            index += 1
+            break
     
-    def f(self, x, t):
-        return np.array([self.a1 * 1, 
-                         self.a3 * (1-x[1])])
-    
-    def g(self, x, t):
-        return np.array([[self.a2*1., 0.*0.], 
-                        [0.*0., self.a4*1.]])
+    return index
 
 
-def generate_original_data(trace_num, total_t=6280, dt=0.1, save=True, plot=False, parallel=False):
+def time_discretization(seed, total_t, dt=None, is_print=False, data=None, save=True):
+    """Time-forward NearestNeighbor interpolate to discretizate the time"""
+
+    if not data:
+        data = np.load(f'Data/1S1F/origin/{seed}/origin.npz')
     
-    def solve_1_trace(trace_id=0, total_t=5, dt=0.001):
+    data_t = data['t']
+    data_X = data['X']
+    data_Y = data['Y']
+
+    dt = 5e-6 if dt is None else dt
+    current_t = 0.0
+    index = 0
+    t, X, Y = [], [], []
+    while current_t < total_t:
+        index = findNearestPoint(data_t, start=index, object_t=current_t)
+        t.append(current_t)
+        X.append(data_X[index])
+        Y.append(data_Y[index])
+
+        current_t += dt
+
+        if is_print == 1: print(f'\rSeed[{seed}] interpolating {current_t:.6f}/{total_t}', end='')
+
+    if save:
+        plt.figure(figsize=(12,5))
+        # plt.title(f'dt = {dt}')
+        plt.subplot(1,2,1)
+        plt.plot(t, X, label=r'$X$')
+        plt.xlabel(r'$t / s$', fontsize=18)
+        plt.ylabel(r'$X$', fontsize=18)
+        plt.subplot(1,2,2)
+        plt.plot(t, Y, label=r'$Y$')
+        plt.xlabel(r'$t / s$', fontsize=18)
+        plt.ylabel(r'$Y$', fontsize=18)
+
+        plt.xticks(fontsize=15)
+        plt.yticks(fontsize=15)
+        plt.subplots_adjust(
+            left=0.05,
+            right=0.95,
+            top=0.9,
+            bottom=0.15,
+            wspace=0.2
+        )
+        plt.savefig(f'Data/1S1F/origin/{seed}/data.pdf', dpi=300)
+
+        np.savez(f'Data/1S1F/origin/{seed}/data.npz', dt=dt, t=t, X=X, Y=Y)
+    else:
+        return np.array([X, Y])
+
+
+def generate_original_data(trace_num, total_t, dt, save=True, plot=False, parallel=False):
+
+    os.makedirs('Data/1S1F/origin', exist_ok=True)
+
+    # generate original data by gillespie algorithm
+    subprocess = []
+    for seed in range(1, trace_num+1):
+        if not os.path.exists(f'Data/1S1F/origin/{seed}/origin.npz'):
+            IC = [np.random.randint(50,150), np.random.randint(50,150)]
+            if parallel:
+                is_print = len(subprocess)==0
+                subprocess.append(Process(target=generate_1s1f_origin, args=(total_t, seed, IC, True, is_print), daemon=True))
+                subprocess[-1].start()
+            else:
+                generate_1s1f_origin(total_t, seed, IC, is_print=True)
+    while any([subp.exitcode == None for subp in subprocess]):
+        pass
+    
+    # time discretization by time-forward NearestNeighbor interpolate
+    subprocess = []
+    for seed in range(1, trace_num+1):
+        if not os.path.exists(f'Data/1S1F/origin/{seed}/data.npz'):
+            is_print = len(subprocess)==0
+            if parallel:
+                subprocess.append(Process(target=time_discretization, args=(seed, total_t, dt, is_print), daemon=True))
+                subprocess[-1].start()
+            else:
+                time_discretization(seed, total_t, dt, is_print)
+    while any([subp.exitcode == None for subp in subprocess]):
+        pass
+
+    print(f'save origin data form seed 1 to {trace_num} at Data/1S1F/origin/')
+
+
+def generate_original_data2(trace_num, total_t, dt, parallel=False):
+
+    def unit(queue, total_t, seed, dt, IC, is_print):
+        simdata = generate_1s1f_origin(total_t=total_t, seed=seed, IC=IC, save=False, is_print=is_print)
+        data = time_discretization(seed=seed, total_t=total_t, dt=dt, is_print=False, data=simdata, save=False)
+        queue.put_nowait(data)
+
+    parallel_batch = 90 # max parallel subprocess num at same time
+
+    queue = multiprocessing.Manager().Queue()
+    
+    sol = []
+    for batch_id in range(int(trace_num/parallel_batch)+1):
+        print(f'[{batch_id+1}/{int(trace_num/parallel_batch)+1}] parallel batch')
+        subprocess = []
+
+        for i in range(batch_id*parallel_batch+1, (batch_id+1)*parallel_batch+1):
+            if i > trace_num: break
+            IC = [np.random.randint(50,150), np.random.randint(50,150)]
+            if parallel:
+                is_print = len(subprocess)==0
+                subprocess.append(Process(target=unit, args=(queue, total_t, i, dt, IC, is_print)))
+                subprocess[-1].start()
+            else: 
+                sol.append(unit(queue, total_t, i, dt, IC, True))
         
-        seed_everything(trace_id)
-        
-        sde = SDE_1S1F(a1 = 1e-3, a2 = 1e-3, a3 = 1e-1, a4 = 1e-1)
-        y0 = [1., 0.]
-        tspan  =np.arange(0, total_t, dt)
-        
-        sol = itoSRI2(sde.f, sde.g, y0, tspan) # Runge-Kutta algorithm
-        # sol = itoEuler(sde.f, sde.g, y0, tspan) # Euler-Maruyama algorithm
-
-        x = sol[:, 1] * np.cos(sol[:, 0]+sol[:, 1]-1)
-        y = sol[:, 1] * np.sin(sol[:, 0]+sol[:, 1]-1)
-        result = np.concatenate((x[...,np.newaxis],y[...,np.newaxis],sol), axis=1)
-
-        if plot:
-            os.makedirs('Data/1S1F/origin', exist_ok=True)
-            plt.figure(figsize=(16, 16))
-            ax1 = plt.subplot(2,2,1)
-            ax1.plot(tspan, result[:, 2], label='u')
-            ax1.plot(tspan, result[:, 3], label='v')
-            ax1.set_xlabel('t')
-            ax1.set_ylabel('var')
-            ax1.legend()
-            ax2 = plt.subplot(2,2,2)
-            ax2.scatter(result[::5,0], result[::5,1], c=tspan[::5], cmap='viridis', linewidths=0.01)
-            ax2.set_xlabel('x')
-            ax2.set_ylabel('y')
-            ax3 = plt.subplot(2,2,3)
-            ax3.plot(tspan, result[:,0], label='x')
-            ax3.plot(tspan, result[:,1], label='y')
-            ax3.set_xlabel('t')
-            ax3.set_ylabel('var')
-            ax1.legend()
-            plt.savefig(f'Data/1S1F/origin/1s1f_{trace_id}.pdf', dpi=100)
-        
-        return np.array(result)
+        while any([subp.exitcode == None for subp in subprocess]):
+            if not queue.empty():
+                data = queue.get_nowait()
+                sol.append(data)
     
-    if save and os.path.exists('Data/1S1F/origin/origin.npz'): return
-    
-    trace = []
-    for trace_id in tqdm(range(1, trace_num+1)):
-        sol = solve_1_trace(trace_id, total_t, dt)
-        trace.append(sol)
-    
-    if save: 
-        os.makedirs('Data/1S1F/origin', exist_ok=True)
-        np.savez('Data/1S1F/origin/origin.npz', trace=trace, dt=dt, T=total_t)
-        print(f'save origin data form seed 1 to {trace_num} at Data/1S1F/origin/')
-    
-    return np.array(trace)
-# generate_original_data(1, total_t=31400, dt=1, save=False, plot=True)
+    return np.array(sol).transpose((0,2,1))
 
 
 def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=False, parallel=False):
-
+    
     if os.path.exists(f"Data/1S1F/data/tau_{tau}/train_static.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/val_static.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/test_static.npz"):
         return
     
     # generate simulation data
     if not os.path.exists(f"Data/1S1F/data/static_{max_tau:.2f}.npz"):
         if is_print: print('generating simulation trajectories:')
-        data = generate_original_data(trace_num, total_t=max_tau+101*dt, dt=dt, save=False, plot=False, parallel=parallel)
+        data = generate_original_data2(trace_num, total_t=max_tau+dt, dt=dt, parallel=parallel)
         data = data[:,:,np.newaxis] # add channel dim
         np.savez(f"Data/1S1F/data/static_{max_tau:.2f}.npz", data=data)
         if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
@@ -101,10 +168,10 @@ def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=Fal
     # save statistic information
     data_dir = f"Data/1S1F/data/tau_{tau}"
     os.makedirs(data_dir, exist_ok=True)
-    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)))
-    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)))
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(data, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(data, axis=(0,1)).reshape(1,-1))
     np.savetxt(data_dir + "/tau_static.txt", [tau]) # Save the timestep
 
     ##################################
@@ -121,10 +188,11 @@ def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=Fal
 
         # subsampling
         step_length = int(tau/dt) if tau!=0. else 1
+        squence_length = 2 if tau!=0. else 1
 
-        assert step_length<data_item.shape[1], f"Tau {tau} is larger than the simulation time length{dt*data_item.shape[1]}"
-        sequences = data_item[:, 100::step_length]
-        sequences = sequences[:, :2]
+        assert step_length<=data_item.shape[1], f"Tau {tau} is larger than the simulation time length {dt*data_item.shape[1]}"
+        sequences = data_item[:, ::step_length]
+        sequences = sequences[:, :squence_length]
         
         # save
         np.savez(data_dir+f'/{item}_static.npz', data=sequences)
@@ -132,18 +200,18 @@ def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=Fal
         # plot
         plt.figure(figsize=(16,10))
         plt.title(f'{item.capitalize()} Data')
-        plt.plot(sequences[:,0,0,0], label='x')
-        plt.plot(sequences[:,0,0,1], label='y')
+        plt.plot(sequences[:,0,0,0], label='X')
+        plt.plot(sequences[:,0,0,1], label='Y')
         plt.legend()
         plt.savefig(data_dir+f'/{item}_static_input.pdf', dpi=300)
 
         plt.figure(figsize=(16,10))
         plt.title(f'{item.capitalize()} Data')
-        plt.plot(sequences[:,1,0,0], label='x')
-        plt.plot(sequences[:,1,0,1], label='y')
+        plt.plot(sequences[:,squence_length-1,0,0], label='X')
+        plt.plot(sequences[:,squence_length-1,0,1], label='Y')
         plt.legend()
         plt.savefig(data_dir+f'/{item}_static_target.pdf', dpi=300)
-
+    
     
 def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=False, sequence_length=None):
 
@@ -151,12 +219,21 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
         return
     elif (sequence_length is None) and os.path.exists(f"Data/1S1F/data/tau_{tau}/train.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/val.npz") and os.path.exists(f"Data/1S1F/data/tau_{tau}/test.npz"):
         return
-    
+
     # load original data
     if is_print: print('loading original trace data:')
-    tmp = np.load(f"Data/1S1F/origin/origin.npz")
-    dt = tmp['dt']
-    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
+    data = []
+    iter = tqdm(range(1, trace_num+1)) if is_print else range(1, trace_num+1)
+    for trace_id in iter:
+        tmp = np.load(f"Data/1S1F/origin/{trace_id}/data.npz")
+        dt = tmp['dt']
+        X = np.array(tmp['X'])[:, np.newaxis, np.newaxis] # (sample_num, channel, feature_num)
+        Y = np.array(tmp['Y'])[:, np.newaxis, np.newaxis]
+
+        trace = np.concatenate((X, Y), axis=-1)
+        data.append(trace[np.newaxis])
+    data = np.concatenate(data, axis=0)
+
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information
@@ -214,7 +291,7 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
         if is_print: print()
 
         sequences = np.array(sequences) 
-        if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length}, step_length={step_length})", np.shape(sequences))
+        if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length})", np.shape(sequences))
 
         # keep sequences_length equal to sample_num
         if sample_num is not None:
@@ -237,18 +314,22 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
         else:
             np.savez(data_dir+f'/{item}.npz', data=sequences)
 
-            # plot
-            if seq_none:
-                plt.figure(figsize=(16,10))
-                plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-                plt.plot(sequences[:,0,0,0], label='x')
-                plt.plot(sequences[:,0,0,1], label='y')
-                plt.legend()
-                plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
+        # plot
+        if seq_none:
+            plt.figure(figsize=(16,10))
+            plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+            for i in range(2):
+                ax = plt.subplot(2,1,i+1)
+                ax.set_title(['X','Y'][i])
+                plt.plot(sequences[:, 0, 0, i])
+            plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
+            plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
 
-                plt.figure(figsize=(16,10))
-                plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-                plt.plot(sequences[:,sequence_length-1,0,0], label='x')
-                plt.plot(sequences[:,sequence_length-1,0,1], label='y')
-                plt.legend()
-                plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
+            plt.figure(figsize=(16,10))
+            plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+            for i in range(2):
+                ax = plt.subplot(2,1,i+1)
+                ax.set_title(['X','Y'][i])
+                plt.plot(sequences[:, sequence_length-1, 0, i])
+            plt.subplots_adjust(left=0.05, bottom=0.05,  right=0.95,  top=0.95,  hspace=0.35)
+            plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
