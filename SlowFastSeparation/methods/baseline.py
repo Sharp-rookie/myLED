@@ -242,5 +242,5 @@ def baseline_test(
         c1_evolve_mae = np.mean(np.abs(pred[:,0,0,0] - true[:,0,0,0]))
         c2_evolve_mae = np.mean(np.abs(pred[:,0,0,1] - true[:,0,0,1]))
         return MSE, RMSE, MAE, MAPE, c1_evolve_mae, c2_evolve_mae
-    elif system == '1S2F':
+    elif system in ['1S1F', '1S2F', 'HalfMoon']:
         return MSE, RMSE, MAE, MAPE

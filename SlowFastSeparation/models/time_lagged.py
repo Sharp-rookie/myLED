@@ -17,13 +17,20 @@ class EncodeCell(nn.Module):
         self.flatten = nn.Flatten() if flatten else None
         self.dropout = nn.Dropout(p=0.01) if dropout else None
 
-        self.w1 = nn.Parameter(torch.rand(input_dim, hidden_dim))
-        self.w2 = nn.Parameter(torch.rand(input_dim, hidden_dim))
-        self.w3 = nn.Parameter(torch.rand(input_dim, hidden_dim))
-        self.b1 = nn.Parameter(torch.rand(hidden_dim))
-        self.b2 = nn.Parameter(torch.rand(hidden_dim))
-        self.b3 = nn.Parameter(torch.rand(hidden_dim))
-        self.b4 = nn.Parameter(torch.rand(hidden_dim))
+        self.w1 = nn.Parameter(torch.normal(mean=0., std=0.01, size=(input_dim, hidden_dim)))
+        self.b1 = nn.Parameter(torch.zeros(hidden_dim))
+
+        if net != 'MLP': # GRU1/2 or LSTM
+            self.w2 = nn.Parameter(torch.normal(mean=0., std=0.01, size=(input_dim, hidden_dim)))
+            self.b2 = nn.Parameter(torch.zeros(hidden_dim))
+
+        if net != 'GRU1': # GRU2 or LSTM
+            self.w3 = nn.Parameter(torch.normal(mean=0., std=0.01, size=(input_dim, hidden_dim)))
+            self.b3 = nn.Parameter(torch.zeros(hidden_dim))
+
+        if 'LSTM' not in net: # GRU2
+            self.b4 = nn.Parameter(torch.zeros(hidden_dim))
+
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
     
@@ -65,15 +72,14 @@ class EncodeCell(nn.Module):
 
 class TimeLaggedAE(nn.Module):
     
-    def __init__(self, in_channels, feature_dim, embed_dim, data_dim, enc_net='MLP'):
+    def __init__(self, in_channels, feature_dim, embed_dim, data_dim, enc_net='MLP', e1_layer_n=3):
         super(TimeLaggedAE, self).__init__()
                 
         # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)
-        self.encoder = nn.Sequential(
-            EncodeCell(in_channels*feature_dim, 64, True, True, enc_net),
-            EncodeCell(64, 64, False, True, enc_net),
-            EncodeCell(64, embed_dim, False, False, enc_net, False),
-        )
+        assert e1_layer_n>1, f"Layer num of encoder_1 must larger than 1, but is {e1_layer_n}"
+        self.encoder = nn.Sequential(EncodeCell(in_channels*feature_dim, 64, True, True, enc_net))
+        [self.encoder.append(EncodeCell(64, 64, False, True, enc_net)) for _ in range(e1_layer_n-2)]
+        self.encoder.append(EncodeCell(64, embed_dim, False, False, enc_net, False))
         # self.encoder = nn.Sequential(
         #     nn.Flatten(),
         #     nn.Linear(in_channels*feature_dim, 64, bias=True),

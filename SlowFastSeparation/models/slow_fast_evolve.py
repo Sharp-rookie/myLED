@@ -82,18 +82,18 @@ class LSTM_OPT(nn.Module):
 
 class DynamicsEvolver(nn.Module):
     
-    def __init__(self, in_channels, feature_dim, embed_dim, slow_dim, redundant_dim, tau_s, device, data_dim, enc_net='MLP'):
+    def __init__(self, in_channels, feature_dim, embed_dim, slow_dim, redundant_dim, tau_s, device, data_dim, enc_net='MLP', e1_layer_n=3):
         super(DynamicsEvolver, self).__init__()
 
         self.slow_dim = slow_dim
+        self.redundant_dim = redundant_dim
         
         # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)
         assert enc_net in ['MLP', 'GRU1', 'GRU2', 'LSTM', 'LSTM-changed'], f"Encoder Net Error, {enc_net} not implemented!"
-        self.encoder_1 = nn.Sequential(
-            EncodeCell(in_channels*feature_dim, 64, True, True, enc_net),
-            EncodeCell(64, 64, False, True, enc_net),
-            EncodeCell(64, embed_dim, False, False, enc_net, False),
-        )
+        assert e1_layer_n>1, f"Layer num of encoder_1 must larger than 1, but is {e1_layer_n}"
+        self.encoder_1 = nn.Sequential(EncodeCell(in_channels*feature_dim, 64, True, True, enc_net))
+        [self.encoder_1.append(EncodeCell(64, 64, False, True, enc_net)) for _ in range(e1_layer_n-2)]
+        self.encoder_1.append(EncodeCell(64, embed_dim, False, False, enc_net, False))
         # self.encoder_1 = nn.Sequential(
         #     nn.Flatten(),
         #     nn.Linear(in_channels*feature_dim, 64, bias=True),
@@ -109,18 +109,6 @@ class DynamicsEvolver(nn.Module):
             nn.Dropout(p=0.01),
             nn.Linear(64, slow_dim, bias=True),
         )
-        # self.encoder_2_1 = nn.Sequential(
-        #     nn.Linear(embed_dim, 64, bias=True),
-        #     nn.Tanh(),
-        #     nn.Dropout(p=0.01),
-        #     nn.Linear(64, 1, bias=True),
-        # )
-        # self.encoder_2_2 = nn.Sequential(
-        #     nn.Linear(embed_dim, 64, bias=True),
-        #     nn.Tanh(),
-        #     nn.Dropout(p=0.01),
-        #     nn.Linear(64, 1, bias=True),
-        # )
 
         # (batchsize, slow_dim)-->(batchsize, redundant_dim)
         self.encoder_3 = nn.Sequential(
@@ -137,18 +125,6 @@ class DynamicsEvolver(nn.Module):
             nn.Dropout(p=0.01),
             nn.Linear(64, embed_dim, bias=True),
         )
-        # self.decoder_1_1 = nn.Sequential(
-        #     nn.Linear(1, 64, bias=True),
-        #     nn.Tanh(),
-        #     nn.Dropout(p=0.01),
-        #     nn.Linear(64, embed_dim, bias=True),
-        # )
-        # self.decoder_1_2 = nn.Sequential(
-        #     nn.Linear(1, 64, bias=True),
-        #     nn.Tanh(),
-        #     nn.Dropout(p=0.01),
-        #     nn.Linear(64, embed_dim, bias=True),
-        # )
 
         # (batchsize, embed_dim)-->(batchsize,1,channel_num,feature_dim)
         self.decoder_2 = nn.Sequential(
@@ -158,20 +134,6 @@ class DynamicsEvolver(nn.Module):
             nn.Linear(64, in_channels*feature_dim, bias=True),
             nn.Unflatten(-1, (1, in_channels, feature_dim))
         )
-        # self.decoder_2_1 = nn.Sequential(
-        #     nn.Linear(embed_dim, 64, bias=True),
-        #     nn.Tanh(),
-        #     nn.Dropout(p=0.01),
-        #     nn.Linear(64, in_channels*feature_dim, bias=True),
-        #     nn.Unflatten(-1, (1, in_channels, feature_dim))
-        # )
-        # self.decoder_2_2 = nn.Sequential(
-        #     nn.Linear(embed_dim, 64, bias=True),
-        #     nn.Tanh(),
-        #     nn.Dropout(p=0.01),
-        #     nn.Linear(64, in_channels*feature_dim, bias=True),
-        #     nn.Unflatten(-1, (1, in_channels, feature_dim))
-        # )
         
         self.K_opt = Koopman_OPT(slow_dim+redundant_dim)
         self.lstm = LSTM_OPT(in_channels, feature_dim, hidden_dim=64, layer_num=2, tau_s=tau_s, device=device)
@@ -189,26 +151,6 @@ class DynamicsEvolver(nn.Module):
         slow_var = self.encoder_2(embed)
         
         return slow_var, embed
-    # def obs2slow_new(self, obs):
-    #     # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)-->(batchsize, slow_dim)
-    #     embed = self.encoder_1(obs)
-    #     slow_var1 = self.encoder_2_1(embed)
-    #     slow_var2 = self.encoder_2_2(embed)
-        
-    #     return slow_var1, slow_var2, embed
-    # def obs2slow_new2(self, obs):
-    #     # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)-->(batchsize, slow_dim)
-    #     embed = self.encoder_1(obs)
-
-    #     from sklearn.manifold import TSNE
-    #     from sklearn.decomposition import PCA, KernelPCA, TruncatedSVD
-    #     pca = KernelPCA(n_components=4, kernel='cosine')
-    #     svd = TruncatedSVD(n_components=4)
-    #     tsne = TSNE(n_components=4)
-    #     slow_var = pca.fit_transform(embed.detach().cpu().numpy())
-    #     slow_var = torch.from_numpy(slow_var).to(embed.device)
-        
-    #     return slow_var, embed
 
     def slow2obs(self, slow_var):
         # (batchsize, slow_dim)-->(batchsize,1,channel_num,feature_dim)
@@ -217,32 +159,26 @@ class DynamicsEvolver(nn.Module):
         # obs = self.decoder_2(embed)
 
         return obs, embed
-    # def slow2obs_new2(self, slow_var):
-    #     # (batchsize, slow_dim)-->(batchsize,1,channel_num,feature_dim)
-    #     embed = self.decoder_1(slow_var)
-    #     obs1 = self.decoder_2_1(embed.detach())
-    #     obs2 = self.decoder_2_2(embed.detach())
-    #     # obs = self.decoder_2(embed)
-
-        # return obs1, obs2, embed
-    # def slow2obs_new(self, slow_var1, slow_var2):
-    #     # (batchsize, slow_dim)-->(batchsize,1,channel_num,feature_dim)
-    #     embed1 = self.decoder_1_1(slow_var1)
-    #     embed2 = self.decoder_1_2(slow_var2)
-    #     obs = self.decoder_2((embed1+embed2).detach())
-    #     # obs = self.decoder_2(embed1+embed2)
-
-    #     return obs, embed1, embed2
 
     def slow2koopman(self, slow_var):
+        
+        if not self.redundant_dim:
+            return slow_var
+        
         # (batchsize, slow_dim)-->(batchsize, koopman_dim = slow_dim + redundant_dim)
         redundant_var = self.encoder_3(slow_var)
         koopman_var = torch.concat((slow_var, redundant_var), dim=-1)
+        
         return koopman_var
 
     def koopman2slow(self, koopman_var):
+        
+        if not self.redundant_dim:
+            return koopman_var
+        
         # (batchsize, koopman_dim = slow_dim + redundant_dim)-->(batchsize, slow_dim)
         slow_var = koopman_var[:,:self.slow_dim]
+        
         return slow_var
 
     def koopman_evolve(self, koopman_var, tau=1.):

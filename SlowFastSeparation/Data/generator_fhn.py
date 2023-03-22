@@ -110,8 +110,8 @@ def generate_original_data(trace_num, total_t=1000.1, dt=0.01, save=True, plot=F
         x = np.loadtxt("Data/FHN_ICs/y0x.txt", delimiter="\n")
 
         # hyper-params
-        epsilon = 0.006
-        a1 = 2.
+        epsilon = 0.01
+        a1 = 3.
 
         # simulate by LBM
         rho_act, rho_in, t_vec, _, _, _, _, dt, _, _, _, x, _, _, a0, a1, _, _, total_t = run_lb_fhn_ic(f_id+1, len(file_names), rho_act_0, rho_in_0, total_t, dt, epsilon, a1)
@@ -133,7 +133,7 @@ def generate_original_data(trace_num, total_t=1000.1, dt=0.01, save=True, plot=F
         np.savez('Data/FHN/origin/origin.npz', trace=trace, dt=dt, T=total_t)
 
     return trace
-generate_original_data(1, total_t=1000.1, dt=0.01, save=False, plot=True)
+# generate_original_data(1, total_t=1000.1, dt=0.01, save=False, plot=True)
 
 
 # def generate_dataset_static(trace_num, tau=0., dt=0.01, max_tau=5., is_print=False, parallel=False):
@@ -203,20 +203,21 @@ generate_original_data(1, total_t=1000.1, dt=0.01, save=False, plot=True)
     
 def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=False, sequence_length=None, x_num=101):
 
-    if (sequence_length is not None) and os.path.exists(f"Data/FHN/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/FHN/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/FHN/data/tau_{tau}/test_{sequence_length}.npz"):
+    if (sequence_length is not None) and os.path.exists(f"Data/FHN_{x_num}/data/tau_{tau}/train_{sequence_length}.npz") and os.path.exists(f"Data/FHN_{x_num}/data/tau_{tau}/val_{sequence_length}.npz") and os.path.exists(f"Data/FHN_{x_num}/data/tau_{tau}/test_{sequence_length}.npz"):
         return
-    elif (sequence_length is None) and os.path.exists(f"Data/FHN/data/tau_{tau}/train.npz") and os.path.exists(f"Data/FHN/data/tau_{tau}/val.npz") and os.path.exists(f"Data/FHN/data/tau_{tau}/test.npz"):
+    elif (sequence_length is None) and os.path.exists(f"Data/FHN_{x_num}/data/tau_{tau}/train.npz") and os.path.exists(f"Data/FHN_{x_num}/data/tau_{tau}/val.npz") and os.path.exists(f"Data/FHN_{x_num}/data/tau_{tau}/test.npz"):
         return
     
     # load original data
     if is_print: print('loading original trace data:')
     tmp = np.load(f"Data/FHN/origin/origin.npz")
     dt = tmp['dt']
-    data = np.array(tmp['trace'])[:trace_num,:,np.newaxis] # (trace_num, time_length, channel, feature_num)
+    step = int(101/(x_num-1+1e-5))
+    data = np.array(tmp['trace'])[:trace_num,:,:,np.arange(0,x_num*step, step)] # (trace_num, time_length, channel, feature_num)
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information
-    data_dir = f"Data/FHN/data/tau_{tau}"
+    data_dir = f"Data/FHN_{x_num}/data/tau_{tau}"
     os.makedirs(data_dir, exist_ok=True)
     np.savetxt(data_dir + "/data_mean.txt", np.mean(data, axis=(0,1)))
     np.savetxt(data_dir + "/data_std.txt", np.std(data, axis=(0,1)))
@@ -246,7 +247,7 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
         data_item = data[trace_list[item]]
 
         # space downsample
-        data_item = data_item[:,:,2,::int(101/data_item)]
+        print(np.shape(data_item))
 
         # subsampling
         step_length = int(tau/dt) if tau!=0. else 1
@@ -302,7 +303,6 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
                 plt.figure(figsize=(24,10))
                 ax1 = plt.subplot(1,2,1)
                 ax2 = plt.subplot(1,2,2)
-                plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
                 for i in range(x_num):
                     ax1.plot(sequences[:,0,0,i], label=f'u_{i}')
                     ax2.plot(sequences[:,0,1,i], label=f'v_{i}')
@@ -313,7 +313,6 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
                 plt.figure(figsize=(24,10))
                 ax1 = plt.subplot(1,2,1)
                 ax2 = plt.subplot(1,2,2)
-                plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
                 for i in range(x_num):
                     ax1.plot(sequences[:,0,0,i], label=f'u_{i}')
                     ax2.plot(sequences[:,0,1,i], label=f'v_{i}')
