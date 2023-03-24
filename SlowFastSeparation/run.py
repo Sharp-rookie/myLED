@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import time
+import signal
 import argparse
 import torch
 import numpy as np
@@ -51,7 +52,7 @@ def learn_subworker(args, n, random_seed=729, is_print=False, mode='train'):
                 MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = test_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.learn_epoch, args.slow_dim, args.koopman_dim, delta_t, i, is_print, random_seed, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n)
                 with open(args.result_dir+f'ours_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
-            elif args.system in ['1S1F', '1S2F', 'HalfMoon'] or 'FHN' in args.system:
+            elif args.system in ['1S1F', '1S2F', 'ToggleSwitch', 'SignalingCascade', 'HalfMoon'] or 'FHN' in args.system:
                 MSE, RMSE, MAE, MAPE = test_evolve(args.system, args.embedding_dim, args.channel_num, args.obs_dim, args.tau_s, args.learn_epoch, args.slow_dim, args.koopman_dim, delta_t, i, is_print, random_seed, args.data_dir, args.learn_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n)
                 with open(args.result_dir+f'ours_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
@@ -83,7 +84,7 @@ def baseline_subworker(args, is_print=False, random_seed=729, mode='train'):
                 MSE, RMSE, MAE, MAPE, c1_mae, c2_mae = baseline_test(model, args.obs_dim, args.system, args.tau_s, args.baseline_epoch, delta_t, i, random_seed, args.data_dir, args.baseline_log_dir, args.device, args.batch_size)
                 with open(args.result_dir+f'{args.model}_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}, {c1_mae}, {c2_mae}\n')
-            elif args.system in ['1S1F', '1S2F', 'HalfMoon'] or 'FHN' in args.system:
+            elif args.system in ['1S1F', '1S2F', 'ToggleSwitch', 'SignalingCascade', 'HalfMoon'] or 'FHN' in args.system:
                 MSE, RMSE, MAE, MAPE = baseline_test(model, args.obs_dim, args.system, args.tau_s, args.baseline_epoch, delta_t, i, random_seed, args.data_dir, args.baseline_log_dir, args.device, args.batch_size)
                 with open(args.result_dir+f'{args.model}_evolve_test_{args.tau_s}.txt','a') as f:
                     f.writelines(f'{delta_t}, {random_seed}, {MSE}, {RMSE}, {MAE}, {MAPE}\n')
@@ -200,7 +201,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='ours', help='Model: [ours, lstm, tcn, neural_ode]')
-    parser.add_argument('--system', type=str, default='2S2F', help='Dynamical System: [1S1F, 1S2F, HalfMoon, 2S2F, FHN, SC]')
+    parser.add_argument('--system', type=str, default='2S2F', help='Dynamical System: [1S1F, 1S2F, ToggleSwitch, SignalingCascade, HalfMoon, 2S2F, FHN, SC]')
     parser.add_argument('--channel_num', type=int, default=4, help='Overall featrue number')
     parser.add_argument('--obs_dim', type=int, default=4, help='Obervable feature dimension')
     parser.add_argument('--data_dim', type=int, default=4, help='Overall feature dimension')
@@ -247,6 +248,14 @@ if __name__ == '__main__':
         assert args.obs_dim==3, f"Comflicting observable dimension: {args.obs_dim}(should be 3)"
         from Data.generator_1s2f import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
         from util.plot_1s2f import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
+    elif args.system == 'ToggleSwitch':
+        assert args.obs_dim==2, f"Comflicting observable dimension: {args.obs_dim}(should be 2)"
+        from Data.generator_ToggleSwitch import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
+        from util.plot_ToggleSwitch import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
+    elif args.system == 'SignalingCascade':
+        assert args.obs_dim==4, f"Comflicting observable dimension: {args.obs_dim}(should be 4)"
+        from Data.generator_SignalingCascade import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
+        from util.plot_SignalingCascade import plot_epoch_test_log, plot_id_per_tau, plot_autocorr
     elif args.system == 'HalfMoon':
         assert args.obs_dim==2, f"Comflicting observable dimension: {args.obs_dim}(should be 2)"
         from Data.generator_halfmoon import generate_dataset_slidingwindow, generate_dataset_static, generate_original_data
@@ -267,6 +276,11 @@ if __name__ == '__main__':
     
     if args.enc_net != 'MLP' and args.e1_layer_n == 2:
         print('RNN layer num should be larger than 2!')
+
+    # ctrl c
+    def term_sig_handler(signum, frame):
+        exit(0)
+    signal.signal(signal.SIGINT, term_sig_handler)
     
     # main pipeline
     Data_Generate(args)
