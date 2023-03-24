@@ -175,7 +175,7 @@ def train_slow_extract_and_evolve(
             model.eval()
             for input, target, _ in val_loader:
 
-                if system == 'HalfMoon':
+                if system in ['HalfMoon', 'ToggleSwitch']:
                     hidden_slow.append(input[..., obs_dim:].cpu())
                 
                 input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel_num,feature_dim)
@@ -221,7 +221,7 @@ def train_slow_extract_and_evolve(
             adiabatic_embeds = torch.concat(adiabatic_embeds, axis=0)
             # slow_obses_next = torch.concat(slow_obses_next, axis=0)
             # total_obses_next = torch.concat(total_obses_next, axis=0)
-            if system == 'HalfMoon':
+            if system in ['HalfMoon', 'ToggleSwitch']:
                 hidden_slow = torch.concat(hidden_slow, axis=0)
 
             # slow_var1 = slow_vars[:, :1]
@@ -257,7 +257,7 @@ def train_slow_extract_and_evolve(
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.pdf", dpi=300)
                 plt.close()
 
-                if system == 'HalfMoon':
+                if system in ['HalfMoon', 'ToggleSwitch']:
                     # plot slow variable vs hidden variable
                     plt.figure(figsize=(8*(hidden_slow.shape[-1]),5+2*(slow_dim-1)))
                     plt.title('Extracted VS Hidden Slow')
@@ -328,8 +328,9 @@ def train_slow_extract_and_evolve(
                         # plot the slow manifold and c3,c4 trajectory
                         ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
                         ax.plot(descale[:num,0,0,:1], descale[:num,0,0,1:2], trace, linewidth=2, color="r", label=rf'Slow trajectory')
-                        ax.set_xlabel(r"$c_2$", labelpad=10, fontsize=18)
-                        ax.set_ylabel(r"$c_1$", labelpad=10, fontsize=18)
+                        print(descale[:num,0,0,:1].item());exit(0)
+                        ax.set_xlabel(r"$c_1$", labelpad=10, fontsize=18)
+                        ax.set_ylabel(r"$c_2$", labelpad=10, fontsize=18)
                         ax.set_zlim(0, 2)
                         ax.text2D(0.85, 0.65, rf"$c_{2+i+1}$", fontsize=18, transform=ax.transAxes)
                         # ax.zaxis.set_rotate_label(False)  # disable automatic rotation
@@ -453,7 +454,7 @@ def test_evolve(
         model.eval()
         for input, target in test_loader:
 
-            if system == 'HalfMoon':
+            if system in ['HalfMoon', 'ToggleSwitch']:
                 hidden_slow.append(input[..., obs_dim:].cpu())
             
             input = model.scale(input.to(device))[..., :obs_dim]
@@ -531,8 +532,6 @@ def test_evolve(
     plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.pdf", dpi=300)
     plt.close()
 
-    # TODO: 如果是2S2F，把slow extract画在慢流型上
-
     # plot slow variable vs input
     sample = 4
     plt.figure(figsize=(16,5+2*(slow_dim-1)))
@@ -548,7 +547,7 @@ def test_evolve(
     plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=150)
     plt.close()
 
-    if system == 'HalfMoon':
+    if system in ['HalfMoon', 'ToggleSwitch']:
         # plot slow variable vs hidden variable
         plt.figure(figsize=(8*(hidden_slow.shape[-1]),5+2*(slow_dim-1)))
         plt.title('Extracted VS Hidden Slow')
@@ -589,5 +588,5 @@ def test_evolve(
         c1_evolve_mae = torch.mean(torch.abs(recons_obses_next[:,0,0,0] - true[:,0,0,0]))
         c2_evolve_mae = torch.mean(torch.abs(recons_obses_next[:,0,0,1] - true[:,0,0,1]))
         return MSE, RMSE, MAE, MAPE, c1_evolve_mae.item(), c2_evolve_mae.item()
-    elif system in ['1S1F', '1S2F', 'HalfMoon'] or 'FHN' in system:
+    elif system in ['1S1F', '1S2F', 'ToggleSwitch', 'SignalingCascade', 'HalfMoon'] or 'FHN' in system:
         return MSE, RMSE, MAE, MAPE

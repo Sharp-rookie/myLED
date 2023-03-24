@@ -41,8 +41,8 @@ def train_time_lagged(
     # init model
     model = models.TimeLaggedAE(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     tmp = '' if sliding_window else '_static'
-    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
-    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
+    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
+    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
     model.to(device)
     
     # training params
@@ -148,8 +148,8 @@ def test_and_save_embeddings_of_time_lagged(
     model = models.TimeLaggedAE(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     if checkpoint_filepath is None: # not trained
         tmp = '' if sliding_window else '_static'
-        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
-        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
+        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
+        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
 
     # dataset
     test_dataset = Dataset(data_filepath, 'test', sliding_window=sliding_window)
@@ -244,6 +244,10 @@ def test_and_save_embeddings_of_time_lagged(
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         elif system == '1S2F':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{epoch},{MLE_id}\n")
+        elif system == 'ToggleSwitch':
+            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
+        elif system == 'SignalingCascade':
+            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{mse_[3]},{epoch},{MLE_id}\n")
         elif 'FHN' in system:
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         elif system == 'HalfMoon':

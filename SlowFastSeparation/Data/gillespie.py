@@ -7,7 +7,7 @@ from tqdm import tqdm
 from scipy.special import comb
 import matplotlib.pyplot as plt
 
-# from util import seed_everything
+from util import seed_everything
 
 class Reaction:
 
@@ -207,7 +207,7 @@ def generate_toggle_switch_origin(total_t=None, seed=729, IC=[1,0,0,1,0,0], save
 
     time.sleep(1.0)
 
-    # seed_everything(seed)
+    seed_everything(seed)
     if save: os.makedirs(f'Data/ToggleSwitch/origin/{seed}/', exist_ok=True)
 
     num_elements = 6
@@ -232,10 +232,10 @@ def generate_toggle_switch_origin(total_t=None, seed=729, IC=[1,0,0,1,0,0], save
     
     if save:
         plt.figure(figsize=(16,9))
-        name = ['Gx', '^Gx', 'Px', 'Gy', '^Gy', 'Py']
+        name = ['G_x', 'G_x2', 'P_x', 'G_y', 'G_y2', 'P_y']
         for i in range(num_elements):
             ax = plt.subplot(2,3,i+1)
-            ax.set_title(name[i])
+            ax.set_title(rf'{name[i]}')
             ax.plot(t, vars[i])
             ax.set_xlabel('time / s')
 
@@ -255,14 +255,14 @@ def generate_toggle_switch_origin(total_t=None, seed=729, IC=[1,0,0,1,0,0], save
 
         np.savez(f'Data/ToggleSwitch/origin/{seed}/origin.npz', t=t, Gx=vars[0], _Gx=vars[1], Px=vars[2], Gy=vars[3], _Gy=vars[4], Py=vars[5], dt=avg)
     else:
-        return {'t': t, 'Gx': vars[0], '^Gx': vars[1], 'Px': vars[2], 'Gy': vars[3], '^Gy': vars[4], 'Py': vars[5]}
+        return {'t': t, 'Gx': vars[0], '_Gx': vars[1], 'Px': vars[2], 'Gy': vars[3], '_Gy': vars[4], 'Py': vars[5]}
 
 
 def generate_epidemicSIR_origin(total_t=None, seed=729, IC=[51,11,0], save=True, is_print=False):
 
     time.sleep(1.0)
 
-    # seed_everything(seed)
+    seed_everything(seed)
     if save: os.makedirs(f'Data/EpidemicSIR/origin/{seed}/', exist_ok=True)
 
     num_elements = 3
@@ -305,7 +305,7 @@ def generate_signalling_cascade_origin(total_t=None, seed=729, IC=[0 for _ in ra
 
     time.sleep(1.0)
 
-    # seed_everything(seed)
+    seed_everything(seed)
     if save: os.makedirs(f'Data/SignallingCascade/origin/{seed}/', exist_ok=True)
 
     num_elements = 4
@@ -341,16 +341,16 @@ def generate_signalling_cascade_origin(total_t=None, seed=729, IC=[0 for _ in ra
         digit = f'{np.average(np.diff(t)):.20f}'.count("0")
         avg = np.round(np.average(np.diff(t)), digit)
 
-        np.savez(f'Data/SignallingCascade/origin/{seed}/origin.npz', t=t, S=vars[0], I=vars[1], R=vars[2], dt=avg)
+        np.savez(f'Data/SignallingCascade/origin/{seed}/origin.npz', t=t, X1=vars[0], X2=vars[1], X3=vars[2], X4=vars[3], dt=avg)
     else:
-        return {'t': t, 'vars': vars}
+        return {'t': t, 'X1': vars[0], 'X2': vars[1], 'X3': vars[2], 'X4': vars[3]}
 
 
 def generate_self_replicator_origin(total_t=None, seed=729, IC=[3, 50, 47], save=True, is_print=False):
 
     time.sleep(1.0)
 
-    # seed_everything(seed)
+    seed_everything(seed)
     if save: os.makedirs(f'Data/SelfReplicator/origin/{seed}/', exist_ok=True)
 
     num_elements = 3
@@ -387,6 +387,3 @@ def generate_self_replicator_origin(total_t=None, seed=729, IC=[3, 50, 47], save
         np.savez(f'Data/SelfReplicator/origin/{seed}/origin.npz', t=t, S=vars[0], I=vars[1], R=vars[2], dt=avg)
     else:
         return {'t': t, 'vars': vars}
-
-
-generate_signalling_cascade_origin(100, seed=1, IC=[0,0,0,0], save=True, is_print=True)
