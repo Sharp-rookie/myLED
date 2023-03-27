@@ -39,11 +39,14 @@ class ID_Estimator:
             return np.array(dims)
 
 
-def eval_id_embedding(vars_filepath, method='MLE', is_print=False, max_point=1000):
+def eval_id_embedding(vars_filepath, method='MLE', is_print=False, max_point=1000, embedding=None):
     
-    embedding = np.load(vars_filepath+'/embedding.npy')
+    if embedding is None:
+        embedding = np.load(vars_filepath+'/embedding.npy')
+
     if len(embedding) > max_point: embedding = np.random.permutation(embedding)[:max_point] # 避免计算耗时过长，随机取max_point个点计算ID
     embedding = np.unique(embedding, axis=0)
+    
     if is_print: print(f'[{method}] Samples (unique): {embedding.shape[0]}')
     
     estimator = ID_Estimator(method=method)
@@ -54,3 +57,5 @@ def eval_id_embedding(vars_filepath, method='MLE', is_print=False, max_point=100
     
     dims = estimator.fit(embedding, k_list)
     np.save(vars_filepath+f'/id_{method}.npy', dims)
+
+    return np.mean(dims)

@@ -211,7 +211,7 @@ def test_and_save_embeddings_of_time_lagged(
         plt.savefig(var_log_dir+"/result.pdf", dpi=300)
         plt.close()
 
-        if 'FHN' in system:
+        if 'FHN' in system and '2d' not in system:
             plt.figure(figsize=(16,5))
             for j in range(test_outputs.shape[-1]):
                 data = []
@@ -248,7 +248,9 @@ def test_and_save_embeddings_of_time_lagged(
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         elif system == 'SignalingCascade':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{mse_[3]},{epoch},{MLE_id}\n")
-        elif 'FHN' in system:
+        elif 'FHN' in system and '2d' not in system:
+            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
+        elif 'FHN_2d' in system:
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
         elif system == 'HalfMoon':
             fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")

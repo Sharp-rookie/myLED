@@ -12,8 +12,8 @@ def plot_epoch_test_log(tau, max_epoch, log_dir):
     class MSE():
         def __init__(self, tau):
             self.tau = tau
+            self.mse_u = [[] for _ in range(max_epoch)]
             self.mse_v = [[] for _ in range(max_epoch)]
-            self.mse_w = [[] for _ in range(max_epoch)]
             self.MLE_id = [[] for _ in range(max_epoch)]
 
     fp = open(log_dir + f'tau_{tau}/test_log.txt', 'r')
@@ -21,34 +21,34 @@ def plot_epoch_test_log(tau, max_epoch, log_dir):
     for line in fp.readlines():
         tau = float(line[:-1].split(',')[0])
         seed = int(line[:-1].split(',')[1])
-        mse_v = float(line[:-1].split(',')[2])
-        mse_w = float(line[:-1].split(',')[3])
+        mse_u = float(line[:-1].split(',')[2])
+        mse_v = float(line[:-1].split(',')[3])
         epoch = int(line[:-1].split(',')[4])
         MLE_id = float(line[:-1].split(',')[5])
 
         find = False
         for M in items:
             if M.tau == tau:
+                M.mse_u[epoch].append(mse_u)
                 M.mse_v[epoch].append(mse_v)
-                M.mse_w[epoch].append(mse_w)
                 M.MLE_id[epoch].append(MLE_id)
                 find = True
                     
         if not find:
             M = MSE(tau)
+            M.mse_u[epoch].append(mse_u)
             M.mse_v[epoch].append(mse_v)
-            M.mse_w[epoch].append(mse_w)
             M.MLE_id[epoch].append(MLE_id)
             items.append(M)
     fp.close()
 
     for M in items:
+        mse_u_list = []
         mse_v_list = []
-        mse_w_list = []
         MLE_id_list = []
         for epoch in range(max_epoch):
+            mse_u_list.append(np.mean(M.mse_u[epoch]))
             mse_v_list.append(np.mean(M.mse_v[epoch]))
-            mse_w_list.append(np.mean(M.mse_w[epoch]))
             MLE_id_list.append(np.mean(M.MLE_id[epoch]))
 
     plt.figure(figsize=(12,9))
@@ -60,8 +60,8 @@ def plot_epoch_test_log(tau, max_epoch, log_dir):
     ax2 = plt.subplot(2,1,2)
     plt.xlabel('epoch')
     plt.ylabel('MSE')
+    plt.plot(range(max_epoch), mse_u_list, label='u')
     plt.plot(range(max_epoch), mse_v_list, label='v')
-    plt.plot(range(max_epoch), mse_w_list, label='w')
     # plt.ylim((0., 1.05*max(np.max(mse_v_list), np.max(mse_w_list), np.max(mse_b_list))))
     plt.legend()
     plt.savefig(log_dir + f'tau_{tau}/ID_per_epoch.pdf', dpi=300)
