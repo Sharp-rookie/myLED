@@ -238,8 +238,8 @@ def train_slow_extract_and_evolve(
             # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}, obs_evol={obs_evol_loss:.5f}, cosine_similarity={cos_sim:.5f}', end='')
             
             
-            # plot per 5 epoch
-            if epoch % 1 == 0:
+            # plot per 25 epoch
+            if epoch % 25 == 0:
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
                 sample = 10
                 input_data = model.descale(inputs)
@@ -285,11 +285,10 @@ def train_slow_extract_and_evolve(
                 plt.figure(figsize=(12,5+2*(slow_dim-1)))
                 plt.title('Slow variable Curve')
                 for id_var in range(slow_dim):
-                    ax = plt.subplot(slow_dim, 1, 1+id_var)
-                    for idx in range(slow_dim):
+                    for idx in range(inputs.shape[-1]):
+                        ax = plt.subplot(slow_dim, inputs.shape[-1], 1+idx+id_var*inputs.shape[-1])
                         ax.plot(inputs[:,0,0,idx], label=f'c{idx+1}')
-                    ax.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
-                    plt.xlabel(item)
+                        ax.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
                     ax.legend()
                 plt.subplots_adjust(wspace=0.35, hspace=0.35)
                 plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.pdf", dpi=300)

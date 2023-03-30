@@ -36,7 +36,7 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir):
     trace = np.array(trace)
 
     # 保存模拟结果
-    np.savez(f'{dir}/origin.npz', trace=trace, u_bound=u_bound, v_bound=v_bound, u_step=u_step, v_step=v_step)
+    np.savez(f'{dir}/origin_{n_trace}.npz', trace=trace, u_bound=u_bound, v_bound=v_bound, u_step=u_step, v_step=v_step)
 
     # 绘制膜电位和恢复变量随时间演化的图形
     plt.figure(figsize=(10,12))
@@ -47,7 +47,7 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir):
         ax.set_xlabel('Time / s')
         ax.set_ylabel(['u', 'v'][i])
     plt.subplots_adjust(hspace=0.3)
-    plt.savefig(f'{dir}/fhn.jpg', dpi=100)
+    plt.savefig(f'{dir}/fhn.jpg', dpi=300)
     plt.close()
     
     # 绘制相空间演化轨迹
@@ -80,7 +80,7 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir):
     ax.set_xlim(-0.6, 1.6)
     ax.set_ylim(-2.1, 2.1)
     ax.set_title(f'{n_trace} trajectories simulated for {int(np.max(t))}s')
-    plt.savefig(f'{dir}/phase.jpg', dpi=100)
+    plt.savefig(f'{dir}/phase.jpg', dpi=300)
     plt.close()
 
     return trace
@@ -90,9 +90,9 @@ def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step,
 
     data_dir = data_dir + f'u0={u_bound:.2f}_v0={v_bound:.2f}'
 
-    if os.path.exists(f'{data_dir}/origin.npz'): 
+    if os.path.exists(f'{data_dir}/origin_{n_trace}.npz'): 
         # 导入数据
-        simdata = np.load(f'{data_dir}/origin.npz')['trace']
+        simdata = np.load(f'{data_dir}/origin_{n_trace}.npz')['trace']
     else:
         # 从指定范围初始化并演化微分方程
         t = np.arange(0., total_t, dt)
@@ -126,11 +126,11 @@ def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step,
 
         # subsampling
         step_length = int(tau/dt) if tau!=0. else 1
-        squence_length = 2 if tau!=0. else 1
+        sequence_length = 2 if tau!=0. else 1
 
         assert step_length<=data_item.shape[1], f"Tau {tau} is larger than the simulation time length {dt*data_item.shape[1]}"
         sequences = data_item[:, ::step_length]
-        sequences = sequences[:, :squence_length]
+        sequences = sequences[:, :sequence_length]
         
         # save
         np.savez(data_dir+f'/{item}_static.npz', data=sequences)
@@ -145,9 +145,109 @@ def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step,
 
         plt.figure(figsize=(16,10))
         plt.title(f'{item.capitalize()} Data')
-        plt.plot(sequences[:,squence_length-1,0,0], label='u')
-        plt.plot(sequences[:,squence_length-1,0,1], label='v')
+        plt.plot(sequences[:,sequence_length-1,0,0], label='u')
+        plt.plot(sequences[:,sequence_length-1,0,1], label='v')
         plt.legend()
         plt.savefig(data_dir+f'/{item}_static_target.pdf', dpi=300)
+    
+
+def generate_dataset_sliding_window(tau, u_bound, v_bound, total_t, dt, n_trace, u_step, v_step, data_dir, sequence_length=None):
+
+    data_dir = data_dir + f'u0={u_bound:.2f}_v0={v_bound:.2f}'
+
+    if os.path.exists(f'{data_dir}/origin_{n_trace}.npz'): 
+        # 导入数据
+        simdata = np.load(f'{data_dir}/origin_{n_trace}.npz')['trace']
+    else:
+        # 从指定范围初始化并演化微分方程
+        t = np.arange(0., total_t, dt)
+        simdata = simulation(u_bound, v_bound, t, n_trace, u_step, v_step, data_dir)
+    
+    # reshape
+    simdata = simdata.reshape(n_trace, -1, 1, 2)  # (n_trace, time_length, channel=1, feature_num=2)
+
+    # save statistic information
+    data_dir = data_dir + f"/tau_{tau}"
+    os.makedirs(data_dir, exist_ok=True)
+    np.savetxt(data_dir + "/data_mean.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_std.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_max.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_min.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/tau.txt", [tau])  # Save the timestep
+
+    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_std_static.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_max_static.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/data_min_static.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(data_dir + "/tau_static.txt", [tau])  # Save the timestep
+
+    ##################################
+    # Create [train,val,test] dataset
+    ##################################
+    train_num = int(0.7*n_trace)
+    val_num = int(0.1*n_trace)
+    test_num = int(0.2*n_trace)
+    trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
+    for item in ['train','val','test']:
+        
+        if sequence_length is None and os.path.exists(data_dir+f'/{item}.npz'): continue
+        if sequence_length is not None and os.path.exists(data_dir+f'/{item}_{sequence_length}.npz'): continue
+        
+        # select trace num
+        N_TRACE = len(trace_list[item])
+        data_item = simdata[trace_list[item]]
+
+        # subsampling
+        step_length = int(tau/dt) if tau!=0. else 1
+        # single-sample time steps
+        if sequence_length is None:
+            s_length = 2 if tau != 0. else 1
+            seq_none = True
+        else:
+            s_length = sequence_length
+            seq_none = False
+        
+        # select sliding window index from N trace
+        idxs_timestep = []
+        idxs_ic = []
+        for ic in range(N_TRACE):
+            seq_data = data_item[ic]
+            idxs = np.arange(0, np.shape(seq_data)[0]-step_length*(s_length-1), 1)
+            for idx_ in idxs:
+                idxs_ic.append(ic)
+                idxs_timestep.append(idx_)
+
+        # generator item dataset
+        sequences = []
+        parallel_sequences = [[] for _ in range(N_TRACE)]
+        for bn in range(len(idxs_timestep)):
+            idx_ic = idxs_ic[bn]
+            idx_timestep = idxs_timestep[bn]
+            tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(s_length-1)+1 : step_length]
+            sequences.append(tmp)
+            parallel_sequences[idx_ic].append(tmp)
+
+        sequences = np.array(sequences) 
+        
+        # save
+        if not seq_none:
+            np.savez(data_dir+f'/{item}_{s_length}.npz', data=sequences)
+        else:
+            np.savez(data_dir+f'/{item}.npz', data=sequences)
+
+        # plot
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,0,0,0], label='u')
+        plt.plot(sequences[:,0,0,1], label='v')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
+
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        plt.plot(sequences[:,s_length-1,0,0], label='u')
+        plt.plot(sequences[:,s_length-1,0,1], label='v')
+        plt.legend()
+        plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
 
 # generator_data(tau=0.2, u_bound=-2., v_bound=-0.5, total_t=20., dt=0.01, n_trace=50, u_step=0.8, v_step=0.4, data_dir='Data/FHN_grid5/')

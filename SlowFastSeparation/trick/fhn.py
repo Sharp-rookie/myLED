@@ -24,9 +24,9 @@ dt = 0.01
 t = np.arange(t0, tf, dt)
 
 # 定义初值范围和轨迹数
-n_trace = 500
-u_step = 0.8
-v_step = 0.4
+n_trace = 100
+u_step = 0.2
+v_step = 0.1
 images = []
 flag = True
 for u_bound in np.arange(-2.,2.,u_step):

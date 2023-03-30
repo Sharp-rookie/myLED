@@ -82,14 +82,14 @@ def plot_id_per_tau(tau_list, id_epoch, log_dir):
                 id_per_tau[i].append([MLE_id])
     
     for i in range(len(tau_list)):
+        if len(id_per_tau[i])==0:
+            id_per_tau[i].append([0.])
         id_per_tau[i] = np.mean(id_per_tau[i], axis=0)
     id_per_tau = np.array(id_per_tau)
 
     round_id_per_tau = []
     for id in id_per_tau:
-        if math.isnan(id[0]):
-            id[0] = 0.
-        round_id_per_tau.append([round(id[0])])
+        round_id_per_tau.append([round(np.mean(id))])
     round_id_per_tau = np.array(round_id_per_tau)
 
     plt.figure(figsize=(6,6))
