@@ -5,6 +5,9 @@
 *.pth
 *.gif
 *.h5
+*.zip
+*.tar
+*.tar.gz
 *.npz
 *.npy
 *.jpg
