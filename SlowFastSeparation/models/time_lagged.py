@@ -4,18 +4,20 @@ from torch import nn
 from .weight_init import normal_init
 
 
-class EncodeCell(nn.Module):
+class EncodeLayer(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, flatten=False, dropout=False, net='MLP', act=True):
-        super(EncodeCell, self).__init__()
+    def __init__(self, input_dim, hidden_dim, flatten=False, dropout=False, net='MLP', activate=False, layernorm=False):
+        super(EncodeLayer, self).__init__()
 
         assert net in ['MLP', 'GRU1', 'GRU2', 'LSTM', 'LSTM-changed'], f"Encoder Net Error, {net} not implemented!"
+        if activate==True and net!='MLP': print("Warning: Activate only works for MLP!")
 
         self.net = net
 
-        self.act = act
+        self.activate = activate
         self.flatten = nn.Flatten() if flatten else None
         self.dropout = nn.Dropout(p=0.01) if dropout else None
+        self.layernorm = nn.LayerNorm(hidden_dim) if layernorm else None
 
         self.w1 = nn.Parameter(torch.normal(mean=0., std=0.01, size=(input_dim, hidden_dim)))
         self.b1 = nn.Parameter(torch.zeros(hidden_dim))
@@ -40,10 +42,7 @@ class EncodeCell(nn.Module):
             x = self.flatten(x)
         
         if self.net == 'MLP':
-            if self.act:
-                y = self.tanh(x @ self.w1 + self.b1)
-            else:
-                y = x @ self.w1 + self.b1
+            y = x @ self.w1 + self.b1
         elif self.net == 'GRU1':
             z = self.sigmoid(x @ self.w1 + self.b1)
             h = self.tanh(x @ self.w2 + self.b2)
@@ -63,6 +62,12 @@ class EncodeCell(nn.Module):
             I = self.sigmoid(x @ self.w2 + self.b2)
             C = self.tanh(x @ self.w3 + self.b3)
             y = (1-O) * self.tanh(I * C)
+        
+        if self.layernorm:
+            y = self.layernorm(y)
+        
+        if self.activate and self.net == 'MLP':
+            y = self.tanh(y)
 
         if self.dropout:
             y = self.dropout(y)
@@ -76,10 +81,18 @@ class TimeLaggedAE(nn.Module):
         super(TimeLaggedAE, self).__init__()
                 
         # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)
-        assert e1_layer_n>1, f"Layer num of encoder_1 must larger than 1, but is {e1_layer_n}"
-        self.encoder = nn.Sequential(EncodeCell(in_channels*feature_dim, 64, True, True, enc_net))
-        [self.encoder.append(EncodeCell(64, 64, False, True, enc_net)) for _ in range(e1_layer_n-2)]
-        self.encoder.append(EncodeCell(64, embed_dim, False, False, enc_net, False))
+        assert e1_layer_n>=1, f"Layer num of encoder_1 must larger than 0, but is {e1_layer_n}"
+        self.encoder = nn.Sequential()
+        enc_layer_num = e1_layer_n + 1  # layer num = hidden layer num + 1
+        for i in range(enc_layer_num):
+            self.encoder.append(EncodeLayer(
+                input_dim  = 64 if i>0 else in_channels*feature_dim, 
+                hidden_dim = 64 if i<enc_layer_num-1 else embed_dim, 
+                flatten    = False if i>0 else True, 
+                dropout    = True if i<enc_layer_num-1 else False, 
+                net        = enc_net, 
+                activate   = True if i<enc_layer_num-1 else False, 
+                layernorm  = True if i<enc_layer_num-1 else False))
         # self.encoder = nn.Sequential(
         #     nn.Flatten(),
         #     nn.Linear(in_channels*feature_dim, 64, bias=True),

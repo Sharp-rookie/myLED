@@ -1,14 +1,14 @@
-#--------------------------------FHN--------------------------------
+#--------------------------------FHN-------------------------------- 
 model=ours
 enc_net=MLP
-e1_layer_n=2
+e1_layer_n=1
 sample_type=static
 channel_num=1
 data_dim=2
 grid=20
 system=FHN_2d_grid$grid
 obs_dim=$data_dim
-trace_num=2000
+trace_num=1000
 total_t=50.
 dt=0.01
 lr=0.001

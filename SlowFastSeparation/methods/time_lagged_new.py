@@ -48,7 +48,8 @@ def train_time_lagged(
     # training params
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    mse_loss = nn.MSELoss()
+    # mse_loss = nn.MSELoss()
+    mse_loss = nn.L1Loss()
     l1_loss = nn.L1Loss()
 
     # dataset
@@ -60,7 +61,7 @@ def train_time_lagged(
     # training pipeline
     losses = []
     loss_curve = []
-    for epoch in range(1, max_epoch+1):
+    for epoch in range(0, max_epoch):
         
         # train
         model.train()
@@ -102,10 +103,12 @@ def train_time_lagged(
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE: prior={prior_loss:.5f}, reverse={reverse_loss:.5f}, symmetry={symmetry_loss:.5f}', end='')
         
         # save each epoch model
-        interval = 200
-        if epoch % interval == 1:
-            model.train()
-            torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
+        # interval = 200
+        # if epoch % interval == 1:
+            # model.train()
+            # torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
+    model.train()
+    torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{max_epoch}.ckpt")
         
     # plot loss curve
     plt.figure()
@@ -144,7 +147,8 @@ def test_and_save_embeddings_of_time_lagged(
     data_filepath = data_dir + 'tau_' + str(tau)
     
     # testing params
-    loss_func = nn.MSELoss()
+    # loss_func = nn.MSELoss()
+    loss_func = nn.L1Loss()
     
     # init model
     model = models.TimeLaggedAE(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
@@ -160,7 +164,8 @@ def test_and_save_embeddings_of_time_lagged(
     # testing pipeline
     fp = open(log_dir + 'tau_' + str(tau) + '/test_log.txt', 'a')
     interval = 200
-    for ep in range(0, max_epoch, interval):
+    # for ep in range(-1, max_epoch-1, interval):
+    for ep in [max_epoch-1]:
         
         # load weight file
         epoch = ep

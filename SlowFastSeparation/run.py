@@ -28,7 +28,7 @@ def ID_subworker(args, tau, data_dir, id_log_dir, random_seed=729, is_print=Fals
     train_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, is_print, random_seed, data_dir, id_log_dir, args.device, args.data_dim, args.lr, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
 
     # test and calculating ID
-    test_and_save_embeddings_of_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, None, is_print, random_seed, data_dir, id_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
+    # test_and_save_embeddings_of_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, None, is_print, random_seed, data_dir, id_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
     test_and_save_embeddings_of_time_lagged(args.system, args.embedding_dim, args.channel_num, args.obs_dim, tau, args.id_epoch, id_log_dir+f"tau_{tau}/seed{random_seed}", is_print, random_seed, data_dir, id_log_dir, args.device, args.data_dim, args.batch_size, args.enc_net, args.e1_layer_n, sliding_window)
 
 
@@ -106,6 +106,8 @@ def Learn_Slow_Fast(args, data_dir, ckpt_path, learn_log_dir, mode='train'):
 def local_ID_estimate(args, u_bound, v_bound, u_step, v_step):
 
     assert args.trace_num>=500, "trace_num should be large in FHN Time Selecting Process!"
+
+    if os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/id_per_tau.pdf'): return
 
     # generate local dataset
     print('Generating local dataset...')
@@ -201,7 +203,7 @@ def plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_
         ax.set_xticklabels((u_step/2+np.arange(u_min, u_max, u_step)).round(2), fontsize=12)
         ax.set_yticklabels((v_step/2+np.arange(v_min, v_max, v_step)).round(2), fontsize=12)
         ax.set_zticks(np.arange(0, 1.1e-2, 2e-3))
-        ax.set_zticklabels(np.arange(0, 1.1e-2, 2e-3).round(3))
+        ax.set_zticklabels(np.arange(0, 1.1e-2, 2e-3).round(3), fontsize=12)
         ax.view_init(35, 20)
         plt.gca().invert_xaxis()
         # 画柱状图
@@ -281,15 +283,13 @@ if __name__ == '__main__':
     for i in range(args.grid):
         for j in range(args.grid):
             u = u_bound[i, j]
-            v = v_bound[i, j]
-            print(f'u0 = {u:.2f}', f'v0 = {v:.2f}')
+            v = v_bound[i, j] 
+            print(f'\nu0 = {u:.2f}', f'v0 = {v:.2f}')
             # if round(v,2)>-0.25:
             #     continue
-            if os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/id_per_tau.pdf'):
-                continue
             local_ID_estimate(args, u, v, u_step, v_step)
-            if i%4==0 and j%4==0:  # 只取1/16的区域提取慢变量，避免子进程过多挤占资源
-                dynamic_learn_workers.append(*local_Dynamic_Learn(args, 50, u, v, u_step, v_step))
+            # if i%4==0 and j%4==0:  # 只取1/16的区域提取慢变量，避免子进程过多挤占资源
+            #     dynamic_learn_workers.append(*local_Dynamic_Learn(args, 50, u, v, u_step, v_step))
             get_local_ID_per_tau(args, u, v, u_min, v_min, u_step, v_step, id_heatmap, loss_tau)
     plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_step, v_min, v_max)
 

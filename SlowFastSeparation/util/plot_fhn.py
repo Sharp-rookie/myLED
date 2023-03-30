@@ -79,6 +79,10 @@ def plot_id_per_tau(tau_list, id_epoch, log_dir):
             MLE_id = float(line[:-1].split(',')[5])
 
             if epoch in id_epoch:
+                if MLE_id == float('inf'):
+                    MLE_id = 0.
+                elif math.isnan(MLE_id):
+                    MLE_id = 0.
                 id_per_tau[i].append([MLE_id])
     
     for i in range(len(tau_list)):

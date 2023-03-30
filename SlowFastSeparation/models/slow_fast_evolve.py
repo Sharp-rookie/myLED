@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from .weight_init import normal_init
-from .time_lagged import EncodeCell
+from .time_lagged import EncodeLayer
 
 
 class Koopman_OPT(nn.Module):
@@ -89,11 +89,18 @@ class DynamicsEvolver(nn.Module):
         self.redundant_dim = redundant_dim
         
         # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)
-        assert enc_net in ['MLP', 'GRU1', 'GRU2', 'LSTM', 'LSTM-changed'], f"Encoder Net Error, {enc_net} not implemented!"
-        assert e1_layer_n>1, f"Layer num of encoder_1 must larger than 1, but is {e1_layer_n}"
-        self.encoder_1 = nn.Sequential(EncodeCell(in_channels*feature_dim, 64, True, True, enc_net))
-        [self.encoder_1.append(EncodeCell(64, 64, False, True, enc_net)) for _ in range(e1_layer_n-2)]
-        self.encoder_1.append(EncodeCell(64, embed_dim, False, False, enc_net, False))
+        assert e1_layer_n>=1, f"Layer num of encoder_1 must larger than 0, but is {e1_layer_n}"
+        self.encoder_1 = nn.Sequential()
+        enc_layer_num = e1_layer_n + 1  # layer num = hidden layer num + 1
+        for i in range(enc_layer_num):
+            self.encoder_1.append(EncodeLayer(
+                input_dim  = 64 if i>0 else in_channels*feature_dim, 
+                hidden_dim = 64 if i<enc_layer_num-1 else embed_dim, 
+                flatten    = False if i>0 else True, 
+                dropout    = True if i<enc_layer_num-1 else False, 
+                net        = enc_net, 
+                activate   = True if i<enc_layer_num-1 else False, 
+                layernorm  = True if i<enc_layer_num-1 else False))
         # self.encoder_1 = nn.Sequential(
         #     nn.Flatten(),
         #     nn.Linear(in_channels*feature_dim, 64, bias=True),
