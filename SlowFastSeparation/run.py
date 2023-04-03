@@ -77,8 +77,8 @@ def ID_Estimate(args, data_dir, id_log_dir):
     while args.parallel and any([sub.exitcode==None for sub in workers]):
         pass
 
-    # plot ID curve
-    # [plot_epoch_test_log(round(tau,2), max_epoch=args.id_epoch+1, log_dir=id_log_dir) for tau in T]
+    # # plot ID curve
+    # # [plot_epoch_test_log(round(tau,2), max_epoch=args.id_epoch+1, log_dir=id_log_dir) for tau in T]
     plot_id_per_tau(T, np.arange(args.id_epoch-200, args.id_epoch+1, 1), log_dir=id_log_dir)
     
 
@@ -107,7 +107,9 @@ def local_ID_estimate(args, u_bound, v_bound, u_step, v_step):
 
     assert args.trace_num>=500, "trace_num should be large in FHN Time Selecting Process!"
 
-    if os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/id_per_tau.pdf'): return
+    if os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/tau_0.0/test_log.txt') and \
+        os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/tau_0.0/id_per_tau.pdf'): 
+        return
 
     # generate local dataset
     print('Generating local dataset...')
@@ -149,15 +151,15 @@ def get_local_ID_per_tau(args, u, v, u_min, v_min, u_step, v_step, id_heatmap, l
 
     for tau in np.arange(args.tau_1, args.tau_N+args.dt, args.tau_unit):
         tau = round(tau, 2)
-        u_index = int((u-u_min)/u_step)
-        v_index = int((v-v_min)/v_step)
-        tau_index = int((tau-args.tau_1)/args.tau_unit)
+        u_index = round((u-u_min)/u_step)
+        v_index = round((v-v_min)/v_step)
+        tau_index = round((tau-args.tau_1)/args.tau_unit)
         
         with open(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/'+f'tau_{tau}/test_log.txt', 'r') as log:
             id_heatmap[tau_index, u_index, v_index] = float(log.readlines()[-1].split(',')[-1])
-        
+       
         loss_f = np.load(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}'+f'/tau_{tau}/seed1/training_loss.npy')
-        loss_tau[tau_index, u_index, v_index] = loss_f[-1,0]
+        loss_tau[tau_index, u_index, v_index] = loss_f[-1, 0]
 
 
 def plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_step, v_min, v_max):
@@ -202,8 +204,8 @@ def plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_
         ax.set_yticks(np.arange(0, args.grid, 1))
         ax.set_xticklabels((u_step/2+np.arange(u_min, u_max, u_step)).round(2), fontsize=12)
         ax.set_yticklabels((v_step/2+np.arange(v_min, v_max, v_step)).round(2), fontsize=12)
-        ax.set_zticks(np.arange(0, 1.1e-2, 2e-3))
-        ax.set_zticklabels(np.arange(0, 1.1e-2, 2e-3).round(3), fontsize=12)
+        ax.set_zticks(np.arange(0, 5e-2, 1e-2))
+        ax.set_zticklabels(np.arange(0, 5e-2, 1e-2).round(3), fontsize=12)
         ax.view_init(35, 20)
         plt.gca().invert_xaxis()
         # 画柱状图
@@ -283,13 +285,13 @@ if __name__ == '__main__':
     for i in range(args.grid):
         for j in range(args.grid):
             u = u_bound[i, j]
-            v = v_bound[i, j] 
+            v = v_bound[i, j]
             print(f'\nu0 = {u:.2f}', f'v0 = {v:.2f}')
-            # if round(v,2)>-0.25:
-            #     continue
+            
             local_ID_estimate(args, u, v, u_step, v_step)
             # if i%4==0 and j%4==0:  # 只取1/16的区域提取慢变量，避免子进程过多挤占资源
             #     dynamic_learn_workers.append(*local_Dynamic_Learn(args, 50, u, v, u_step, v_step))
+    
             get_local_ID_per_tau(args, u, v, u_min, v_min, u_step, v_step, id_heatmap, loss_tau)
     plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_step, v_min, v_max)
 

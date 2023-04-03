@@ -122,19 +122,18 @@ def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3
 
 def plot_autocorr(T, dt=0.01):
 
-    if os.path.exists('Data/FHN/autocorr.pdf'): return
+    # if os.path.exists('Data/FHN/autocorr.pdf'): return
 
-    simdata = np.load('Data/FHN/origin/origin.npz')
+    simdata = np.load('result.npz')
     
-    trace_num = 3
-    corrV, corrW, corrB = [[] for _ in range(trace_num)], [[] for _ in range(trace_num)], [[] for _ in range(trace_num)]
+    trace_num = 10
+    corrU, corrV = [[] for _ in range(trace_num)], [[] for _ in range(trace_num)]
     for trace_id in range(trace_num):
-        tmp = np.array(simdata['trace'])[trace_id]
-        v = tmp[:,0][:,np.newaxis]
-        w = tmp[:,1][:,np.newaxis]
-        b = tmp[:,2][:,np.newaxis]
+        tmp = np.array(simdata['results'])[trace_id]
+        u = tmp[:,0][:,np.newaxis]
+        v = tmp[:,1][:,np.newaxis]
 
-        data = pd.DataFrame(np.concatenate((v,w,b), axis=-1), columns=['v','w','b'])
+        data = pd.DataFrame(np.concatenate((u,v), axis=-1), columns=['u','v'])
         
         fig, ax = plt.subplots(figsize=(6,6))
         corr = data.corr()
@@ -149,31 +148,28 @@ def plot_autocorr(T, dt=0.01):
                 text = ax.text(j, i, round(corr.iloc[i, j], 2),
                             ha='center', va='center', color='w')
         fig.colorbar(im)
-        plt.savefig('Data/FHN/corr.pdf', bbox_inches='tight')
+        plt.savefig('corr.pdf', bbox_inches='tight')
 
         lag_list = np.arange(0, T*int(1/dt), int(1/dt))
         for lag in tqdm(lag_list):
+            corrU[trace_id].append(data['u'].autocorr(lag=lag))
             corrV[trace_id].append(data['v'].autocorr(lag=lag))
-            corrW[trace_id].append(data['w'].autocorr(lag=lag))
-            corrB[trace_id].append(data['b'].autocorr(lag=lag))
     
+    corrU = np.mean(corrU, axis=0)
     corrV = np.mean(corrV, axis=0)
-    corrW = np.mean(corrW, axis=0)
-    corrB = np.mean(corrB, axis=0)
 
     plt.figure(figsize=(6,6))
-    plt.plot(lag_list*dt, np.array(corrV), marker="o", markersize=6, label=r'$v$')
-    plt.plot(lag_list*dt, np.array(corrW), marker="^", markersize=6, label=r'$w$')
-    plt.plot(lag_list*dt, np.array(corrB), marker="D", markersize=6, label=r'$b$')
+    plt.plot(lag_list*dt, np.array(corrU), marker="o", markersize=6, label=r'$v$')
+    plt.plot(lag_list*dt, np.array(corrV), marker="^", markersize=6, label=r'$w$')
     plt.xlabel(r'$t/s$', fontsize=18)
     plt.ylabel('Autocorrelation coefficient', fontsize=18)
     plt.xticks(fontsize=16)
     plt.yticks(fontsize=16)
     plt.legend()
     # plt.subplots_adjust(bottom=0.15, left=0.2)
-    plt.savefig('Data/FHN/autocorr.pdf', dpi=300)
+    plt.savefig('autocorr.pdf', dpi=300)
 
-    np.savez('Data/1S2F/autocorr.npz', corrV=corrV, corrW=corrW, corrB=corrB)
+    # np.savez('autocorr.npz', corrV=corrU, corrW=corrV)
     
     
 def plot_evolve(length):
@@ -284,5 +280,5 @@ def plot_evolve(length):
 
 if __name__ == '__main__':
     
-    plot_fhn_autocorr(T=15)
+    plot_autocorr(T=300)
     # plot_evolve(0.8)

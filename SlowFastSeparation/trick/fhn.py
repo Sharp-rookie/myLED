@@ -17,33 +17,35 @@ def fhn(y, t):
     return [dudt, dvdt]
 
 
-n_trace = 500
+n_trace = 100
 # n_trace = 50
-grid = 5
-u_min, u_max = -2., 2.
-v_min, v_max = -0.5, 1.5
+grid = 50
+u_min, u_max = -20., 20.
+v_min, v_max = -15., 15.
 u_step = (u_max-u_min)/grid
 v_step = (v_max-v_min)/grid
-dpi = 150
-fhn_dir = 'FHN_macro'
+dpi = 300
+# fhn_dir = 'FHN_macro'
+fhn_dir = 'FHN_large'
 # fhn_dir = 'FHN_micro'
-for tf in range(1, 40+1):
+# for tf in range(1, 40+1):
+for tf in [300]:
     dt = 0.01
     t = np.arange(0, tf, dt)
 
     # 定义初值范围和轨迹数
     images = []
     flag = True
-    for u_bound in np.arange(-2.,2.,u_step):
+    for u_bound in np.arange(u_min, u_max, u_step):
         if flag:
-            iter = np.arange(-0.5,1.5,v_step)
+            iter = np.arange(v_min, v_max, v_step)
             flag = False
         else:
-            iter = np.arange(1.5-v_step,-0.5-v_step,-v_step)
+            iter = np.arange(v_max-v_step, v_min-v_step, -v_step)
             flag = True
         
         for v_bound in iter:
-        # for v_bound in np.arange(-0.5,1.5,v_step):
+        # for v_bound in np.arange(v_min, v_max, v_step):
 
             print(f'\rRunning FHN u0={u_bound:.2f} v0={v_bound:.2f}', end='')
         
@@ -85,9 +87,9 @@ for tf in range(1, 40+1):
                 sol = results[j]
                 ax.plot(sol[:, 1], sol[:, 0], c='b', alpha=0.05, label='trajectory' if j==0 else None)
             # 绘制u、v的nullcline
-            u1 = np.linspace(-2.,2.,100)
+            u1 = np.linspace(u_min, u_max, 100)
             v1 = u1-u1**3/3+0.5
-            v2 = np.linspace(-0.5,1.5,100)
+            v2 = np.linspace(v_min, v_max, 100)
             u2 = 0.8*v2 - 0.7
             ax.plot(v1, u1, c='r', label='u-nullcline (slow manifold))')
             ax.plot(v2, u2, c='g', label='v-nullcline(dv/dt=0)')
@@ -95,17 +97,18 @@ for tf in range(1, 40+1):
             ax.set_ylabel('u (fast)')
             ax.legend(loc='upper right')
             # 注明dudt、dvdt的正负
-            ax.text(0.28, 0.89, r'$\frac{du}{dt} > 0$', transform=ax.transAxes, fontsize=14)
-            ax.text(0.8, 0.5, r'$\frac{dv}{dt} < 0$', transform=ax.transAxes, fontsize=14)
+            # ax.text(0.28, 0.7, r'$\frac{du}{dt} > 0$', transform=ax.transAxes, fontsize=14)
+            ax.text(0.28, 0.5, r'$\frac{du}{dt} > 0$', transform=ax.transAxes, fontsize=14)
+            ax.text(0.8, 0.6, r'$\frac{dv}{dt} < 0$', transform=ax.transAxes, fontsize=14)
             # 绘制初始范围框
             ax.add_patch(plt.Rectangle((v_bound, u_bound), v_step, u_step, fill=False, edgecolor='k', lw=1))
             # 绘制全局所有初始范围框
-            for _u_bound in np.arange(-2.,2.,u_step):
-                for _v_bound in np.arange(-0.5,1.5,v_step):
+            for _u_bound in np.arange(u_min, u_max, u_step):
+                for _v_bound in np.arange(v_min, v_max, v_step):
                     ax.add_patch(plt.Rectangle((_v_bound, _u_bound), v_step, u_step, fill=False, edgecolor='k', lw=0.5, alpha=0.5))
             # 设置x、y轴范围
-            ax.set_xlim(-0.6, 1.6)
-            ax.set_ylim(-2.1, 2.1)
+            ax.set_xlim(v_min-0.1, v_max+0.1)
+            ax.set_ylim(u_min-0.1, u_max+0.1)
             ax.set_title(f'{n_trace} trajectories simulated for {tf}s')
             plt.savefig(f'{dir}/phase.jpg', dpi=dpi)
             plt.close()

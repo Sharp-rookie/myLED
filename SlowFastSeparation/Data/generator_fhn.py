@@ -89,6 +89,11 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir):
 def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step, v_step, data_dir):
 
     data_dir = data_dir + f'u0={u_bound:.2f}_v0={v_bound:.2f}'
+    
+    if os.path.exists(data_dir+f'/train_static.npz') and \
+        os.path.exists(data_dir+f'/val_static.npz') and \
+            os.path.exists(data_dir+f'/test_static.npz'): 
+        return
 
     if os.path.exists(f'{data_dir}/origin_{n_trace}.npz'): 
         # 导入数据
