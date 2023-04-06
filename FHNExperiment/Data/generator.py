@@ -121,7 +121,7 @@ def generate_origin_data(tf=451, dt=0.001, epsilon=0.006):
         x = np.loadtxt("Data/ICs/y0x.txt", delimiter="\n")
         
         # simulate by LBM
-        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf, dt, epsilon)
+        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf = run_lb_fhn_ic(f_id, len(file_names), rho_act_0, rho_in_0, tf, dt)
 
         # record
         rho_act_all.append(rho_act)
@@ -138,7 +138,7 @@ def generate_origin_data(tf=451, dt=0.001, epsilon=0.006):
     plot_original_data(np.array(rho_act_all), np.array(rho_in_all), np.array(x), tf, dt, np.array(t_vec_all))
 
     
-def analysis_noise_data(tf=451, dt=0.001, epsilon=0.006, a1=2.):
+def analysis_noise_data(tf=451, dt=0.001):
 
     file_names = ["y00"]
 
@@ -148,12 +148,12 @@ def analysis_noise_data(tf=451, dt=0.001, epsilon=0.006, a1=2.):
     for f_id, file_name in enumerate(file_names):
         
         # load inital-condition file
-        rho_act_0 = np.loadtxt(f"Data/ICs/{file_name}u.txt", delimiter="\n")
-        rho_in_0 = np.loadtxt(f"Data/ICs/{file_name}v.txt", delimiter="\n")
-        x = np.loadtxt("Data/ICs/y0x.txt", delimiter="\n")
+        rho_act_0 = np.loadtxt(f"/home/lrk/myLED/FHNExperiment/Data/ICs/{file_name}u.txt", delimiter="\n")
+        rho_in_0 = np.loadtxt(f"/home/lrk/myLED/FHNExperiment/Data/ICs/{file_name}v.txt", delimiter="\n")
+        x = np.loadtxt("/home/lrk/myLED/FHNExperiment/Data/ICs/y0x.txt", delimiter="\n")
         
         # simulate by LBM
-        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf = run_lb_fhn_ic(f_id, 2, rho_act_0, rho_in_0, tf, dt, epsilon, a1)
+        rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf = run_lb_fhn_ic(f_id, 1, rho_act_0, rho_in_0, tf, dt)
 
         # record
         rho_act_all.append(rho_act)
@@ -164,14 +164,14 @@ def analysis_noise_data(tf=451, dt=0.001, epsilon=0.006, a1=2.):
     
     # plot ICs
     fig, (ax1, ax2) = plt.subplots(1,2,figsize=(15,6))
-    for ic in range(len(rho_act_all)-1):
+    for ic in range(len(rho_act_all)):
         ax1.plot(x, rho_act_all[ic,0,:], label=f"ic[{ic}]", linewidth=2)
     ax1.set_ylabel(r"$u(x,t=0)$")
     ax1.set_xlabel(r"$x$")
     ax1.set_xlim([np.min(x), np.max(x)])
     ax1.set_title("Activator")
 
-    for ic in range(len(rho_in_all)-1):
+    for ic in range(len(rho_in_all)):
         ax2.plot(x, rho_in_all[ic,0,:], label=f"ic[{ic}]", linewidth=2)
     ax2.set_ylabel(r"$v(x,t=0)$")
     ax2.set_xlabel(r"$x$")
@@ -256,7 +256,7 @@ def analysis_noise_data(tf=451, dt=0.001, epsilon=0.006, a1=2.):
         #     return line, ax
         # anim = animation.FuncAnimation(fig, update, frames=np.arange(0, 200), interval=1)
         # anim.save(f'in_eps{epsilon}_a{a1}.gif', dpi=100, writer='pillow')
-analysis_noise_data(tf=1000.1, dt=0.01, epsilon=0.006, a1=2.)
+analysis_noise_data(tf=210.1, dt=0.001)
 
 
 def generate_tau_dataset(tau, sample_num=None, is_print=False, sequence_length=None):

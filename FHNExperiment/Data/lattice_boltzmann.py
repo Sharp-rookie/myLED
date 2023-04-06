@@ -72,10 +72,11 @@ def LBM(f1_act, f_1_act, f0_act, f1_in, f_1_in, f0_in, omegas, a1, a0, epsilon, 
     return f1_act_next, f_1_act_next, f0_act_next, f1_in_next, f_1_in_next, f0_in_next
 
 
-def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt, epsilon=0.006, a1=2.):
+def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt):
     ###########################################
     ## Simulation of the Lattice Boltzman Method
     ## for the FitzHugh-Nagumo
+    ## u: activator, v: inhibitor
     ###########################################
 
     N = 100
@@ -83,37 +84,19 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt, epsilon=0.006, a1=2.):
     x = np.linspace(0, L, N+1)
     dx = x[1]-x[0]
 
-    Dx = 1 # Dact (activator)
-    Dy = 4 # Din  (inhibitor)
-
-    # a0 = -0.03
-    # a1 = 2.0
+    epsilon=0.006  # Bifurcation parameter
+    Du = 1.
+    Dv = 4.
+    a1 = 2.
     a0 = -0.03
-    # a1 = 2.
 
-    omegas = [2/(1+3*Dx*dt/(dx*dx)), 2/(1+3*Dy*dt/(dx*dx))]
+    omegas = [2/(1+3*Du*dt/(dx*dx)), 2/(1+3*Dv*dt/(dx*dx))]
     n1 = 1/3
-
-    # # Bifurcation parameter
-    # epsilon = 0.006
 
     t = 0
     it = 0
 
     N_T = int(np.ceil(tf/dt))+1
-
-    # Storing the density
-    rho_act = np.zeros((N_T, N+1))
-    rho_in  = np.zeros((N_T, N+1))
-    t_vec   = np.zeros((N_T))
-
-    # Storing momentum terms
-    mom_act = np.zeros((N_T, N+1))
-    mom_in  = np.zeros((N_T, N+1))
-
-    # Storing energy terms
-    energ_act = np.zeros((N_T, N+1))
-    energ_in  = np.zeros((N_T, N+1))
 
     # Activator
     f1_act  = 1/3*rho_act_0
@@ -133,7 +116,12 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt, epsilon=0.006, a1=2.):
     mom_in_t   = f1_in - f_1_in
     energ_in_t = 0.5 * (f1_in + f_1_in)
 
+    rho_act, rho_in, t_vec = np.zeros((N_T, N+1)), np.zeros((N_T, N+1)), np.zeros((N_T))  # u, v density
+    mom_act,mom_in = np.zeros((N_T, N+1)), np.zeros((N_T, N+1))  # Momentum terms
+    energ_act, energ_in = np.zeros((N_T, N+1)), np.zeros((N_T, N+1))  # Energy terms
+
     while np.abs(t-tf)>1e-6:
+
         print("\r Generating Data[{:d}/{:d}]: {:.3f}/{:.2f}. {:.2f}% (dt={:.3f})".format(id, num, t, tf, t/tf*100.0, dt), end=' ')
 
         # Propagate the Lattice Boltzmann in time
@@ -149,15 +137,12 @@ def run_lb_fhn_ic(id, num, rho_act_0, rho_in_0, tf, dt, epsilon=0.006, a1=2.):
         mom_in_t   = f1_in - f_1_in
         energ_in_t = 0.5 * (f1_in + f_1_in)
 
-        rho_act[it]     = rho_act_t
-        rho_in[it]      = rho_in_t
-        t_vec[it]       = t
-        mom_act[it]     = mom_act_t
-        mom_in[it]      = mom_in_t
-        energ_act[it]   = energ_act_t
-        energ_in[it]    = energ_in_t
+        # Saving the data
+        rho_act[it], rho_in[it], t_vec[it] = rho_act_t, rho_in_t, t
+        mom_act[it],mom_in[it] = mom_act_t, mom_in_t
+        energ_act[it], energ_in[it] = energ_act_t, energ_in_t
 
         it+=1
         t +=dt
 
-    return rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Dx, Dy, a0, a1, n1, omegas, tf
+    return rho_act, rho_in, t_vec, mom_act, mom_in, energ_act, energ_in, dt, N, L, dx, x, Du, Dv, a0, a1, n1, omegas, tf

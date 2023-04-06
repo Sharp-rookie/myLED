@@ -7,19 +7,59 @@ import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 
 
-class Net(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, n_layer):
-        super(Net, self).__init__()
+def weight_init(m):
+    if hasattr(m, 'weight'):
+        nn.init.normal_(m.weight, mean=0, std=0.01)
+        if hasattr(m, 'bias') and m.bias is not None:
+            nn.init.zeros_(m.bias)
+
+
+class RNN(nn.Module):
+    def __init__(self, input_size, hidden_size, horizon, output_size, n_layer):
+        super(RNN, self).__init__()
         self.n_layer = n_layer
         self.hidden_size = hidden_size
+        self.horizon = horizon
+        self.output_size = output_size
         self.rnn = nn.RNN(input_size, hidden_size, n_layer, batch_first=True)
+        self.gru = nn.GRU(input_size, hidden_size, n_layer, batch_first=True)
+        self.lstm = nn.LSTM(input_size, hidden_size, n_layer, batch_first=True)
         self.fc = nn.Linear(hidden_size, output_size)
+
+        self.apply(weight_init)
     
     def forward(self, x):
-        import ipdb;ipdb.set_trace()
         h0 = torch.zeros(self.n_layer, x.size(0), self.hidden_size).to(x.device)
-        out, _ = self.rnn(x, h0)
-        out = self.fc(out)
+        # c0 = torch.zeros(self.n_layer, x.size(0), self.hidden_size).to(x.device)
+        # out, h = self.rnn(x, h0)
+        out, h = self.gru(x, h0)
+        # out, (h, c) = self.lstm(x, (h0, c0))
+        if self.horizon == 1:
+            out = self.fc(out[:, -1])
+        else:
+            out = self.fc(out[:, -self.horizon:])
+        out = out.view(-1, self.horizon, self.output_size)
+        return out
+
+
+class MLP(nn.Module):
+    def __init__(self, lookback, input_size, hidden_size, horizon, output_size):
+        super(MLP, self).__init__()
+        self.horizon = horizon
+        self.output_size = output_size
+
+        self.fc1 = nn.Linear(lookback*input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, horizon*output_size)
+        self.relu = nn.ReLU()
+
+        self.apply(weight_init)
+    
+    def forward(self, x):
+        x = nn.Flatten()(x)
+        out = self.fc1(x)
+        out = self.relu(out)
+        out = self.fc2(out)
+        out = out.view(-1, self.horizon, self.output_size)
         return out
 
 
@@ -83,7 +123,7 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir, u_max, u_min, 
     ax.set_ylabel('u (fast)')
     ax.legend(loc='upper right')
     ax.text(0.2, 0.5, r'$\frac{du}{dt} > 0$', transform=ax.transAxes, fontsize=14)
-    ax.text(0.8, 0.6, r'$\frac{dv}{dt} < 0$', transform=ax.transAxes, fontsize=14)
+    ax.text(0.8, 0.4, r'$\frac{dv}{dt} < 0$', transform=ax.transAxes, fontsize=14)
     # 绘制初始范围框
     ax.add_patch(plt.Rectangle((v_bound, u_bound), v_step, u_step, fill=False, edgecolor='k', lw=1))
     # 绘制全局所有初始范围框
@@ -101,14 +141,15 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir, u_max, u_min, 
 
 def train():
 
+    n_trace = 1
     try:
-        data = np.load('v_fhn/origin_100.npz')['trace']
+        data = np.load(f'v_fhn/origin_{n_trace}.npz')['trace']
     except:
         simdata = simulation(
             u_bound=-2.0,
             v_bound=-0.5,
-            t=np.arange(0., 1000., 0.001),
-            n_trace=100,
+            t=np.arange(0., 2000., 1.),
+            n_trace=n_trace,
             u_step=4.0,
             v_step=2.0,
             dir='v_fhn',
@@ -117,50 +158,77 @@ def train():
             v_max=1.5,
             v_min=-0.5
             )
-        data = np.load('v_fhn/origin_100.npz')['trace']
+        data = np.load(f'v_fhn/origin_{n_trace}.npz')['trace']
     
-    train_data = data[:80]
-    test_data = data[80:]
+    data = data.astype(np.float32)
+    train_data = data[0, :200]
+    test_data = data[0, 200:]
 
-    train_x = train_data[:, :-1, 1].reshape(-1, 1, 1)  # 
-    train_y = train_data[:, 1:, 1].reshape(-1, 1)
-    test_x = test_data[:, :-1, :].reshape(-1, 2)
-    test_y = test_data[:, 1:,:].reshape(-1, 2)
-
+    lookback = 10  # 和NMI22用的相同
+    horizon = 1
+    window_size = lookback + horizon
+    train_data = np.array([train_data[i:i+window_size, :] for i in range(train_data.shape[0]-window_size)]).reshape(-1, window_size, 2)
+    test_data = np.array([test_data[i:i+window_size, :] for i in range(test_data.shape[0]-window_size)]).reshape(-1, window_size, 2)
+    train_x = train_data[:, :lookback, 1].reshape(-1, lookback, 1)  # (batch, 2, input_size)
+    test_x = test_data[:, :lookback, 1].reshape(-1, lookback, 1)
+    train_y = train_data[:, lookback:, :].reshape(-1, horizon, 2)  # (batch, 1, input_size)
+    test_y = test_data[:, lookback:, :].reshape(-1, horizon, 2)
+    
     train_dataset = TensorDataset(torch.from_numpy(train_x), torch.from_numpy(train_y))
-    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=128, shuffle=True, num_workers=8)
 
     device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
-    model = Net(input_size=1, hidden_size=64, output_size=2, n_layer=1).to(device)
+    model = RNN(input_size=1, hidden_size=32, horizon=horizon, output_size=2, n_layer=1).to(device)
+    # model = MLP(lookback=lookback, input_size=1, hidden_size=32, horizon=horizon, output_size=2).to(device)
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(1000):
-        model.train()
-        for i, (x, y) in enumerate(train_loader):
-            x, y = x.to(device), y.to(device)
-            optimizer.zero_grad()
-            pred = model(x)
-            loss = criterion(pred, y)
-            loss.backward()
-            optimizer.step()
-        if epoch % 10 == 0:
-            print(f'epoch: {epoch}, loss: {loss.item()}')
+    max_epoch = 1000
+
+    try:
+        model.load_state_dict(torch.load(f'v_fhn/model_{max_epoch}.pth'))
+    except:
+        for epoch in range(1, max_epoch+1):
+            model.train()
+            for i, (x, y) in enumerate(train_loader):
+                x, y = x.to(device), y.to(device)
+                optimizer.zero_grad()
+                pred = model(x)
+                loss = criterion(pred, y)
+                loss.backward()
+                optimizer.step()
+            if epoch % 1 == 0:
+                print(f'\repoch: {epoch}, loss: {loss.item():.6f}', end='')
+        torch.save(model.state_dict(), f'v_fhn/model_{max_epoch}.pth')
     
     model.eval()
+    pred = []
     with torch.no_grad():
-        pred = model(torch.from_numpy(test_x).to(device)).cpu().numpy()
-        plt.figure(figsize=(10,12))
-        for i in range(2):
-            ax = plt.subplot(2,1,i+1)
-            ax.plot(test_y[:, i], c='b', label='ground truth')
-            ax.plot(pred[:, i], c='r', label='prediction')
-            ax.set_xlabel('Time / s')
-            ax.set_ylabel(['u', 'v'][i])
-            ax.legend()
-        plt.subplots_adjust(hspace=0.3)
-        plt.savefig('v_fhn/prediction.jpg', dpi=300)
-        plt.close()
+        input = torch.from_numpy(data[:,:lookback,1].reshape(1, lookback, 1)).to(device)
+        out = model(input)
+        for i in range(len(data[0])-window_size):
+            input = torch.cat([input[:, horizon:, :], out.view(1, horizon, 2)[..., 1:]], dim=1)
+            out = model(input)
+            pred.append(out.cpu().tolist())
+    pred = np.array(pred).reshape(-1, 2)
+
+    plt.figure(figsize=(21, 6))
+    ax = plt.subplot(121)
+    ax.plot(data[0, window_size:, 0], c='b', label='true')
+    ax.plot(pred[:, 0], c='r', label='pred')
+    ax.set_xlabel('time')
+    ax.set_ylabel('u (fast)')
+    ax.legend()
+    ax.axvline(200, c='k', ls='--')
+    ax = plt.subplot(122)
+    ax.plot(data[0, window_size:, 1], c='b', label='true')
+    ax.plot(pred[:, 1], c='r', label='pred')
+    ax.set_xlabel('time')
+    ax.set_ylabel('v (slow)')
+    ax.legend()
+    ax.axvline(200, c='k', ls='--')
+    plt.savefig(f'v_fhn/pred.jpg', dpi=300)
+    plt.close()
     
 
 if __name__ == '__main__':
