@@ -7,8 +7,6 @@ from scipy.integrate import odeint
 
 # 定义 FHN 系统的微分方程
 def fhn(y, t):
-    
-    a, b, I, epsilon = 0.7, 0.8, 0.5, 0.08
 
     u, v = y
     dudt = u - u**3/3 - v + I
@@ -17,11 +15,12 @@ def fhn(y, t):
     return [dudt, dvdt]
 
 
+a, b, I, epsilon = 0.7, 0.8, 0.5, 0.08
 n_trace = 100
 # n_trace = 50
 grid = 50
 u_min, u_max = -20., 20.
-v_min, v_max = -15., 15.
+v_min, v_max = -20., 20.
 u_step = (u_max-u_min)/grid
 v_step = (v_max-v_min)/grid
 dpi = 300
@@ -87,10 +86,10 @@ for tf in [300]:
                 sol = results[j]
                 ax.plot(sol[:, 1], sol[:, 0], c='b', alpha=0.05, label='trajectory' if j==0 else None)
             # 绘制u、v的nullcline
-            u1 = np.linspace(u_min, u_max, 100)
-            v1 = u1-u1**3/3+0.5
-            v2 = np.linspace(v_min, v_max, 100)
-            u2 = 0.8*v2 - 0.7
+            u1 = np.linspace(u_min, u_max, 500)
+            v1 = u1-u1**3/3+I
+            v2 = np.linspace(v_min, v_max, 500)
+            u2 = b*v2 - a
             ax.plot(v1, u1, c='r', label='u-nullcline (slow manifold))')
             ax.plot(v2, u2, c='g', label='v-nullcline(dv/dt=0)')
             ax.set_xlabel('v (slow)')

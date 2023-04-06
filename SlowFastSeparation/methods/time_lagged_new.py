@@ -12,6 +12,20 @@ from Data.dataset import Dataset
 from util.intrinsic_dimension import eval_id_embedding
 
 
+def weighted_mse(pred, true, u_diff, v_diff):
+
+    u_loss_weight = 2 / (torch.exp(u_diff) + torch.exp(-u_diff))
+    v_loss_weight = 2 / (torch.exp(v_diff) + torch.exp(-v_diff))
+
+    u = pred[..., 0]
+    v = pred[..., 1]
+    u_true = true[..., 0]
+    v_true = true[..., 1]
+    u_loss = torch.mean(u_loss_weight.detach() * (u - u_true) ** 2)
+    v_loss = torch.mean(v_loss_weight.detach() * (v - v_true) ** 2)
+
+    return u_loss + v_loss
+
 def train_time_lagged(
         system,
         embedding_dim,
@@ -41,15 +55,14 @@ def train_time_lagged(
     # init model
     model = models.TimeLaggedAE(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     tmp = '' if sliding_window else '_static'
-    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
-    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
+    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt")[:data_dim].reshape(channel_num,data_dim).astype(np.float32))
+    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt")[:data_dim].reshape(channel_num,data_dim).astype(np.float32))
     model.to(device)
     
     # training params
     weight_decay = 0.001
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     # mse_loss = nn.MSELoss()
-    mse_loss = nn.L1Loss()
     l1_loss = nn.L1Loss()
 
     # dataset
@@ -61,21 +74,26 @@ def train_time_lagged(
     # training pipeline
     losses = []
     loss_curve = []
-    for epoch in range(0, max_epoch):
+    for epoch in range(0, max_epoch+1):
         
         # train
         model.train()
         for x_t0, x_t1 in train_loader:
-            x_t0 = model.scale(x_t0.to(device))[..., :obs_dim] # (batchsize,1,channel_num,feature_dim)
-            x_t1 = model.scale(x_t1.to(device))[..., :obs_dim]
+
+            # u_diff = x_t1.to(device)[..., 2]
+            # v_diff = x_t1.to(device)[..., 3]
+
+            x_t0 = model.scale(x_t0.to(device)[..., :obs_dim]) # (batchsize,1,channel_num,feature_dim)
+            x_t1 = model.scale(x_t1.to(device)[..., :obs_dim])
             
             prior, embed1 = model.forward(x_t0, direct='prior')
             reverse, embed2 = model.forward(x_t1, direct='reverse')
             
-            prior_loss = mse_loss(prior, x_t1)
-            reverse_loss = mse_loss(reverse, x_t0)
+            prior_loss = l1_loss(prior, x_t1)
+            reverse_loss = l1_loss(reverse, x_t0)
+            # prior_loss = weighted_mse(prior, x_t1, u_diff, v_diff)
+            # reverse_loss = weighted_mse(reverse, x_t0, u_diff, v_diff)
             symmetry_loss = l1_loss(embed1, embed2)
-            # loss = prior_loss + reverse_loss + symmetry_loss
             loss = prior_loss + reverse_loss + 0.1*symmetry_loss
             
             optimizer.zero_grad()
@@ -91,24 +109,29 @@ def train_time_lagged(
             
             model.eval()
             for x_t0, x_t1 in val_loader:
-                x_t0 = model.scale(x_t0.to(device))[..., :obs_dim]
-                x_t1 = model.scale(x_t1.to(device))[..., :obs_dim]
+                # u_diff = x_t1.to(device)[..., 2]
+                # v_diff = x_t1.to(device)[..., 3]
+
+                x_t0 = model.scale(x_t0.to(device)[..., :obs_dim])
+                x_t1 = model.scale(x_t1.to(device)[..., :obs_dim])
             
                 prior, embed1 = model.forward(x_t0, direct='prior')
                 reverse, embed2 = model.forward(x_t1, direct='reverse')
                 
-            prior_loss = mse_loss(prior, x_t1)
-            reverse_loss = mse_loss(reverse, x_t0)
+            prior_loss = l1_loss(prior, x_t1)
+            reverse_loss = l1_loss(reverse, x_t0)
+            # prior_loss = weighted_mse(prior, x_t1, u_diff, v_diff)
+            # reverse_loss = weighted_mse(reverse, x_t0, u_diff, v_diff)
             symmetry_loss = l1_loss(embed1, embed2)
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE: prior={prior_loss:.5f}, reverse={reverse_loss:.5f}, symmetry={symmetry_loss:.5f}', end='')
         
         # save each epoch model
-        # interval = 200
-        # if epoch % interval == 1:
-            # model.train()
-            # torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
-    model.train()
-    torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{max_epoch}.ckpt")
+        interval = 500
+        if epoch % interval == 0:
+            model.train()
+            torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
+    # model.train()
+    # torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{max_epoch}.ckpt")
         
     # plot loss curve
     plt.figure()
@@ -154,8 +177,8 @@ def test_and_save_embeddings_of_time_lagged(
     model = models.TimeLaggedAE(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     if checkpoint_filepath is None: # not trained
         tmp = '' if sliding_window else '_static'
-        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
-        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,data_dim).astype(np.float32))
+        model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt")[:data_dim].reshape(channel_num,data_dim).astype(np.float32))
+        model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt")[:data_dim].reshape(channel_num,data_dim).astype(np.float32))
 
     # dataset
     test_dataset = Dataset(data_filepath, 'test', sliding_window=sliding_window)
@@ -163,9 +186,9 @@ def test_and_save_embeddings_of_time_lagged(
 
     # testing pipeline
     fp = open(log_dir + 'tau_' + str(tau) + '/test_log.txt', 'a')
-    interval = 200
-    # for ep in range(-1, max_epoch-1, interval):
-    for ep in [max_epoch-1]:
+    interval = 500
+    for ep in range(-1, max_epoch, interval):
+    # for ep in [max_epoch-1]:
         
         # load weight file
         epoch = ep
@@ -186,8 +209,8 @@ def test_and_save_embeddings_of_time_lagged(
         # testing
         with torch.no_grad():
             for input, target in test_loader:
-                input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,1,4)
-                target = model.scale(target.to(device))[..., :obs_dim]
+                input = model.scale(input.to(device)[..., :obs_dim]) # (batchsize,1,1,4)
+                target = model.scale(target.to(device)[..., :obs_dim])
                 
                 output, embeddings = model.forward(input)
                 
@@ -204,34 +227,21 @@ def test_and_save_embeddings_of_time_lagged(
                 mse_.append(loss_func(test_outputs[:,0,0,i], test_targets[:,0,0,i]))
         
         # plot
+        name = ['u', 'v']
         plt.figure(figsize=(16,5))
         for j in range(test_outputs.shape[-1]):
             data = []
             for i in range(len(test_outputs)):
                 data.append([test_outputs[i,0,0,j], test_targets[i,0,0,j]])
             ax = plt.subplot(1,test_outputs.shape[-1],j+1)
-            ax.set_title('test_'+f'c{j+1}')
+            ax.set_title(f'{name[j]}')
             ax.plot(np.array(data)[:,1], label='true')
             ax.plot(np.array(data)[:,0], label='predict')
+            ax.set_ylim([0., 1.])
             ax.legend()
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
         plt.savefig(var_log_dir+"/result.pdf", dpi=300)
         plt.close()
-
-        if 'FHN' in system and '2d' not in system:
-            plt.figure(figsize=(16,5))
-            for j in range(test_outputs.shape[-1]):
-                data = []
-                for i in range(len(test_outputs)):
-                    data.append([test_outputs[i,0,1,j], test_targets[i,0,1,j]])
-                ax = plt.subplot(1,test_outputs.shape[-1],j+1)
-                ax.set_title('test_'+f'c{j+1}')
-                ax.plot(np.array(data)[:,1], label='true')
-                ax.plot(np.array(data)[:,0], label='predict')
-                ax.legend()
-            plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.15, wspace=0.2, hspace=0.35)
-            plt.savefig(var_log_dir+"/result_inhibitor.pdf", dpi=300)
-            plt.close()
 
         # save embedding
         np.save(var_log_dir+'/embedding.npy', all_embeddings)

@@ -23,14 +23,7 @@ class Dataset(Dataset):
     # 0 --> 1
     def __getitem__(self, index):
 
-        trace = self.data[index]
-
-        if self.model == 'cde':
-            input = trace[:self.length-1]
-            target = trace[self.length-1:]
-            input = torch.from_numpy(input).float() # (1, channel, feature_dim)
-            target = torch.from_numpy(target).float()
-            return input, target
+        trace = self.data[index] # (sequence_length, channel, feature_dim)
         
         input = trace[0]
         if self.length is None:

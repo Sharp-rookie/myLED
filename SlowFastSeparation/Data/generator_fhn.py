@@ -16,7 +16,7 @@ def fhn(y, t):
     return [dudt, dvdt]
     
 
-def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir):
+def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir, u_max, u_min, v_max, v_min):
 
     os.makedirs(dir, exist_ok=True)
     
@@ -58,27 +58,27 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir):
         sol = trace[j]
         ax.plot(sol[:, 1], sol[:, 0], c='b', alpha=0.05, label='trajectory' if j==0 else None)
     # 绘制u、v的nullcline
-    u1 = np.linspace(-2.,2.,100)
-    v1 = u1-u1**3/3+0.5
-    v2 = np.linspace(-0.5,0.9,100)
-    u2 = 1.25*v2 + 0.875
-    ax.plot(v1, u1, c='r', label='u-nullcline (slow manifold))')
+    u1 = np.linspace(u_min, u_max, 500)
+    v1 = u1 - u1**3/3 + 0.5
+    v2 = np.linspace(v_min, v_max, 500)
+    u2 = 0.8*v2 - 0.7
+    ax.plot(v1, u1, c='r', label='u-nullcline (slow manifold)')
     ax.plot(v2, u2, c='g', label='v-nullcline(dv/dt=0)')
     ax.set_xlabel('v (slow)')
     ax.set_ylabel('u (fast)')
     ax.legend(loc='upper right')
     # 注明dudt、dvdt的正负
-    ax.text(0.44, 0.55, r'$\frac{du}{dt} > 0$', transform=ax.transAxes, fontsize=14)
-    ax.text(0.2, 0.75, r'$\frac{dv}{dt} < 0$', transform=ax.transAxes, fontsize=14)
+    ax.text(0.2, 0.5, r'$\frac{du}{dt} > 0$', transform=ax.transAxes, fontsize=14)
+    ax.text(0.8, 0.6, r'$\frac{dv}{dt} < 0$', transform=ax.transAxes, fontsize=14)
     # 绘制初始范围框
     ax.add_patch(plt.Rectangle((v_bound, u_bound), v_step, u_step, fill=False, edgecolor='k', lw=1))
     # 绘制全局所有初始范围框
-    for _u_bound in np.arange(-2.,2.,u_step):
-        for _v_bound in np.arange(-0.5,1.5,v_step):
+    for _u_bound in np.arange(u_min, u_max, u_step):
+        for _v_bound in np.arange(v_min, v_max, v_step):
             ax.add_patch(plt.Rectangle((_v_bound, _u_bound), v_step, u_step, fill=False, edgecolor='k', lw=0.5, alpha=0.5))
     # 设置x、y轴范围
-    ax.set_xlim(-0.6, 1.6)
-    ax.set_ylim(-2.1, 2.1)
+    ax.set_xlim(v_min-0.1, v_max+0.1)
+    ax.set_ylim(u_min-0.1, u_max+0.1)
     ax.set_title(f'{n_trace} trajectories simulated for {int(np.max(t))}s')
     plt.savefig(f'{dir}/phase.jpg', dpi=300)
     plt.close()
@@ -86,13 +86,13 @@ def simulation(u_bound, v_bound, t, n_trace, u_step, v_step, dir):
     return trace
 
 
-def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step, v_step, data_dir):
+def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step, v_step, data_dir, u_max, u_min, v_max, v_min):
 
     data_dir = data_dir + f'u0={u_bound:.2f}_v0={v_bound:.2f}'
-    
-    if os.path.exists(data_dir+f'/train_static.npz') and \
-        os.path.exists(data_dir+f'/val_static.npz') and \
-            os.path.exists(data_dir+f'/test_static.npz'): 
+
+    if os.path.exists(data_dir+f"/tau_{tau}"+f'/train_static.npz') and \
+        os.path.exists(data_dir+f"/tau_{tau}"+f'/val_static.npz') and \
+            os.path.exists(data_dir+f"/tau_{tau}"+f'/test_static.npz'): 
         return
 
     if os.path.exists(f'{data_dir}/origin_{n_trace}.npz'): 
@@ -101,19 +101,24 @@ def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step,
     else:
         # 从指定范围初始化并演化微分方程
         t = np.arange(0., total_t, dt)
-        simdata = simulation(u_bound, v_bound, t, n_trace, u_step, v_step, data_dir)
+        simdata = simulation(u_bound, v_bound, t, n_trace, u_step, v_step, data_dir, u_max, u_min, v_max, v_min)
     
     # reshape
     simdata = simdata.reshape(n_trace, -1, 1, 2)  # (n_trace, time_length, channel=1, feature_num=2)
 
     # save statistic information
-    data_dir = data_dir + f"/tau_{tau}"
-    os.makedirs(data_dir, exist_ok=True)
-    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_std_static.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_max_static.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_min_static.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/tau_static.txt", [tau])  # Save the timestep
+    tau_data_dir = data_dir + f"/tau_{tau}"
+    os.makedirs(tau_data_dir, exist_ok=True)
+    np.savetxt(tau_data_dir + "/data_mean_static.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_std_static.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_max_static.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_min_static.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/tau_static.txt", [tau])  # Save the timestep
+
+    # calculate du/dt and dv/dt
+    dudt = np.gradient(simdata[:, :, 0, 0], dt, axis=1)
+    dvdt = np.gradient(simdata[:, :, 0, 1], dt, axis=1)
+    simdata = np.concatenate([simdata, dudt.reshape(n_trace, -1, 1, 1), dvdt.reshape(n_trace, -1, 1, 1)], axis=3)  # (n_trace, time_length, channel=1, feature_num=4)
 
     ##################################
     # Create [train,val,test] dataset
@@ -124,7 +129,7 @@ def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step,
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
 
-        if os.path.exists(data_dir+f'/{item}_static.npz'): continue
+        if os.path.exists(tau_data_dir+f'/{item}_static.npz'): continue
         
         # select trace num
         data_item = simdata[trace_list[item]]
@@ -138,7 +143,7 @@ def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step,
         sequences = sequences[:, :sequence_length]
         
         # save
-        np.savez(data_dir+f'/{item}_static.npz', data=sequences)
+        np.savez(tau_data_dir+f'/{item}_static.npz', data=sequences)
 
         # plot
         plt.figure(figsize=(16,10))
@@ -146,19 +151,39 @@ def generate_dataset_static(tau, u_bound, v_bound, total_t, dt, n_trace, u_step,
         plt.plot(sequences[:,0,0,0], label='u')
         plt.plot(sequences[:,0,0,1], label='v')
         plt.legend()
-        plt.savefig(data_dir+f'/{item}_static_input.pdf', dpi=300)
+        plt.savefig(tau_data_dir+f'/{item}_static_input.pdf', dpi=300)
+        plt.close()
 
         plt.figure(figsize=(16,10))
         plt.title(f'{item.capitalize()} Data')
         plt.plot(sequences[:,sequence_length-1,0,0], label='u')
         plt.plot(sequences[:,sequence_length-1,0,1], label='v')
         plt.legend()
-        plt.savefig(data_dir+f'/{item}_static_target.pdf', dpi=300)
+        plt.savefig(tau_data_dir+f'/{item}_static_target.pdf', dpi=300)
+        plt.close()
+
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        ax = plt.subplot(121)
+        ax.plot(sequences[:,sequence_length-1,0,0], label='u')
+        ax.plot(sequences[:,sequence_length-1,0,2], label='du/dt')
+        ax.legend()
+        ax = plt.subplot(122)
+        ax.plot(sequences[:,sequence_length-1,0,1], label='v')
+        ax.plot(sequences[:,sequence_length-1,0,3], label='dv/dt')
+        ax.legend()
+        plt.savefig(tau_data_dir+f'/{item}_static_derivative.pdf', dpi=300)
+        plt.close()
     
 
-def generate_dataset_sliding_window(tau, u_bound, v_bound, total_t, dt, n_trace, u_step, v_step, data_dir, sequence_length=None):
+def generate_dataset_sliding_window(tau, u_bound, v_bound, total_t, dt, n_trace, u_step, v_step, data_dir, u_max, u_min, v_max, v_min, sequence_length=None):
 
     data_dir = data_dir + f'u0={u_bound:.2f}_v0={v_bound:.2f}'
+
+    if os.path.exists(data_dir+f"/tau_{tau}"+f'/train.npz') and \
+        os.path.exists(data_dir+f"/tau_{tau}"+f'/val.npz') and \
+            os.path.exists(data_dir+f"/tau_{tau}"+f'/test.npz'): 
+        return
 
     if os.path.exists(f'{data_dir}/origin_{n_trace}.npz'): 
         # 导入数据
@@ -166,25 +191,30 @@ def generate_dataset_sliding_window(tau, u_bound, v_bound, total_t, dt, n_trace,
     else:
         # 从指定范围初始化并演化微分方程
         t = np.arange(0., total_t, dt)
-        simdata = simulation(u_bound, v_bound, t, n_trace, u_step, v_step, data_dir)
+        simdata = simulation(u_bound, v_bound, t, n_trace, u_step, v_step, data_dir, u_max, u_min, v_max, v_min)
     
     # reshape
     simdata = simdata.reshape(n_trace, -1, 1, 2)  # (n_trace, time_length, channel=1, feature_num=2)
 
     # save statistic information
-    data_dir = data_dir + f"/tau_{tau}"
-    os.makedirs(data_dir, exist_ok=True)
-    np.savetxt(data_dir + "/data_mean.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_std.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_max.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_min.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/tau.txt", [tau])  # Save the timestep
+    tau_data_dir = data_dir + f"/tau_{tau}"
+    os.makedirs(tau_data_dir, exist_ok=True)
+    np.savetxt(tau_data_dir + "/data_mean.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_std.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_max.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_min.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/tau.txt", [tau])  # Save the timestep
 
-    np.savetxt(data_dir + "/data_mean_static.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_std_static.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_max_static.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/data_min_static.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
-    np.savetxt(data_dir + "/tau_static.txt", [tau])  # Save the timestep
+    np.savetxt(tau_data_dir + "/data_mean_static.txt", np.mean(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_std_static.txt", np.std(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_max_static.txt", np.max(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/data_min_static.txt", np.min(simdata, axis=(0,1)).reshape(1,-1))
+    np.savetxt(tau_data_dir + "/tau_static.txt", [tau])  # Save the timestep
+
+    # calculate du/dt and dv/dt
+    dudt = np.gradient(simdata[:, :, 0, 0], dt, axis=1)
+    dvdt = np.gradient(simdata[:, :, 0, 1], dt, axis=1)
+    simdata = np.concatenate([simdata, dudt.reshape(n_trace, -1, 1, 1), dvdt.reshape(n_trace, -1, 1, 1)], axis=3)  # (n_trace, time_length, channel=1, feature_num=4)
 
     ##################################
     # Create [train,val,test] dataset
@@ -195,8 +225,8 @@ def generate_dataset_sliding_window(tau, u_bound, v_bound, total_t, dt, n_trace,
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:
         
-        if sequence_length is None and os.path.exists(data_dir+f'/{item}.npz'): continue
-        if sequence_length is not None and os.path.exists(data_dir+f'/{item}_{sequence_length}.npz'): continue
+        if sequence_length is None and os.path.exists(tau_data_dir+f'/{item}.npz'): continue
+        if sequence_length is not None and os.path.exists(tau_data_dir+f'/{item}_{sequence_length}.npz'): continue
         
         # select trace num
         N_TRACE = len(trace_list[item])
@@ -232,13 +262,13 @@ def generate_dataset_sliding_window(tau, u_bound, v_bound, total_t, dt, n_trace,
             sequences.append(tmp)
             parallel_sequences[idx_ic].append(tmp)
 
-        sequences = np.array(sequences) 
+        sequences = np.array(sequences, dtype=np.float32)
         
         # save
         if not seq_none:
-            np.savez(data_dir+f'/{item}_{s_length}.npz', data=sequences)
+            np.savez(tau_data_dir+f'/{item}_{s_length}.npz', data=sequences)
         else:
-            np.savez(data_dir+f'/{item}.npz', data=sequences)
+            np.savez(tau_data_dir+f'/{item}.npz', data=sequences)
 
         # plot
         plt.figure(figsize=(16,10))
@@ -246,13 +276,28 @@ def generate_dataset_sliding_window(tau, u_bound, v_bound, total_t, dt, n_trace,
         plt.plot(sequences[:,0,0,0], label='u')
         plt.plot(sequences[:,0,0,1], label='v')
         plt.legend()
-        plt.savefig(data_dir+f'/{item}_input.pdf', dpi=300)
+        plt.savefig(tau_data_dir+f'/{item}_input.pdf', dpi=300)
+        plt.close()
 
         plt.figure(figsize=(16,10))
         plt.title(f'{item.capitalize()} Data')
         plt.plot(sequences[:,s_length-1,0,0], label='u')
         plt.plot(sequences[:,s_length-1,0,1], label='v')
         plt.legend()
-        plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
+        plt.savefig(tau_data_dir+f'/{item}_target.pdf', dpi=300)
+        plt.close()
+
+        plt.figure(figsize=(16,10))
+        plt.title(f'{item.capitalize()} Data')
+        ax = plt.subplot(121)
+        ax.plot(sequences[:,sequence_length-1,0,0], label='u')
+        ax.plot(sequences[:,sequence_length-1,0,2], label='du/dt')
+        ax.legend()
+        ax = plt.subplot(122)
+        ax.plot(sequences[:,sequence_length-1,0,1], label='v')
+        ax.plot(sequences[:,sequence_length-1,0,3], label='dv/dt')
+        ax.legend()
+        plt.savefig(tau_data_dir+f'/{item}_static_derivative.pdf', dpi=300)
+        plt.close()
 
 # generator_data(tau=0.2, u_bound=-2., v_bound=-0.5, total_t=20., dt=0.01, n_trace=50, u_step=0.8, v_step=0.4, data_dir='Data/FHN_grid5/')

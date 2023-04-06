@@ -62,10 +62,11 @@ def learn_subworker(args, n, data_dir, ckpt_path, learn_log_dir, random_seed=729
 def ID_Estimate(args, data_dir, id_log_dir):
         
     # id estimate process
+    # T = np.concatenate((np.arange(0., 0.051, 0.0001), np.arange(1., 30., 1.), (np.arange(30., 200., 1.))))
     T = np.arange(args.tau_1, args.tau_N+args.dt, args.tau_unit)
     workers = []
     for tau in T:
-        tau = round(tau, 2)
+        tau = round(tau, 3)
         for random_seed in range(1, args.seed_num+1):
             if args.parallel: # multi-process to speed-up
                 is_print = True if len(workers)==0 else False
@@ -77,9 +78,9 @@ def ID_Estimate(args, data_dir, id_log_dir):
     while args.parallel and any([sub.exitcode==None for sub in workers]):
         pass
 
-    # # plot ID curve
-    # # [plot_epoch_test_log(round(tau,2), max_epoch=args.id_epoch+1, log_dir=id_log_dir) for tau in T]
-    plot_id_per_tau(T, np.arange(args.id_epoch-200, args.id_epoch+1, 1), log_dir=id_log_dir)
+    # plot ID curve
+    # [plot_epoch_test_log(round(tau,2), max_epoch=args.id_epoch+1, log_dir=id_log_dir) for tau in T]
+    plot_id_per_tau(T, np.arange(args.id_epoch-5, args.id_epoch+1, 1), log_dir=id_log_dir)
     
 
 def Learn_Slow_Fast(args, data_dir, ckpt_path, learn_log_dir, mode='train'):
@@ -93,8 +94,7 @@ def Learn_Slow_Fast(args, data_dir, ckpt_path, learn_log_dir, mode='train'):
     workers = []
     for random_seed in range(1, args.seed_num+1):
         if args.parallel:
-            # is_print = True if len(workers)==0 else False
-            is_print = False
+            is_print = True if len(workers)==0 else False
             workers.append(Process(target=learn_subworker, args=(args, n, data_dir, ckpt_path, learn_log_dir, random_seed, is_print, mode), daemon=True))
             workers[-1].start()
         else:
@@ -105,23 +105,36 @@ def Learn_Slow_Fast(args, data_dir, ckpt_path, learn_log_dir, mode='train'):
 
 def local_ID_estimate(args, u_bound, v_bound, u_step, v_step):
 
-    assert args.trace_num>=500, "trace_num should be large in FHN Time Selecting Process!"
+    if args.sample_type=='static' and args.trace_num<500:
+        print(f"trace_num should be larger than {args.trace_num} in static FHN Time Selecting Process!")
+        exit(0)
 
-    if os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/tau_0.0/test_log.txt') and \
-        os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/tau_0.0/id_per_tau.pdf'): 
-        return
+    # if os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/tau_0.0/test_log.txt') and \
+    #     os.path.exists(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/id_per_tau.pdf'): 
+    #     return
 
     # generate local dataset
     print('Generating local dataset...')
+    parallel_num = 10  # number of parallel process
+    worker = []
     T = np.arange(args.tau_1, args.tau_N+args.dt, args.tau_unit)
     for tau in T:
-        tau = round(tau, 2)
+        tau = round(tau, 3)
+        while len(worker)>=parallel_num:
+            for i in range(len(worker)):
+                if worker[i].exitcode!=None:
+                    worker.pop(i)
+                    break
         if args.sample_type=='sliding_window':
-            generate_dataset_sliding_window(tau, u_bound, v_bound, args.total_t, args.dt, args.trace_num, u_step, v_step, args.data_dir)
+            worker.append(Process(target=generate_dataset_sliding_window, args=(tau, u_bound, v_bound, args.total_t, args.dt, args.trace_num, u_step, v_step, args.data_dir, args.u_max, args.u_min, args.v_max, args.v_min), daemon=True))
         elif args.sample_type=='static':
-            generate_dataset_static(tau, u_bound, v_bound, args.total_t, args.dt, args.trace_num, u_step, v_step, args.data_dir)
+            worker.append(Process(target=generate_dataset_static, args=(tau, u_bound, v_bound, args.total_t, args.dt, args.trace_num, u_step, v_step, args.data_dir, args.u_max, args.u_min, args.v_max, args.v_min), daemon=True))
         else:
             raise NotImplementedError
+        worker[-1].start()
+    while any([sub.exitcode==None for sub in worker]):
+        pass
+    print('Done!')
     
     # id estimate process
     data_dir = args.data_dir + f'u0={u_bound:.2f}_v0={v_bound:.2f}/'
@@ -134,9 +147,10 @@ def local_Dynamic_Learn(args, trace_num, u_bound, v_bound, u_step, v_step):
     assert trace_num<=100, "trace_num should be small in FHN Dynamic Learning Process!"
 
     # generate local dataset
-    print(f'\nLearning slow-fast dynamics [{u_bound},{v_bound}]')
+    print('Generating local dataset...')
     n = int(args.tau_s/args.tau_unit)
-    generate_dataset_sliding_window(args.tau_unit, u_bound, v_bound, args.total_t, args.dt, trace_num, u_step, v_step, args.data_dir, n)
+    generate_dataset_sliding_window(args.tau_unit, u_bound, v_bound, args.total_t, args.dt, 50, u_step, v_step, args.data_dir, args.u_max, args.u_min, args.v_max, args.v_min, n)
+    print('Done!')
     
     # dynamic learning process
     data_dir = args.data_dir + f'u0={u_bound:.2f}_v0={v_bound:.2f}/'
@@ -147,12 +161,12 @@ def local_Dynamic_Learn(args, trace_num, u_bound, v_bound, u_step, v_step):
     return workers
 
 
-def get_local_ID_per_tau(args, u, v, u_min, v_min, u_step, v_step, id_heatmap, loss_tau):
+def get_local_ID_per_tau(args, u, v, u_step, v_step, id_heatmap, loss_tau):
 
     for tau in np.arange(args.tau_1, args.tau_N+args.dt, args.tau_unit):
-        tau = round(tau, 2)
-        u_index = round((u-u_min)/u_step)
-        v_index = round((v-v_min)/v_step)
+        tau = round(tau, 3)
+        u_index = round((u-args.u_min)/u_step)
+        v_index = round((v-args.v_min)/v_step)
         tau_index = round((tau-args.tau_1)/args.tau_unit)
         
         with open(args.id_log_dir+f'u0={u:.2f}_v0={v:.2f}/'+f'tau_{tau}/test_log.txt', 'r') as log:
@@ -162,12 +176,12 @@ def get_local_ID_per_tau(args, u, v, u_min, v_min, u_step, v_step, id_heatmap, l
         loss_tau[tau_index, u_index, v_index] = loss_f[-1, 0]
 
 
-def plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_step, v_min, v_max):
+def plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, v_step):
 
     os.makedirs(args.id_log_dir+'id_heatmap', exist_ok=True)
     T = np.arange(args.tau_1, args.tau_N+args.dt, args.tau_unit)
     for tau_index, tau in enumerate(T):
-        tau = round(tau, 2)
+        tau = round(tau, 3)
 
         # ID heatmap
         plt.figure(figsize=(10,10))
@@ -184,8 +198,8 @@ def plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_
             for v_index in range(args.grid):
                 plt.text(v_index, u_index, id_heatmap[tau_index, u_index, v_index].round(2), ha='center', va='center', fontsize=8)
         # 坐标轴
-        plt.yticks(np.arange(0, args.grid, 1), (u_step/2+np.arange(u_min, u_max, u_step)).round(2), fontsize=12)
-        plt.xticks(np.arange(0, args.grid, 1), (v_step/2+np.arange(v_min, v_max, v_step)).round(2), fontsize=12)
+        plt.yticks(np.arange(0, args.grid, 1), (u_step/2+np.arange(args.u_min, args.u_max, u_step)).round(2), fontsize=12)
+        plt.xticks(np.arange(0, args.grid, 1), (v_step/2+np.arange(args.v_min, args.v_max, v_step)).round(2), fontsize=12)
         plt.ylabel('u0 (fast)', fontsize=18)
         plt.xlabel('v0 (slow)', fontsize=18)
         # y轴由下到上
@@ -202,8 +216,8 @@ def plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_
         ax.set_zlim(0, 1e-2)
         ax.set_xticks(np.arange(0, args.grid, 1))
         ax.set_yticks(np.arange(0, args.grid, 1))
-        ax.set_xticklabels((u_step/2+np.arange(u_min, u_max, u_step)).round(2), fontsize=12)
-        ax.set_yticklabels((v_step/2+np.arange(v_min, v_max, v_step)).round(2), fontsize=12)
+        ax.set_xticklabels((u_step/2+np.arange(args.u_min, args.u_max, u_step)).round(2), fontsize=12)
+        ax.set_yticklabels((v_step/2+np.arange(args.v_min, args.v_max, v_step)).round(2), fontsize=12)
         ax.set_zticks(np.arange(0, 5e-2, 1e-2))
         ax.set_zticklabels(np.arange(0, 5e-2, 1e-2).round(3), fontsize=12)
         ax.view_init(35, 20)
@@ -226,6 +240,10 @@ if __name__ == '__main__':
     parser.add_argument('--obs_dim', type=int, default=4, help='Obervable feature dimension')
     parser.add_argument('--data_dim', type=int, default=4, help='Overall feature dimension')
     parser.add_argument('--trace_num', type=int, default=200, help='Number of simulation trajectories')
+    parser.add_argument('--u_max', type=float, default=2.0, help='Upper boundary of u0')
+    parser.add_argument('--u_min', type=float, default=-2.0, help='Lower boundary of u0')
+    parser.add_argument('--v_max', type=float, default=1.5, help='Upper boundary of v0')
+    parser.add_argument('--v_min', type=float, default=-0.5, help='Lower boundary of v0')
     parser.add_argument('--grid', type=int, default=5, help='Grid size of 2D data space') 
     parser.add_argument('--total_t', type=float, default=5.1, help='Time length of each simulation trajectories')
     parser.add_argument('--dt', type=float, default=0.01, help='Time step of each simulation trajectories')
@@ -272,12 +290,10 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, term_sig_handler)
     
     # main pipeline
-    u_min, u_max = -2., 2.
-    v_min, v_max = -0.5, 1.5
-    u_step = (u_max-u_min)/args.grid
-    v_step = (v_max-v_min)/args.grid
-    u_bound = np.arange(u_min, u_max, u_step)
-    v_bound = np.arange(v_min, v_max, v_step)
+    u_step = (args.u_max-args.u_min)/args.grid
+    v_step = (args.v_max-args.v_min)/args.grid
+    u_bound = np.arange(args.u_min, args.u_max, u_step)
+    v_bound = np.arange(args.v_min, args.v_max, v_step)
     u_bound, v_bound = np.meshgrid(u_bound, v_bound)
     id_heatmap = np.zeros((int((args.tau_N+args.dt-args.tau_1)/args.tau_unit)+1, args.grid, args.grid))
     loss_tau = np.zeros((int((args.tau_N+args.dt-args.tau_1)/args.tau_unit)+1, args.grid, args.grid))
@@ -289,11 +305,16 @@ if __name__ == '__main__':
             print(f'\nu0 = {u:.2f}', f'v0 = {v:.2f}')
             
             local_ID_estimate(args, u, v, u_step, v_step)
-            # if i%4==0 and j%4==0:  # 只取1/16的区域提取慢变量，避免子进程过多挤占资源
-            #     dynamic_learn_workers.append(*local_Dynamic_Learn(args, 50, u, v, u_step, v_step))
+            
+            # dynamic_learn_workers.append(*local_Dynamic_Learn(args, 50, u, v, u_step, v_step))
+            # # block
+            # while any([sub.exitcode==None for sub in dynamic_learn_workers]):
+            #     pass
+
+            exit(0)
     
-            get_local_ID_per_tau(args, u, v, u_min, v_min, u_step, v_step, id_heatmap, loss_tau)
-    plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, u_min, u_max, v_step, v_min, v_max)
+            get_local_ID_per_tau(args, u, v, u_step, v_step, id_heatmap, loss_tau)
+    plot_ID_heatmap_per_tau(args, id_heatmap, loss_tau, u_step, v_step)
 
     # block
     while any([sub.exitcode==None for sub in dynamic_learn_workers]):
@@ -303,7 +324,7 @@ if __name__ == '__main__':
     images1 = []
     images2 = []
     for tau in np.arange(args.tau_1, args.tau_N, args.tau_unit):
-        tau = round(tau, 2)
+        tau = round(tau, 3)
         images1.append(imageio.imread(args.id_log_dir + f'id_heatmap/tau_{tau}_id.jpg'))
         images2.append(imageio.imread(args.id_log_dir + f'id_heatmap/tau_{tau}_loss.jpg'))
     imageio.mimsave(args.id_log_dir + f'id_heatmap/id.gif', images1, duration=0.5)

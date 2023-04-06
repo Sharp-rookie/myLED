@@ -46,8 +46,8 @@ def train_slow_extract_and_evolve(
     assert koopman_dim>=slow_dim, f"Value Error, koopman_dim is smaller than slow_dim({koopman_dim}<{slow_dim})"
     model = models.DynamicsEvolver(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, slow_dim=slow_dim, redundant_dim=koopman_dim-slow_dim, tau_s=tau_s, device=device, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     tmp = '' if sliding_window else '_static'
-    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
-    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
+    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt")[..., :data_dim].reshape(channel_num,data_dim).astype(np.float32))
+    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt")[..., :data_dim].reshape(channel_num,data_dim).astype(np.float32))
     
     # load pretrained time-lagged AE
     ckpt = torch.load(ckpt_path)
@@ -85,7 +85,7 @@ def train_slow_extract_and_evolve(
         [lambda_curve[i].append(model.K_opt.Lambda[i].detach().cpu()) for i in range(slow_dim) ]
         for input, _, internl_units in train_loader:
             
-            input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel,obs_dim)
+            input = model.scale(input.to(device)[..., :obs_dim]) # (batchsize,1,channel,obs_dim)
             
             # obs —— embedding —— slow representation —— embedding(reconstruction) —— obs(reconstruction)
             slow_var, embed = model.obs2slow(input)
@@ -178,8 +178,8 @@ def train_slow_extract_and_evolve(
                 if system in ['HalfMoon', 'ToggleSwitch']:
                     hidden_slow.append(input[..., obs_dim:].cpu())
                 
-                input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel_num,feature_dim)
-                target = model.scale(target.to(device))[..., :obs_dim]
+                input = model.scale(input.to(device)[..., :obs_dim]) # (batchsize,1,channel_num,feature_dim)
+                target = model.scale(target.to(device)[..., :obs_dim])
 
                 # obs —— embedding —— slow representation —— embedding(reconstruction) —— obs(reconstruction)
                 slow_var, embed = model.obs2slow(input)
@@ -237,9 +237,8 @@ def train_slow_extract_and_evolve(
             # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}, cosine_similarity={cos_sim:.5f}', end='')
             # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}, obs_evol={obs_evol_loss:.5f}, cosine_similarity={cos_sim:.5f}', end='')
             
-            
-            # plot per 25 epoch
-            if epoch % 25 == 0:
+            # plot per 5 epoch
+            if epoch % 1 == 0:
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
                 sample = 10
                 input_data = model.descale(inputs)
@@ -456,8 +455,8 @@ def test_evolve(
             if system in ['HalfMoon', 'ToggleSwitch']:
                 hidden_slow.append(input[..., obs_dim:].cpu())
             
-            input = model.scale(input.to(device))[..., :obs_dim]
-            target = model.scale(target.to(device))[..., :obs_dim]
+            input = model.scale(input.to(device)[..., :obs_dim])
+            target = model.scale(target.to(device)[..., :obs_dim])
         
             # obs —— embedding —— slow representation —— koopman
             slow_var, _ = model.obs2slow(input)

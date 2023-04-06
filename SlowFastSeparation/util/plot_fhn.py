@@ -99,6 +99,7 @@ def plot_id_per_tau(tau_list, id_epoch, log_dir):
     plt.figure(figsize=(6,6))
     plt.plot(tau_list, id_per_tau[:,0], marker="o", markersize=6, label="ID")
     plt.plot(tau_list, round_id_per_tau[:,0], marker="^", markersize=6, label="ID-rounding")
+    plt.ylim((0, 3))  # assume the max ID is 3
     plt.xticks(fontsize=16)
     plt.yticks(fontsize=16)
     plt.legend()
@@ -280,5 +281,47 @@ def plot_evolve(length):
 
 if __name__ == '__main__':
     
-    plot_autocorr(T=300)
-    # plot_evolve(0.8)
+    # plot_autocorr(T=300)
+    
+    trace = np.load('results.npz')['trace']
+    u = trace[0,:,0]
+    v = trace[0,:,1]
+    # derivative
+    u_diff = np.gradient(u, 0.001)
+    v_diff = np.gradient(v, 0.001)
+    # transform
+    u_weight = 2 / (np.exp(u_diff) + np.exp(-u_diff))
+    v_weight = 2 / (np.exp(v_diff) + np.exp(-v_diff))
+    # t
+    dt = 0.001
+    point = int(40/dt)
+    t = np.arange(0, len(u_diff)) * dt
+    # plot
+    plt.figure(figsize=(12,5))
+    ax = plt.subplot(1,2,1)
+    # ax.plot(t[:point], u[:point], label='u')
+    # ax.plot(t[:point], u_diff[:point], label='du/dt')
+    # ax.plot(t[point:], u[point:], label='u')
+    # ax.plot(t[point:], u_diff[point:], label='du/dt')
+    # ax.plot(t[point:], u_weight[point:], label='u weight')
+    ax.plot(t, u, label='u')
+    ax.plot(t, u_diff, label='du/dt')
+    ax.plot(t, u_weight, label='u weight')
+    ax.set_xlabel('t/s', fontsize=18)
+    ax.legend()
+    ax.set_ylim(-2,2)
+    ax = plt.subplot(1,2,2)
+    # ax.plot(t[:point], v[:point], label='v')
+    # ax.plot(t[:point], v_diff[:point], label='dv/dt')
+    # ax.plot(t[point:], v[point:], label='v')
+    # ax.plot(t[point:], v_diff[point:], label='dv/dt')
+    # ax.plot(t[point:], v_weight[point:], label='v weight')
+    ax.plot(t, v, label='v')
+    ax.plot(t, v_diff, label='dv/dt')
+    ax.plot(t, v_weight, label='v weight')
+    ax.set_xlabel('t/s', fontsize=18)
+    ax.legend()
+    ax.set_ylim(-2,2)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.savefig(f'results.jpg', dpi=300)
