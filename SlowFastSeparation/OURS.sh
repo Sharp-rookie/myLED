@@ -1,4 +1,42 @@
-#--------------------------------FHN-------------------------------- 
+# #--------------------------------FHN-------------------------------- 
+# model=ours
+# enc_net=MLP
+# e1_layer_n=2
+# sample_type=static
+# channel_num=1
+# data_dim=2
+# u_max=20
+# u_min=-20
+# v_max=20
+# v_min=-20
+# grid=50
+# system=FHN_2d_grid$grid
+# obs_dim=$data_dim
+# trace_num=1000
+# total_t=36.
+# dt=0.001
+# lr=0.001
+# batch_size=128
+# id_epoch=500
+# learn_epoch=100
+# seed_num=1
+# tau_unit=0.001
+# tau_1=0.
+# tau_N=0.05
+# tau_s=0.03
+# embedding_dim=64
+# slow_dim=1
+# koopman_dim=4
+# device=cpu
+# cpu_num=1
+# data_dir=Data/$system/data/
+# id_log_dir=logs/$system-$sample_type/TimeSelection/
+# learn_log_dir=logs/$system-$sample_type/LearnDynamics/
+# result_dir=Results/$system-$sample_type/
+# gpu=1
+
+
+#--------------------------------PNAS17-------------------------------- 
 model=ours
 enc_net=MLP
 e1_layer_n=2
@@ -10,7 +48,8 @@ u_min=-20
 v_max=20
 v_min=-20
 grid=50
-system=FHN_2d_grid$grid
+xdim=100
+system=PNAS17_xdim$xdim
 obs_dim=$data_dim
 trace_num=1000
 total_t=36.
@@ -49,6 +88,7 @@ CUDA_VISIBLE_DEVICES=$gpu python run.py \
 --v_max $v_max \
 --v_min $v_min \
 --grid $grid \
+--xdim $xdim \
 --trace_num $trace_num \
 --total_t $total_t \
 --dt $dt \

@@ -46,8 +46,8 @@ def train_slow_extract_and_evolve(
     assert koopman_dim>=slow_dim, f"Value Error, koopman_dim is smaller than slow_dim({koopman_dim}<{slow_dim})"
     model = models.DynamicsEvolver(in_channels=channel_num, feature_dim=obs_dim, embed_dim=embedding_dim, slow_dim=slow_dim, redundant_dim=koopman_dim-slow_dim, tau_s=tau_s, device=device, data_dim=data_dim, enc_net=enc_net, e1_layer_n=e1_layer_n)
     tmp = '' if sliding_window else '_static'
-    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt")[..., :data_dim].reshape(channel_num,data_dim).astype(np.float32))
-    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt")[..., :data_dim].reshape(channel_num,data_dim).astype(np.float32))
+    model.min = torch.from_numpy(np.loadtxt(data_filepath+"/data_min" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
+    model.max = torch.from_numpy(np.loadtxt(data_filepath+"/data_max" + tmp + ".txt").reshape(channel_num,obs_dim).astype(np.float32))
     
     # load pretrained time-lagged AE
     ckpt = torch.load(ckpt_path)
@@ -85,7 +85,7 @@ def train_slow_extract_and_evolve(
         [lambda_curve[i].append(model.K_opt.Lambda[i].detach().cpu()) for i in range(slow_dim) ]
         for input, _, internl_units in train_loader:
             
-            input = model.scale(input.to(device)[..., :obs_dim]) # (batchsize,1,channel,obs_dim)
+            input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel,obs_dim)
             
             # obs —— embedding —— slow representation —— embedding(reconstruction) —— obs(reconstruction)
             slow_var, embed = model.obs2slow(input)
@@ -178,8 +178,8 @@ def train_slow_extract_and_evolve(
                 if system in ['HalfMoon', 'ToggleSwitch']:
                     hidden_slow.append(input[..., obs_dim:].cpu())
                 
-                input = model.scale(input.to(device)[..., :obs_dim]) # (batchsize,1,channel_num,feature_dim)
-                target = model.scale(target.to(device)[..., :obs_dim])
+                input = model.scale(input.to(device))[..., :obs_dim] # (batchsize,1,channel_num,feature_dim)
+                target = model.scale(target.to(device))[..., :obs_dim]
 
                 # obs —— embedding —— slow representation —— embedding(reconstruction) —— obs(reconstruction)
                 slow_var, embed = model.obs2slow(input)
@@ -237,24 +237,69 @@ def train_slow_extract_and_evolve(
             # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}, cosine_similarity={cos_sim:.5f}', end='')
             # if is_print: print(f'\rTau[{tau_s}] | epoch[{epoch}/{learn_max_epoch}] | val: adiabatic={adiabatic_loss:.5f}, emebd_recons={embed_reconstruct_loss:.5f}, obs_recons={obs_reconstruct_loss:.5f}, obs_evol={obs_evol_loss:.5f}, cosine_similarity={cos_sim:.5f}', end='')
             
+            
             # plot per 5 epoch
-            if epoch % 1 == 0:
+            if epoch % 5 == 0:
                 os.makedirs(log_dir+f"/val/epoch-{epoch}/", exist_ok=True)
-                sample = 10
+                sample = 1
                 input_data = model.descale(inputs)
 
                 # plot slow variable vs input
-                plt.figure(figsize=(16,5+2*(slow_dim-1)))
-                plt.title('Val Reconstruction Curve')
-                for id_var in range(slow_dim):
-                    for index, item in enumerate([f'c{k}' for k in range(inputs.shape[-1])]):
-                        plt.subplot(slow_dim, inputs.shape[-1], index+1+inputs.shape[-1]*(id_var))
-                        plt.scatter(input_data[::sample,0,0,index], slow_vars[::sample, id_var], s=5)
-                        plt.xlabel(item)
-                        plt.ylabel(f'U{id_var+1}')
-                plt.subplots_adjust(wspace=0.35, hspace=0.35)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.pdf", dpi=300)
-                plt.close()
+                if 'FHN' in system:
+                    dim = inputs.shape[-1]
+                    num = 5
+                    interval = dim//num
+
+                    plt.figure(figsize=(16,5+2*(slow_dim-1)))
+                    plt.title('Val Reconstruction Curve')
+                    for id_var in range(slow_dim):
+                        for index, item in enumerate([f'c{k}' for k in range(0, dim, interval)]):
+                            plt.subplot(slow_dim, num, index+1+dim*(id_var))
+                            plt.scatter(input_data[::sample,0,0,index*interval], slow_vars[::sample, id_var], s=5)
+                            plt.xlabel(item)
+                            plt.ylabel(f'U{id_var+1}')
+                    plt.subplots_adjust(wspace=0.35, hspace=0.35)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input_activator.png", dpi=300)
+                    plt.close()
+
+                    plt.figure(figsize=(16,5+2*(slow_dim-1)))
+                    plt.title('Val Reconstruction Curve')
+                    for id_var in range(slow_dim):
+                        for index, item in enumerate([f'c{k}' for k in range(0, dim, interval)]):
+                            plt.subplot(slow_dim, num, index+1+dim*(id_var))
+                            plt.scatter(input_data[::sample,0,1,index*interval], slow_vars[::sample, id_var], s=5)
+                            plt.xlabel(item)
+                            plt.ylabel(f'U{id_var+1}')
+                    plt.subplots_adjust(wspace=0.35, hspace=0.35)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input_inhibitor.png", dpi=300)
+                    plt.close()
+                elif 'PNAS17' in system:
+                    plt.figure(figsize=(16,5+2*(slow_dim-1)))
+                    plt.title('Val Reconstruction Curve')
+                    for id_var in range(slow_dim):
+                        ax1 = plt.subplot(slow_dim, 2, 1+2*(id_var))
+                        ax1.scatter(input_data[::sample,0,0,0], slow_vars[::sample, id_var], s=5)
+                        ax1.set_xlabel('u')
+                        ax1.set_ylabel(f'U{id_var+1}')
+                        ax2 = plt.subplot(slow_dim, 2, 2+2*(id_var))
+                        ax2.scatter(input_data[::sample,0,1,0], slow_vars[::sample, id_var], s=5)
+                        ax2.set_xlabel('v')
+                        ax2.set_ylabel(f'U{id_var+1}')
+                    plt.subplots_adjust(wspace=0.35, hspace=0.35)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.png", dpi=300)
+                    plt.close()
+                else:
+                    plt.figure(figsize=(16,5+2*(slow_dim-1)))
+                    plt.title('Val Reconstruction Curve')
+                    for id_var in range(slow_dim):
+                        for index, item in enumerate([f'c{k}' for k in range(inputs.shape[-1])]):
+                            plt.subplot(slow_dim, inputs.shape[-1], index+1+inputs.shape[-1]*(id_var))
+                            plt.scatter(input_data[::sample,0,0,index], slow_vars[::sample, id_var], s=5)
+                            plt.xlabel(item)
+                            plt.ylabel(f'U{id_var+1}')
+                    plt.subplots_adjust(wspace=0.35, hspace=0.35)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_input.png", dpi=300)
+                    plt.close()
 
                 if system in ['HalfMoon', 'ToggleSwitch']:
                     # plot slow variable vs hidden variable
@@ -267,7 +312,7 @@ def train_slow_extract_and_evolve(
                             plt.xlabel(item)
                             plt.ylabel(f'U{id_var+1}')
                     plt.subplots_adjust(wspace=0.35, hspace=0.35)
-                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_hidden.pdf", dpi=300)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_hidden.png", dpi=300)
                     plt.close()
                 
                 if system == '1S1F':
@@ -277,78 +322,152 @@ def train_slow_extract_and_evolve(
                     plt.scatter(input_data[::sample,0,0,0]+2*input_data[::sample,0,0,0], slow_vars[::sample, 0], s=5)
                     plt.xlabel('X+2Y')
                     plt.ylabel('U')
-                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_constant.pdf", dpi=300)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_vs_constant.png", dpi=300)
                     plt.close()
                 
                 # plot slow variable
-                plt.figure(figsize=(12,5+2*(slow_dim-1)))
-                plt.title('Slow variable Curve')
-                for id_var in range(slow_dim):
-                    for idx in range(inputs.shape[-1]):
-                        ax = plt.subplot(slow_dim, inputs.shape[-1], 1+idx+id_var*inputs.shape[-1])
-                        ax.plot(inputs[:,0,0,idx], label=f'c{idx+1}')
+                if 'PNAS17' in system:
+                    plt.figure(figsize=(16,5+2*(slow_dim-1)))
+                    plt.title('Slow variable Curve')
+                    for id_var in range(slow_dim):
+                        ax1 = plt.subplot(slow_dim, 2, 1+2*id_var)
+                        ax1.plot(inputs[:,0,0,0], label=f'u')
+                        ax1.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
+                        ax1.set_xlabel('t / sample interval')
+                        ax1.legend()
+                        ax2 = plt.subplot(slow_dim, 2, 2+2*id_var)
+                        ax2.plot(inputs[:,0,1,0], label=f'v')
+                        ax2.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
+                        ax2.set_xlabel('t / sample interval')
+                        ax2.legend()
+                    plt.subplots_adjust(wspace=0.35, hspace=0.35)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.png", dpi=300)
+                    plt.close()
+                else:
+                    plt.figure(figsize=(12,5+2*(slow_dim-1)))
+                    plt.title('Slow variable Curve')
+                    for id_var in range(slow_dim):
+                        ax = plt.subplot(slow_dim, 1, 1+id_var)
+                        for idx in range(slow_dim):
+                            ax.plot(inputs[:,0,0,idx], label=f'c{idx+1}')
                         ax.plot(slow_vars[:, id_var], label=f'U{id_var+1}')
-                    ax.legend()
-                plt.subplots_adjust(wspace=0.35, hspace=0.35)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.pdf", dpi=300)
-                plt.close()
+                        ax.set_xlabel('t / sample interval')
+                        ax.legend()
+                    plt.subplots_adjust(wspace=0.35, hspace=0.35)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/slow_variable.png", dpi=300)
+                    plt.close()
 
                 # plot observation and reconstruction
-                plt.figure(figsize=(16,5))
-                for j, item in enumerate([f'c{k}' for k in range(targets.shape[-1])]):
-                    ax = plt.subplot(1,targets.shape[-1],j+1)
-                    ax.plot(inputs[:,0,0,j], label='all_obs')
-                    ax.plot(recons_obses[:,0,0,j], label='slow_obs')
-                    ax.set_title(item)
+                if 'FHN' in system:
+                    dim = targets.shape[-1]
+                    num = 5
+                    interval = dim//num
+
+                    plt.figure(figsize=(16,5))
+                    for j, item in enumerate([f'c{k}' for k in range(0, dim, interval)]):
+                        ax = plt.subplot(1,num,j+1)
+                        ax.plot(inputs[:,0,0,j*interval], label='activator')
+                        ax.plot(recons_obses[:,0,0,j*interval], label='slow_obs')
+                        ax.set_title(item)
+                        ax.legend()
+                    plt.subplots_adjust(wspace=0.2)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_obs_activator.png", dpi=300)
+                    plt.close()
+
+                    plt.figure(figsize=(16,5))
+                    for j, item in enumerate([f'c{k}' for k in range(0, dim, interval)]):
+                        ax = plt.subplot(1,num,j+1)
+                        ax.plot(inputs[:,0,1,j*interval], label='inhibitor')
+                        ax.plot(recons_obses[:,0,1,j*interval], label='slow_obs')
+                        ax.set_title(item)
+                        ax.legend()
+                    plt.subplots_adjust(wspace=0.2)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_obs_inhibitor.png", dpi=300)
+                    plt.close()
+                elif 'PNAS17' in system:
+                    plt.figure(figsize=(16,5))
+                    ax = plt.subplot(121)
+                    ax.plot(inputs[:,0,0,0], label='all_obs')
+                    ax.plot(recons_obses[:,0,0,0], label='slow_obs')
+                    ax.set_title('u')
                     ax.legend()
-                plt.subplots_adjust(wspace=0.2)
-                plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_obs.pdf", dpi=300)
-                plt.close()
+                    ax = plt.subplot(122)
+                    ax.plot(inputs[:,0,1,0], label='all_obs')
+                    ax.plot(recons_obses[:,0,1,0], label='slow_obs')
+                    ax.set_title('v')
+                    ax.legend()
+                    plt.subplots_adjust(wspace=0.2)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_obs.png", dpi=300)
+                    plt.close()
+                    
+                    # phase
+                    plt.figure(figsize=(6,6))
+                    plt.plot(recons_obses[:,0,1,0], recons_obses[:,0,0,0], label='identified slow variable')
+                    plt.plot(inputs[:,0,1,0], inputs[:,0,0,0], label='trajectory')
+                    # u1 = recons_obses.cpu().detach().numpy()[:,0,0,0]
+                    # v1 = u1 - u1**3/3
+                    # plt.plot(v1, u1, label='slow manifold')
+                    plt.xlabel('v')
+                    plt.ylabel('u')
+                    plt.legend()
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/phase.png", dpi=300)
+                    plt.close()
+                else:
+                    plt.figure(figsize=(16,5))
+                    for j, item in enumerate([f'c{k}' for k in range(targets.shape[-1])]):
+                        ax = plt.subplot(1,targets.shape[-1],j+1)
+                        ax.plot(inputs[:,0,0,j], label='all_obs')
+                        ax.plot(recons_obses[:,0,0,j], label='slow_obs')
+                        ax.set_title(item)
+                        ax.legend()
+                    plt.subplots_adjust(wspace=0.2)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_obs.png", dpi=300)
+                    plt.close()
 
                 if system == '2S2F':
 
                     # TODO: 有问题！！！
 
-                    np.savez(log_dir+f"/val/epoch-{epoch}/slow_vs_input.npz", slow_vars=slow_vars, inputs=inputs)
+                    np.savez(log_dir+f"/val/epoch-{epoch}/slow_vs_input.npz", slow_vars=slow_vars, inputs=inputs, recons=recons_obses)
 
-                    num = int(5.1/0.01)
+                    # num = int(5.1/0.01)
                     
-                    c1, c2 = np.meshgrid(np.linspace(-3, 3, 60), np.linspace(-3, 3, 60))
-                    omega = 3
-                    c3 = np.sin(omega*c1)*np.sin(omega*c2)
-                    c4 = 1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2)))
+                    # c1, c2 = np.meshgrid(np.linspace(-3, 3, 60), np.linspace(-3, 3, 60))
+                    # omega = 3
+                    # c3 = np.sin(omega*c1)*np.sin(omega*c2)
+                    # c4 = 1/((1+np.exp(-omega*c1))*(1+np.exp(-omega*c2)))
                     
-                    fig = plt.figure(figsize=(16,6))
-                    descale = model.descale(recons_obses)
-                    for i, (c, trace) in enumerate(zip([c3,c4], [descale[:num,0,0,2:3],descale[:num,0,0,3:4]])):
-                        ax = plt.subplot(1,2,i+1,projection='3d')
+                    # fig = plt.figure(figsize=(16,6))
+                    # descale = model.descale(recons_obses)
+                    # for i, (c, trace) in enumerate(zip([c3,c4], [descale[:num,0,0,2:3],descale[:num,0,0,3:4]])):
+                    #     ax = plt.subplot(1,2,i+1,projection='3d')
 
-                        # plot the slow manifold and c3,c4 trajectory
-                        ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
-                        ax.plot(descale[:num,0,0,:1], descale[:num,0,0,1:2], trace, linewidth=2, color="r", label=rf'Slow trajectory')
-                        print(descale[:num,0,0,:1].item());exit(0)
-                        ax.set_xlabel(r"$c_1$", labelpad=10, fontsize=18)
-                        ax.set_ylabel(r"$c_2$", labelpad=10, fontsize=18)
-                        ax.set_zlim(0, 2)
-                        ax.text2D(0.85, 0.65, rf"$c_{2+i+1}$", fontsize=18, transform=ax.transAxes)
-                        # ax.zaxis.set_rotate_label(False)  # disable automatic rotation
-                        ax.invert_xaxis()
-                        ax.invert_yaxis()
-                        ax.grid(False)
-                        ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-                        ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-                        ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
-                        # ax.view_init(elev=25., azim=-60.) # view direction: elve=vertical angle ,azim=horizontal angle
-                        ax.view_init(elev=0., azim=-90.) # view direction: elve=vertical angle ,azim=horizontal angle
-                        plt.tick_params(labelsize=16)
-                        ax.xaxis.set_major_locator(plt.MultipleLocator(1))
-                        ax.yaxis.set_major_locator(plt.MultipleLocator(1))
-                        ax.zaxis.set_major_locator(plt.MultipleLocator(1))
-                        if i == 1:
-                            plt.legend()
-                        plt.subplots_adjust(bottom=0., top=1.)
+                    #     # plot the slow manifold and c3,c4 trajectory
+                    #     ax.scatter(c1, c2, c, marker='.', color='k', label=rf'Points on slow-manifold surface')
+                    #     ax.plot(descale[:num,0,0,:1], descale[:num,0,0,1:2], trace, linewidth=2, color="r", label=rf'Slow trajectory')
+                    #     print(descale[:num,0,0,:1].item());exit(0)
+                    #     ax.set_xlabel(r"$c_1$", labelpad=10, fontsize=18)
+                    #     ax.set_ylabel(r"$c_2$", labelpad=10, fontsize=18)
+                    #     ax.set_zlim(0, 2)
+                    #     ax.text2D(0.85, 0.65, rf"$c_{2+i+1}$", fontsize=18, transform=ax.transAxes)
+                    #     # ax.zaxis.set_rotate_label(False)  # disable automatic rotation
+                    #     ax.invert_xaxis()
+                    #     ax.invert_yaxis()
+                    #     ax.grid(False)
+                    #     ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+                    #     ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+                    #     ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 1.0))
+                    #     # ax.view_init(elev=25., azim=-60.) # view direction: elve=vertical angle ,azim=horizontal angle
+                    #     ax.view_init(elev=0., azim=-90.) # view direction: elve=vertical angle ,azim=horizontal angle
+                    #     plt.tick_params(labelsize=16)
+                    #     ax.xaxis.set_major_locator(plt.MultipleLocator(1))
+                    #     ax.yaxis.set_major_locator(plt.MultipleLocator(1))
+                    #     ax.zaxis.set_major_locator(plt.MultipleLocator(1))
+                    #     if i == 1:
+                    #         plt.legend()
+                    #     plt.subplots_adjust(bottom=0., top=1.)
                     
-                    plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_manifold.pdf", dpi=300)
+                    plt.savefig(log_dir+f"/val/epoch-{epoch}/recons_manifold.png", dpi=300)
                     plt.close()
 
                 # # plot prediction vs true
@@ -361,7 +480,7 @@ def train_slow_extract_and_evolve(
                 #     ax.set_title(item)
                 #     ax.legend()
                 # plt.subplots_adjust(wspace=0.2)
-                # plt.savefig(log_dir+f"/val/epoch-{epoch}/prediction.pdf", dpi=300)
+                # plt.savefig(log_dir+f"/val/epoch-{epoch}/prediction.png", dpi=300)
                 # plt.close()
         
                 # save model
@@ -376,7 +495,7 @@ def train_slow_extract_and_evolve(
     plt.xlabel('epoch')
     plt.legend()
     plt.title('Training Loss Curve')
-    plt.savefig(log_dir+'/train_loss_curve.pdf', dpi=300)
+    plt.savefig(log_dir+'/train_loss_curve.png', dpi=300)
 
     # plot Koopman Lambda curve
     plt.figure(figsize=(10,10))
@@ -389,7 +508,7 @@ def train_slow_extract_and_evolve(
     plt.yticks(fontsize=16)
     plt.legend()
     plt.subplots_adjust(bottom=0.15)
-    plt.savefig(log_dir+'/K_lambda_curve.pdf', dpi=300)
+    plt.savefig(log_dir+'/K_lambda_curve.png', dpi=300)
     np.savez(log_dir+'/K_lambda_curve.npz',lambda_curve=lambda_curve)
 
 
@@ -455,8 +574,8 @@ def test_evolve(
             if system in ['HalfMoon', 'ToggleSwitch']:
                 hidden_slow.append(input[..., obs_dim:].cpu())
             
-            input = model.scale(input.to(device)[..., :obs_dim])
-            target = model.scale(target.to(device)[..., :obs_dim])
+            input = model.scale(input.to(device))[..., :obs_dim]
+            target = model.scale(target.to(device))[..., :obs_dim]
         
             # obs —— embedding —— slow representation —— koopman
             slow_var, _ = model.obs2slow(input)
@@ -527,7 +646,7 @@ def test_evolve(
         plt.xlabel('t / s', fontsize=20)
         plt.ylabel(item, fontsize=20)
     plt.subplots_adjust(wspace=0.35)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.pdf", dpi=300)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_extract.png", dpi=300)
     plt.close()
 
     # plot slow variable vs input
@@ -542,7 +661,7 @@ def test_evolve(
             plt.xlabel(item, fontsize=20)
             plt.ylabel(rf'$u_{id_var+1}$', fontsize=20)
     plt.subplots_adjust(wspace=0.55, hspace=0.35)
-    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.pdf", dpi=150)
+    plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_input.png", dpi=150)
     plt.close()
 
     if system in ['HalfMoon', 'ToggleSwitch']:
@@ -556,7 +675,7 @@ def test_evolve(
                 plt.xlabel(item)
                 plt.ylabel(f'U{id_var+1}')
         plt.subplots_adjust(wspace=0.35, hspace=0.35)
-        plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_hidden.pdf", dpi=300)
+        plt.savefig(log_dir+f"/test/{delta_t}/slow_vs_hidden.png", dpi=300)
         plt.close()
 
     for i, figname in enumerate(['slow_pred', 'fast_pred', 'total_pred']):
@@ -579,7 +698,7 @@ def test_evolve(
             ax.set_title(item)
             ax.legend()
         plt.subplots_adjust(wspace=0.2)
-        plt.savefig(log_dir+f"/test/{delta_t}/{figname}.pdf", dpi=300)
+        plt.savefig(log_dir+f"/test/{delta_t}/{figname}.png", dpi=300)
         plt.close()
 
     if system == '2S2F':

@@ -77,24 +77,31 @@ def plot_id_per_tau(tau_list, id_epoch, log_dir):
             seed = int(line[:-1].split(',')[1])
             epoch = int(line[:-1].split(',')[4])
             MLE_id = float(line[:-1].split(',')[5])
+            MiND_id = float(line[:-1].split(',')[6])
+            MADA_id = float(line[:-1].split(',')[7])
+            PCA_id = float(line[:-1].split(',')[8])
 
             if epoch in id_epoch:
-                id_per_tau[i].append([MLE_id])
+                id_per_tau[i].append([MLE_id, MiND_id, MADA_id, PCA_id])
     
     for i in range(len(tau_list)):
         id_per_tau[i] = np.mean(id_per_tau[i], axis=0)
     id_per_tau = np.array(id_per_tau)
 
-    round_id_per_tau = []
-    for id in id_per_tau:
-        if math.isnan(id[0]):
-            id[0] = 0.
-        round_id_per_tau.append([round(id[0])])
-    round_id_per_tau = np.array(round_id_per_tau)
+    # round_id_per_tau = []
+    # for id in id_per_tau:
+    #     if math.isnan(id[0]):
+    #         id[0] = 0.
+    #     round_id_per_tau.append([round(id[0])])
+    # round_id_per_tau = np.array(round_id_per_tau)
 
     plt.figure(figsize=(6,6))
-    plt.plot(tau_list, id_per_tau[:,0], marker="o", markersize=6, label="ID")
-    plt.plot(tau_list, round_id_per_tau[:,0], marker="^", markersize=6, label="ID-rounding")
+    plt.plot(tau_list, id_per_tau[:,0], marker="o", markersize=6, label="MLE")
+    plt.plot(tau_list, id_per_tau[:,1], marker="^", markersize=6, label="MiND_ML")
+    plt.plot(tau_list, id_per_tau[:,2], marker="+", markersize=6, label="MADA")
+    plt.plot(tau_list, id_per_tau[:,3], marker="*", markersize=6, label="PCA")
+    # plt.plot(tau_list, id_per_tau[:,0], marker="o", markersize=6, label="ID")
+    # plt.plot(tau_list, round_id_per_tau[:,0], marker="^", markersize=6, label="ID-rounding")
     plt.xticks(fontsize=16)
     plt.yticks(fontsize=16)
     plt.legend()

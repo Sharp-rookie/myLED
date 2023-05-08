@@ -6,10 +6,10 @@ from .weight_init import normal_init
 
 class EncodeLayer(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, flatten=False, dropout=False, net='MLP', activate=False, layernorm=False):
+    def __init__(self, input_dim, hidden_dim, flatten=False, dropout=False, net='MLP', activate=False, layernorm=False, in_channel=2):
         super(EncodeLayer, self).__init__()
 
-        assert net in ['MLP', 'GRU1', 'GRU2', 'LSTM', 'LSTM-changed'], f"Encoder Net Error, {net} not implemented!"
+        assert net in ['MLP', 'GRU1', 'GRU2', 'LSTM', 'LSTM-changed', 'Conv1d'], f"Encoder Net Error, {net} not implemented!"
         if activate==True and net!='MLP': print("Warning: Activate only works for MLP!")
 
         self.net = net
@@ -32,11 +32,30 @@ class EncodeLayer(nn.Module):
 
         if 'LSTM' not in net: # GRU2
             self.b4 = nn.Parameter(torch.zeros(hidden_dim))
+        
+        if net == 'Conv1d':
+            # input: (N, 2, 100)
+            self.conv = nn.Sequential(
+                nn.Conv1d(in_channel, 16, kernel_size=3, stride=1, padding=1), # (N, 2, 100) -> (N, 16, 100)
+                # nn.AvgPool1d(kernel_size=2, stride=2, padding=0), # (N, 8, 100) -> (N, 8, 50)
+                nn.ReLU(),
+                nn.Conv1d(16, 1, kernel_size=3, stride=1, padding=1), # (N, 16, 100) -> (N, 1, 100)
+                # nn.AvgPool1d(kernel_size=2, stride=2, padding=0), # (N, 1, 50) -> (N, 1, 25)
+                nn.ReLU(),
+                nn.Flatten(),
+                nn.Linear(100, hidden_dim)  # (N, 100) -> (N, hidden_dim)
+            )
 
         self.sigmoid = nn.Sigmoid()
         self.tanh = nn.Tanh()
+        self.relu = nn.ReLU()
     
     def forward(self, x):
+
+        if self.net == 'Conv1d':
+            x = x.view(-1, 2, 100)
+            y = self.conv(x)
+            return y
 
         if self.flatten:
             x = self.flatten(x)
@@ -68,6 +87,7 @@ class EncodeLayer(nn.Module):
         
         if self.activate and self.net == 'MLP':
             y = self.tanh(y)
+            # y = self.relu(y)
 
         if self.dropout:
             y = self.dropout(y)
@@ -81,18 +101,17 @@ class TimeLaggedAE(nn.Module):
         super(TimeLaggedAE, self).__init__()
                 
         # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)
-        assert e1_layer_n>=1, f"Layer num of encoder_1 must larger than 0, but is {e1_layer_n}"
         self.encoder = nn.Sequential()
-        enc_layer_num = e1_layer_n + 1  # layer num = hidden layer num + 1
-        for i in range(enc_layer_num):
+        for i in range(e1_layer_n):
             self.encoder.append(EncodeLayer(
-                input_dim  = 64 if i>0 else in_channels*feature_dim, 
-                hidden_dim = 64 if i<enc_layer_num-1 else embed_dim, 
+                input_dim  = 128 if i>0 else in_channels*feature_dim, 
+                hidden_dim = 128 if i<e1_layer_n-1 else embed_dim, 
                 flatten    = False if i>0 else True, 
-                dropout    = True if i<enc_layer_num-1 else False, 
+                dropout    = True if i<e1_layer_n-1 else False, 
                 net        = enc_net, 
-                activate   = True if i<enc_layer_num-1 else False, 
-                layernorm  = True if i<enc_layer_num-1 else False))
+                activate   = True if i<e1_layer_n-1 else False, 
+                layernorm  = True if i<e1_layer_n-1 else False,
+                in_channel = in_channels))
         # self.encoder = nn.Sequential(
         #     nn.Flatten(),
         #     nn.Linear(in_channels*feature_dim, 64, bias=True),
@@ -109,8 +128,6 @@ class TimeLaggedAE(nn.Module):
             nn.Linear(64, in_channels*feature_dim, bias=True),
             nn.Unflatten(-1, (1, in_channels, feature_dim))
         )
-
-        # (batchsize, embed_dim)-->(batchsize,1,channel_num,feature_dim)
         self.decoder_reverse = nn.Sequential(
             nn.Linear(embed_dim, 64, bias=True),
             nn.Tanh(),
@@ -118,6 +135,25 @@ class TimeLaggedAE(nn.Module):
             nn.Linear(64, in_channels*feature_dim, bias=True),
             nn.Unflatten(-1, (1, in_channels, feature_dim))
         )
+
+        # self.decoder_prior = nn.Sequential(
+        #     nn.Linear(embed_dim, 100),
+        #     nn.Unflatten(-1, (1, 100)),
+        #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 1, 25) -> (N, 1, 50)
+        #     nn.ConvTranspose1d(1, 16, kernel_size=5, stride=1, padding=2), # (N, 1, 100) -> (N, 16, 100)
+        #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 8, 50) -> (N, 8, 100)
+        #     nn.ReLU(),
+        #     nn.ConvTranspose1d(16, in_channels, kernel_size=5, stride=1, padding=2), # (N, 16, 100) -> (N, 2, 100)
+        # )
+        # self.decoder_reverse = nn.Sequential(
+        #     nn.Linear(embed_dim, 100),
+        #     nn.Unflatten(-1, (1, 100)),
+        #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 1, 25) -> (N, 1, 50)
+        #     nn.ConvTranspose1d(1, 16, kernel_size=5, stride=1, padding=2), # (N, 1, 100) -> (N, 16, 100)
+        #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 8, 50) -> (N, 8, 100)
+        #     nn.ReLU(),
+        #     nn.ConvTranspose1d(16, in_channels, kernel_size=5, stride=1, padding=2), # (N, 16, 100) -> (N, 2, 100)
+        # )
         
         # scale inside the model
         self.register_buffer('min', torch.zeros(in_channels, data_dim, dtype=torch.float32))
@@ -129,6 +165,7 @@ class TimeLaggedAE(nn.Module):
     def forward(self, x, direct='prior'):
         embed = self.encoder(x)
         out = self.decoder_prior(embed) if direct=='prior' else self.decoder_reverse(embed)
+        out = out.view(x.shape)
         return out, embed
     
     def enc(self, x):

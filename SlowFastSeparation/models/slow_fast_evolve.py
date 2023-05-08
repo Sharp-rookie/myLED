@@ -89,18 +89,17 @@ class DynamicsEvolver(nn.Module):
         self.redundant_dim = redundant_dim
         
         # (batchsize,1,channel_num,feature_dim)-->(batchsize, embed_dim)
-        assert e1_layer_n>=1, f"Layer num of encoder_1 must larger than 0, but is {e1_layer_n}"
         self.encoder_1 = nn.Sequential()
-        enc_layer_num = e1_layer_n + 1  # layer num = hidden layer num + 1
-        for i in range(enc_layer_num):
-            self.encoder_1.append(EncodeLayer(
-                input_dim  = 64 if i>0 else in_channels*feature_dim, 
-                hidden_dim = 64 if i<enc_layer_num-1 else embed_dim, 
+        for i in range(e1_layer_n):
+            self.encoder.append(EncodeLayer(
+                input_dim  = 128 if i>0 else in_channels*feature_dim, 
+                hidden_dim = 128 if i<e1_layer_n-1 else embed_dim, 
                 flatten    = False if i>0 else True, 
-                dropout    = True if i<enc_layer_num-1 else False, 
+                dropout    = True if i<e1_layer_n-1 else False, 
                 net        = enc_net, 
-                activate   = True if i<enc_layer_num-1 else False, 
-                layernorm  = True if i<enc_layer_num-1 else False))
+                activate   = True if i<e1_layer_n-1 else False, 
+                layernorm  = True if i<e1_layer_n-1 else False,
+                in_channel = in_channels))
         # self.encoder_1 = nn.Sequential(
         #     nn.Flatten(),
         #     nn.Linear(in_channels*feature_dim, 64, bias=True),
