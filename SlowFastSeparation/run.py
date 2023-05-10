@@ -69,7 +69,7 @@ def Data_Generate(args):
     else:
         xdim = int(args.system.split('xdim')[-1])
         origin_dir = args.data_dir.replace('data', 'origin')
-        generate_original_data(args.trace_num, args.total_t, args.dt, save=True, plot=True, parallel=args.parallel, xdim=xdim, delta=args.delta, du=args.du, data_dir=origin_dir)
+        generate_original_data(args.trace_num, args.total_t, args.dt, save=True, plot=True, parallel=args.parallel, xdim=xdim, delta=args.delta, du=args.du, data_dir=origin_dir, init_type=args.init_type)
 
     # generate dataset for ID estimating
     print('Generating training data for ID estimating')
@@ -170,6 +170,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='ours', help='Model: [ours, lstm, tcn, neural_ode]')
     parser.add_argument('--init_type', type=str, default='grf', help='initialization type: [grf, random]')
+    parser.add_argument('--clone', type=int, default=None, help='clone the low-dimension to high-dimension')
     parser.add_argument('--system', type=str, default='2S2F', help='Dynamical System: [1S1F, 1S2F, ToggleSwitch, SignalingCascade, HalfMoon, 2S2F, FHN, SC]')
     parser.add_argument('--channel_num', type=int, default=4, help='Overall featrue number')
     parser.add_argument('--obs_dim', type=int, default=4, help='Obervable feature dimension')

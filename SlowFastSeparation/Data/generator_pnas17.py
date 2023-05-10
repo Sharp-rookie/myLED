@@ -72,7 +72,7 @@ def sample_gaussian_field(n, mu=0.0, sigma=1.0, l=1.0):
 
 def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=False, parallel=False, xdim=1, delta=0., du=0.5, data_dir='Data/PNAS17_xdim1/origin', init_type='grf'):
     
-    def solve_1_trace(trace_id, init_type):
+    def solve_1_trace(trace_id, init_type, plot=False):
         
         seed_everything(trace_id)
         
@@ -91,20 +91,20 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
         elif init_type=='circle':
             v0, u0 = [], []
             for _ in range(xdim):
-                angle = np.random.normal(loc=np.pi/2, scale=0.6) if np.random.randint(0, 2)==0 else np.random.normal(loc=-np.pi/2, scale=0.6)
+                angle = np.random.normal(loc=np.pi/2, scale=1.0) if np.random.randint(0, 2)==0 else np.random.normal(loc=-np.pi/2, scale=1.0)
                 u0.append(3*np.cos(angle))
                 v0.append(3*np.sin(angle))
         elif init_type=='grf':
             f = sample_gaussian_field(xdim, mu=-3.0, sigma=1.0, l=5.0) if np.random.randint(0, 2)==0 else sample_gaussian_field(xdim, mu=3.0, sigma=1.0, l=5.0)
-            u0 = []
             v0 = f.tolist()
+            u0 = []
             for v in f:
                 func = np.poly1d([-1/3,0,-1,-v])
                 for root in func.roots:
                     if np.imag(root) == 0:
                         u0.append(np.real(root))
                         continue
-        x0 = u0 + v0        
+        x0 = u0 + v0
 
         tspan  =np.arange(0, total_t, dt)
         
@@ -158,7 +158,7 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
     
     trace = []
     for trace_id in tqdm(range(1, trace_num+1)):
-        sol = solve_1_trace(trace_id, init_type)
+        sol = solve_1_trace(trace_id, init_type, plot=trace_id==1) 
         trace.append(sol)
         
     # plot initial condition

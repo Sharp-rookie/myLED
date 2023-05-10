@@ -65,7 +65,7 @@ def sample_gaussian_field(n, mu=0.0, sigma=1.0, l=1.0):
     return f
 
 
-xdim, t = 300, 0.01
+xdim, t = 2000, 0.05
 l = 2.0
 a, epsilon, delta1, delta2, du = 1.05, 0.01, 0.2, 0.2, 0.
 init_type = 'circle'
@@ -124,10 +124,15 @@ except:
     v = sol[:, xdim:]
     np.savez(f'fhn_hd_delta2_{delta2}_du_{du}_xdim_{xdim}_t{t}.npz', u=u, v=v)
     
+# slow manifold
+u_s = np.linspace(-2.4, 2.4, 100)
+v_s = -u_s**3/3 + u_s
+
 # phase
 plt.figure(figsize=(8, 8))
 for i in range(xdim):
     plt.plot(v[:, i], u[:, i], alpha=0.5)
+    plt.plot(v_s, u_s, 'k--')
     plt.xlabel('v', fontsize=18)
     plt.ylabel('u', fontsize=18)
 plt.savefig(f'phase_delta{delta2}_du{du}.png', dpi=300)
