@@ -35,6 +35,7 @@ class EncodeLayer(nn.Module):
         
         if net == 'Conv1d':
             # input: (N, 2, 100)
+            self.input_dim = input_dim
             self.conv = nn.Sequential(
                 nn.Conv1d(in_channel, 16, kernel_size=3, stride=1, padding=1), # (N, 2, 100) -> (N, 16, 100)
                 # nn.AvgPool1d(kernel_size=2, stride=2, padding=0), # (N, 8, 100) -> (N, 8, 50)
@@ -43,7 +44,7 @@ class EncodeLayer(nn.Module):
                 # nn.AvgPool1d(kernel_size=2, stride=2, padding=0), # (N, 1, 50) -> (N, 1, 25)
                 nn.ReLU(),
                 nn.Flatten(),
-                nn.Linear(100, hidden_dim)  # (N, 100) -> (N, hidden_dim)
+                nn.Linear(int(self.input_dim/2), hidden_dim)  # (N, 100) -> (N, hidden_dim)
             )
 
         self.sigmoid = nn.Sigmoid()
@@ -53,7 +54,7 @@ class EncodeLayer(nn.Module):
     def forward(self, x):
 
         if self.net == 'Conv1d':
-            x = x.view(-1, 2, 100)
+            x = x.view(-1, 2, int(self.input_dim/2))
             y = self.conv(x)
             return y
 
@@ -137,8 +138,8 @@ class TimeLaggedAE(nn.Module):
         )
 
         # self.decoder_prior = nn.Sequential(
-        #     nn.Linear(embed_dim, 100),
-        #     nn.Unflatten(-1, (1, 100)),
+        #     nn.Linear(embed_dim, feature_dim),
+        #     nn.Unflatten(-1, (1, feature_dim)),
         #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 1, 25) -> (N, 1, 50)
         #     nn.ConvTranspose1d(1, 16, kernel_size=5, stride=1, padding=2), # (N, 1, 100) -> (N, 16, 100)
         #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 8, 50) -> (N, 8, 100)
@@ -146,8 +147,8 @@ class TimeLaggedAE(nn.Module):
         #     nn.ConvTranspose1d(16, in_channels, kernel_size=5, stride=1, padding=2), # (N, 16, 100) -> (N, 2, 100)
         # )
         # self.decoder_reverse = nn.Sequential(
-        #     nn.Linear(embed_dim, 100),
-        #     nn.Unflatten(-1, (1, 100)),
+        #     nn.Linear(embed_dim, feature_dim),
+        #     nn.Unflatten(-1, (1, feature_dim)),
         #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 1, 25) -> (N, 1, 50)
         #     nn.ConvTranspose1d(1, 16, kernel_size=5, stride=1, padding=2), # (N, 1, 100) -> (N, 16, 100)
         #     # nn.Upsample(scale_factor=2, mode='linear', align_corners=True), # (N, 8, 50) -> (N, 8, 100)

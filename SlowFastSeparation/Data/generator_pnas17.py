@@ -70,9 +70,9 @@ def sample_gaussian_field(n, mu=0.0, sigma=1.0, l=1.0):
     return f
 
 
-def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=False, parallel=False, xdim=1, delta=0., du=0.5, data_dir='Data/PNAS17_xdim1/origin'):
+def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=False, parallel=False, xdim=1, delta=0., du=0.5, data_dir='Data/PNAS17_xdim1/origin', init_type='grf'):
     
-    def solve_1_trace(trace_id):
+    def solve_1_trace(trace_id, init_type):
         
         seed_everything(trace_id)
         
@@ -80,19 +80,31 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
         sde = SDE_FHN(a=a, epsilon=epsilon, delta1=delta1, delta2=delta2, du=du, xdim=xdim)
         
         # initial condition
-        # x0 = [np.random.normal(-3, 0.3) for _ in range(2*xdim)]  # local
-        v0 = [np.random.uniform(-3, -2) if np.random.randint(0, 2)==0 else np.random.uniform(2, 3) for _ in range(xdim)]
-        u0 = [np.random.uniform(-3, -2) if np.random.randint(0, 2)==0 else np.random.uniform(2, 3) for _ in range(xdim)]
-        # f = sample_gaussian_field(xdim, mu=-3.0, sigma=1.0, l=5.0) if np.random.randint(0, 2)==0 else sample_gaussian_field(xdim, mu=3.0, sigma=1.0, l=5.0)
-        # u0 = []
-        # v0 = f.tolist()
-        # for v in f:
-        #     func = np.poly1d([-1/3,0,-1,-v])
-        #     for root in func.roots:
-        #         if np.imag(root) == 0:
-        #             u0.append(np.real(root))
-        #             continue
-        x0 = u0 + v0
+        if init_type=='random':
+            v0, u0 = [], []
+            for _ in range(xdim):
+                v0.append(np.random.uniform(-3, -2) if np.random.randint(0, 2)==0 else np.random.uniform(2, 3))
+                u0.append(np.random.uniform(-3, -2) if np.random.randint(0, 2)==0 else np.random.uniform(2, 3))
+        elif init_type=='space':
+            v0 = [np.random.uniform(-3, 3) for _ in range(xdim)]
+            u0 = [np.random.uniform(-3, 3) for _ in range(xdim)]
+        elif init_type=='circle':
+            v0, u0 = [], []
+            for _ in range(xdim):
+                angle = np.random.normal(loc=np.pi/2, scale=0.6) if np.random.randint(0, 2)==0 else np.random.normal(loc=-np.pi/2, scale=0.6)
+                u0.append(3*np.cos(angle))
+                v0.append(3*np.sin(angle))
+        elif init_type=='grf':
+            f = sample_gaussian_field(xdim, mu=-3.0, sigma=1.0, l=5.0) if np.random.randint(0, 2)==0 else sample_gaussian_field(xdim, mu=3.0, sigma=1.0, l=5.0)
+            u0 = []
+            v0 = f.tolist()
+            for v in f:
+                func = np.poly1d([-1/3,0,-1,-v])
+                for root in func.roots:
+                    if np.imag(root) == 0:
+                        u0.append(np.real(root))
+                        continue
+        x0 = u0 + v0        
 
         tspan  =np.arange(0, total_t, dt)
         
@@ -139,24 +151,35 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
             plt.close()
 
         sol = np.stack((u,v), axis=0).transpose(1,0,2)  # (time_length, 2, xdim)
+        
         return sol
     
     if save and os.path.exists(f'{data_dir}/origin.npz'): return
     
     trace = []
     for trace_id in tqdm(range(1, trace_num+1)):
-        sol = solve_1_trace(trace_id)
+        sol = solve_1_trace(trace_id, init_type)
         trace.append(sol)
+        
+    # plot initial condition
+    if plot:
+        plt.figure(figsize=(8, 8))
+        for sub_trace in trace:
+            plt.scatter(sub_trace[0, 1, :], sub_trace[0, 0, :])
+        plt.title('Initial condition')
+        plt.xlabel('v')
+        plt.ylabel('u')
+        plt.savefig(f'{data_dir}/IC_delta_{delta}_du_{du}_xdim{xdim}.png')
     
     if save: 
         np.savez(f'{data_dir}/origin.npz', trace=trace, dt=dt, T=total_t)
-        print(f'save origin data form seed 1 to {trace_num} at {data_dir}/')
+        print(f'save origin data from seed 1 to {trace_num} at {data_dir}/')
     
     return np.array(trace)
 # generate_original_data(1, total_t=0.9, dt=0.001, save=False, plot=True, xdim=1)
 
 
-def generate_dataset_static(trace_num, tau=0., dt=0.001, max_tau=0.01, is_print=False, parallel=False, xdim=1, data_dir='Data/PNAS17_xdim1/data'):
+def generate_dataset_static(trace_num, tau=0., dt=0.001, max_tau=0.01, is_print=False, parallel=False, xdim=1, data_dir='Data/PNAS17_xdim1/data', init_type='grf'):
 
     if os.path.exists(f"{data_dir}/tau_{tau}/train_static.npz") and os.path.exists(f"{data_dir}/tau_{tau}/val_static.npz") and os.path.exists(f"{data_dir}/tau_{tau}/test_static.npz"):
         return
@@ -165,7 +188,8 @@ def generate_dataset_static(trace_num, tau=0., dt=0.001, max_tau=0.01, is_print=
     if not os.path.exists(f"{data_dir}/static_{max_tau:.2f}.npz"):
         if is_print: print('generating simulation trajectories:')
         # total_t 略大于 max_tau，后面截取不从0开始，以避免所有数据的初始值相同
-        data = generate_original_data(trace_num, total_t=max_tau+1*dt, dt=dt, save=False, plot=False, parallel=parallel, xdim=xdim)
+        data_dir = data_dir.replace('data', "origin")
+        data = generate_original_data(trace_num, total_t=max_tau+1*dt, dt=dt, save=False, plot=False, parallel=parallel, xdim=xdim, data_dir=data_dir, init_type=init_type)
         os.makedirs(data_dir, exist_ok=True)
         np.savez(f"{data_dir}/static_{max_tau:.2f}.npz", data=data)
         if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
@@ -234,6 +258,7 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
     tmp = np.load(f"{origin_dir}/origin.npz")
     dt = tmp['dt']
     data = tmp['trace']
+    total_t = tmp['T']
     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
 
     # save statistic information
@@ -259,8 +284,7 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
     val_num = int(0.1*trace_num)
     test_num = int(0.2*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
-    for item in ['train','val','test']:
-                
+    for item in ['train','val','test']:                
         # select trace num
         N_TRACE = len(trace_list[item])
         data_item = data[trace_list[item]]
@@ -329,3 +353,113 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
                 plt.plot(sequences[:,sequence_length-1,1,0], label='v_x0')
                 plt.legend()
                 plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
+
+
+def generate_dataset_slidingwindow_slice(trace_num, tau, sample_num=None, is_print=False, sequence_length=None, xdim=1, data_dir='Data/PNAS17_xdim1/data'):
+    
+    # load original data
+    if is_print: print('loading original trace data:')
+    origin_dir = data_dir.replace('data', 'origin')
+    tmp = np.load(f"{origin_dir}/origin.npz")
+    dt = tmp['dt']
+    data = tmp['trace']
+    total_t = tmp['T']
+    if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
+
+    # single-sample time steps
+    if sequence_length is None:
+        sequence_length = 2 if tau != 0. else 1
+        seq_none = True
+    else:
+        seq_none = False
+    
+    ##################################
+    # Create [train,val,test] dataset
+    ##################################
+    train_num = int(0.7*trace_num)
+    val_num = int(0.1*trace_num)
+    test_num = int(0.2*trace_num)
+    trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
+    for item in ['train','val','test']:
+        for slice_id in range(int(total_t)):
+
+            data_dir_tmp = f"{data_dir}/slice_id{slice_id}/tau_{tau}"
+
+            if os.path.exists(f"{data_dir_tmp}/{item}.npz"): continue
+
+            # save statistic information
+            os.makedirs(data_dir_tmp, exist_ok=True)
+            np.savetxt(data_dir_tmp + "/data_mean.txt", np.mean(data, axis=(0,1)).reshape(1,-1))
+            np.savetxt(data_dir_tmp + "/data_std.txt", np.std(data, axis=(0,1)).reshape(1,-1))
+            np.savetxt(data_dir_tmp + "/data_max.txt", np.max(data, axis=(0,1)).reshape(1,-1))
+            np.savetxt(data_dir_tmp + "/data_min.txt", np.min(data, axis=(0,1)).reshape(1,-1))
+            np.savetxt(data_dir_tmp + "/tau.txt", [tau]) # Save the timestep
+                
+            # select trace num
+            N_TRACE = len(trace_list[item])
+            data_item = data[trace_list[item]][:, slice_id*int(1/dt):(slice_id+1)*int(1//dt)]
+
+            # subsampling
+            step_length = int(tau/dt) if tau!=0. else 1
+
+            # select sliding window index from N trace
+            idxs_timestep = []
+            idxs_ic = []
+            for ic in range(N_TRACE):
+                seq_data = data_item[ic]
+                idxs = np.arange(0, np.shape(seq_data)[0]-step_length*(sequence_length-1), 1)
+                for idx_ in idxs:
+                    idxs_ic.append(ic)
+                    idxs_timestep.append(idx_)
+
+            # generator item dataset
+            sequences = []
+            parallel_sequences = [[] for _ in range(N_TRACE)]
+            for bn in range(len(idxs_timestep)):
+                idx_ic = idxs_ic[bn]
+                idx_timestep = idxs_timestep[bn]
+                tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(sequence_length-1)+1 : step_length]
+                sequences.append(tmp)
+                parallel_sequences[idx_ic].append(tmp)
+                if is_print: print(f'\rtau[{tau}] sliding window for {item} data [{bn+1}/{len(idxs_timestep)}]', end='')
+            if is_print: print()
+
+            sequences = np.array(sequences) 
+            if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length}, step_length={step_length})", np.shape(sequences))
+
+            # keep sequences_length equal to sample_num
+            if sample_num is not None:
+                repeat_num = int(np.floor(N_TRACE*sample_num/len(sequences)))
+                idx = np.random.choice(range(len(sequences)), N_TRACE*sample_num-len(sequences)*repeat_num, replace=False)
+                idx = np.sort(idx)
+                tmp1 = sequences[idx]
+                tmp2 = None
+                for i in range(repeat_num):
+                    if i == 0:
+                        tmp2 = sequences
+                    else:
+                        tmp2 = np.concatenate((tmp2, sequences), axis=0)
+                sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
+            if is_print: print(f'tau[{tau}]', f"after process", np.shape(sequences))
+
+            # save
+            if not seq_none:
+                np.savez(data_dir_tmp+f'/{item}_{sequence_length}.npz', data=sequences)
+            else:
+                np.savez(data_dir_tmp+f'/{item}.npz', data=sequences)
+
+                # plot
+                if seq_none:
+                    plt.figure(figsize=(16,10))
+                    plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+                    plt.plot(sequences[:,0,0,0], label='u_x0')
+                    plt.plot(sequences[:,0,1,0], label='v_x0')
+                    plt.legend()
+                    plt.savefig(data_dir_tmp+f'/{item}_input.pdf', dpi=300)
+
+                    plt.figure(figsize=(16,10))
+                    plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
+                    plt.plot(sequences[:,sequence_length-1,0,0], label='u_x0')
+                    plt.plot(sequences[:,sequence_length-1,1,0], label='v_x0')
+                    plt.legend()
+                    plt.savefig(data_dir_tmp+f'/{item}_target.pdf', dpi=300)

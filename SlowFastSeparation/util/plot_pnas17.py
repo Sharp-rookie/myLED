@@ -110,6 +110,78 @@ def plot_id_per_tau(tau_list, id_epoch, log_dir):
     plt.subplots_adjust(bottom=0.15)
     plt.savefig(log_dir + 'id_per_tau.pdf', dpi=300)
 
+
+def plot_id_per_slice(slice_id_list, id_epoch, log_dir):
+
+    id_per_slice_id = [[] for _ in slice_id_list]
+    for i, slice_id in enumerate(slice_id_list):
+        fp = open(log_dir + f'slice_id{slice_id}/tau_0.0/test_log.txt', 'r')
+        for line in fp.readlines():
+            seed = int(line[:-1].split(',')[1])
+            epoch = int(line[:-1].split(',')[4])
+            MLE_id = float(line[:-1].split(',')[5])
+            MiND_id = float(line[:-1].split(',')[6])
+            # DANCo_id = float(line[:-1].split(',')[7])
+            MADA_id = float(line[:-1].split(',')[8])
+
+            if epoch in id_epoch:
+                # id_per_slice_id[i].append([MLE_id, MiND_id, DANCo_id, MADA_id])
+                id_per_slice_id[i].append([MLE_id, MiND_id, MADA_id])
+    
+    for i in range(len(slice_id_list)):
+        id_per_slice_id[i] = np.mean(id_per_slice_id[i], axis=0)
+    id_per_slice_id = np.array(id_per_slice_id)
+
+
+    plt.figure(figsize=(6,6))
+    plt.plot(slice_id_list, id_per_slice_id[:,0], marker="+", markersize=6, label="MLE")
+    plt.plot(slice_id_list, id_per_slice_id[:,1], marker="^", markersize=6, label="MiND_ML")
+    # plt.plot(slice_id_list, id_per_slice_id[:,2], marker="o", markersize=6, label="DANCo")
+    plt.plot(slice_id_list, id_per_slice_id[:,2], marker="*", markersize=6, label="MADA")
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.legend()
+    plt.xlabel('t / s', fontsize=18)
+    plt.ylabel('Intrinsic dimensionality', fontsize=18)
+    plt.subplots_adjust(bottom=0.15)
+    plt.savefig(log_dir + 'id_per_slice_id.pdf', dpi=300)
+
+
+def plot_id_per_xdim(xdim_list, id_epoch, log_dir):
+
+    id_per_xdim = [[] for _ in xdim_list]
+    for i, xdim in enumerate(xdim_list):
+        fp = open(f'logs/PNAS17_xdim{xdim}_delta0.2_du0.0-sliding_window-random/TimeSelection/tau_0.0/test_log.txt', 'r')
+        for line in fp.readlines():
+            seed = int(line[:-1].split(',')[1])
+            epoch = int(line[:-1].split(',')[4])
+            MLE_id = float(line[:-1].split(',')[5])
+            MiND_id = float(line[:-1].split(',')[6])
+            MADA_id = float(line[:-1].split(',')[7])
+            # DANCo_id = float(line[:-1].split(',')[8])
+
+            if epoch in id_epoch:
+                id_per_xdim[i].append([MLE_id, MiND_id, MADA_id])
+    
+    for i in range(len(xdim_list)):
+        id_per_xdim[i] = np.mean(id_per_xdim[i], axis=0)
+    id_per_xdim = np.array(id_per_xdim)
+
+
+    plt.figure(figsize=(6,6))
+    plt.plot(xdim_list, id_per_xdim[:,0], marker="+", markersize=6, label="MLE")
+    plt.plot(xdim_list, id_per_xdim[:,2], marker="*", markersize=6, label="MADA")
+    plt.plot(xdim_list, id_per_xdim[:,1], marker="^", markersize=6, label="MiND_ML")
+    plt.plot(xdim_list, xdim_list)
+    plt.xticks(fontsize=16)
+    plt.yticks(fontsize=16)
+    plt.xlim(0, 51)
+    plt.ylim(0, 51)
+    plt.legend()
+    plt.xlabel('Space dimension', fontsize=18)
+    plt.ylabel('Intrinsic dimension', fontsize=18)
+    plt.savefig('logs/id_per_xdim.pdf', dpi=300)
+
         
 def plot_slow_ae_loss(tau=0.0, pretrain_epoch=30, delta_t=0.01, id_list = [1,2,3,4]):
     

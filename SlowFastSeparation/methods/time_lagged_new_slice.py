@@ -12,7 +12,7 @@ from Data.dataset import Dataset
 from util.intrinsic_dimension import eval_id_embedding
 
 
-def train_time_lagged(
+def train_time_lagged_slice(
         system,
         embedding_dim,
         channel_num,
@@ -29,12 +29,13 @@ def train_time_lagged(
         batch_size=128,
         enc_net='MLP',
         e1_layer_n=3,
-        sliding_window=True
+        sliding_window=True,
+        slice_id=0
         ):
     
     # prepare
-    data_filepath = data_dir + 'tau_' + str(tau)
-    log_dir = log_dir + 'tau_' + str(tau) + f'/seed{random_seed}'
+    data_filepath = data_dir + f'slice_id{slice_id}/' + 'tau_' + str(tau)
+    log_dir = log_dir + f'slice_id{slice_id}/' + 'tau_' + str(tau) + f'/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
     
@@ -102,8 +103,8 @@ def train_time_lagged(
             if is_print: print(f'\rTau[{tau}] | epoch[{epoch}/{max_epoch}] val-MSE: prior={prior_loss:.5f}, reverse={reverse_loss:.5f}, symmetry={symmetry_loss:.5f}', end='')
         
         # save each epoch model
-        interval = 1
-        if epoch%interval==0:
+        interval = 100
+        if epoch==max_epoch:
         # if max_epoch-epoch<5:
             model.train()
             torch.save({'model': model.state_dict(), 'encoder': model.encoder.state_dict(),}, log_dir+f"/checkpoints/epoch-{epoch}.ckpt")
@@ -121,7 +122,7 @@ def train_time_lagged(
     if is_print: print()
         
 
-def test_and_save_embeddings_of_time_lagged(
+def test_and_save_embeddings_of_time_lagged_slice(
         system,
         embedding_dim,
         channel_num,
@@ -140,11 +141,12 @@ def test_and_save_embeddings_of_time_lagged(
         e1_layer_n=3,
         sliding_window=True,
         tau_unit=0.001,
-        total_t=0.9
+        total_t=0.9,
+        slice_id=0
         ):
     
     # prepare
-    data_filepath = data_dir + 'tau_' + str(tau)
+    data_filepath = data_dir + f'slice_id{slice_id}/' + 'tau_' + str(tau)
     
     # testing params
     loss_func = nn.MSELoss()
@@ -161,7 +163,7 @@ def test_and_save_embeddings_of_time_lagged(
     test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False, drop_last=False)
 
     # testing pipeline
-    fp = open(log_dir + 'tau_' + str(tau) + '/test_log.txt', 'a')
+    fp = open(log_dir + f'slice_id{slice_id}/' + 'tau_' + str(tau) + '/test_log.txt', 'a')
     interval = 1
     # for ep in range(0, max_epoch+1, interval):
     # for ep in range(max_epoch-4, max_epoch+1, interval):
@@ -180,7 +182,7 @@ def test_and_save_embeddings_of_time_lagged(
         all_embeddings = [] 
         test_outputs = np.array([])
         test_targets = np.array([])
-        var_log_dir = log_dir + 'tau_' + str(tau) + f'/seed{random_seed}/test/epoch-{epoch}'
+        var_log_dir = log_dir + f'slice_id{slice_id}/' + 'tau_' + str(tau) + f'/seed{random_seed}/test/epoch-{epoch}'
         os.makedirs(var_log_dir, exist_ok=True)
         
         # testing
@@ -332,36 +334,20 @@ def test_and_save_embeddings_of_time_lagged(
         k_list = 20
         max_point = 1000
         MLE_id = cal_id_embedding('MLE', is_print=is_print, max_point=max_point, k_list=k_list)
-        MADA_id = cal_id_embedding('MADA', is_print=is_print, max_point=max_point, k_list=k_list)
         MiND_id = cal_id_embedding('MiND_ML', is_print=is_print, max_point=max_point, k_list=k_list)
+        MADA_id = cal_id_embedding('MADA', is_print=is_print, max_point=max_point, k_list=k_list)
         DANCo_id = cal_id_embedding('DANCo', is_print=is_print, max_point=max_point, k_list=k_list)
-        print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={MLE_id:.1f}, MADA={MADA_id:.1f}, DANCo={DANCo_id:.1f}, MiND_ML={MiND_id:.1f}', end='')
+        print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={MLE_id:.1f}, DANCo={DANCo_id:.1f}, MADA={MADA_id:.1f}, MiND_ML={MiND_id:.1f}', end='')
 
         # logging
-        if system == '2S2F':
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{mse_[3]},{epoch},{MLE_id}\n")
-        elif system == '1S1F':
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
-        elif system == '1S2F':
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{epoch},{MLE_id}\n")
-        elif system == 'ToggleSwitch':
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
-        elif system == 'SignalingCascade':
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{mse_[2]},{mse_[3]},{epoch},{MLE_id}\n")
-        elif 'FHN' in system:
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
-        elif system == 'HalfMoon':
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
-        elif system == 'SC':
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[1]},{epoch},{MLE_id}\n")
-        elif 'PNAS17' in system:
-            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[0+obs_dim]},{epoch},{MLE_id},{MiND_id},{MADA_id},{DANCo_id}\n")
+        if 'PNAS17' in system:
+            fp.write(f"{tau},{random_seed},{mse_[0]},{mse_[0+obs_dim]},{epoch},{MLE_id},{MiND_id},{DANCo_id},{MADA_id}\n")
         fp.flush()
 
-        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={MLE_id:.1f}, MiND={MiND_id:.1f}, MADA={MADA_id:.1f}, PCA={PCA_id:.1f}', end='')
-        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={MLE_id:.1f}', end='')
-        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f}', end='')
+        # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={MLE_id:.1f}, MiND_ML={MiND_id:.1f}, DANCo={DANCo_id:.1f}', end='')
+        # # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f} | MLE={MLE_id:.1f}', end='')
+        # # if is_print: print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MSE: {loss_func(test_outputs, test_targets):.6f}', end='')
         
-        if checkpoint_filepath is None: break
+        # if checkpoint_filepath is None: break
         
     fp.close()
