@@ -9,6 +9,7 @@
 *.tar
 *.tar.gz
 *.txt
+*.mat
 *.npz
 *.npy
 *.jpg
