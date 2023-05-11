@@ -337,7 +337,7 @@ def test_and_save_embeddings_of_time_lagged(
             MLE_id.append(cal_id_embedding('MLE', is_print=False, max_point=max_point, k_list=k_list))
             MADA_id.append(cal_id_embedding('MADA', is_print=False, max_point=max_point, k_list=k_list))
             MiND_id.append(cal_id_embedding('MiND_ML', is_print=False, max_point=max_point, k_list=k_list))
-            # DANCo_id.append(cal_id_embedding('DANCo', is_print=False, max_point=max_point, k_list=k_list))
+            DANCo_id.append(cal_id_embedding('DANCo', is_print=False, max_point=max_point, k_list=k_list))
             print(f'iter[{i}] | MLE={MLE_id[-1]:.1f}, MADA={MADA_id[-1]:.1f}, MiND_ML={MiND_id[-1]:.1f}')
         MLE_id, MADA_id, MiND_id, DANCo_id = np.mean(MLE_id), np.mean(MADA_id), np.mean(MiND_id), np.mean(DANCo_id)
         print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={MLE_id:.1f}, MADA={MADA_id:.1f}, DANCo={DANCo_id:.1f}, MiND_ML={MiND_id:.1f}', end='')

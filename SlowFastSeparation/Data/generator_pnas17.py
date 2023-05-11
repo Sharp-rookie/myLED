@@ -70,7 +70,7 @@ def sample_gaussian_field(n, mu=0.0, sigma=1.0, l=1.0):
     return f
 
 
-def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=False, parallel=False, xdim=1, delta=0., du=0.5, data_dir='Data/PNAS17_xdim1/origin', init_type='grf'):
+def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=False, parallel=False, xdim=1, delta=0., du=0.5, data_dir='Data/PNAS17_xdim1/origin', init_type='grf', clone=1, noise=0):
     
     def solve_1_trace(trace_id, init_type, plot=False):
         
@@ -112,28 +112,41 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
         sol = itoEuler(sde.f, sde.g, x0, tspan) # Euler-Maruyama algorithm
         u = sol[:, :xdim]
         v = sol[:, xdim:]
+                
+        u_origin, v_origin = u, v
+        std = 0.1*np.std(u_origin)
+        for _ in range(clone-1):
+            if noise:
+                u_noise = u_origin + np.random.normal(loc=0, scale=std, size=u_origin.shape)
+                v_noise = v_origin + np.random.normal(loc=0, scale=std, size=v_origin.shape)
+            else:
+                u_noise = u_origin
+                v_noise = v_origin
+            
+            u = np.concatenate((u, u_noise), axis=1)
+            v = np.concatenate((v, v_noise), axis=1)
 
         os.makedirs(data_dir, exist_ok=True)
 
         if plot:
             # heatmap
             fig, ax = plt.subplots(figsize=(8, 8))
-            im = ax.imshow(u[::-1], cmap='jet', vmin=-3, vmax=3, aspect='auto', extent=[0, xdim, 0, total_t])
+            im = ax.imshow(u[::-1], cmap='jet', vmin=-3, vmax=3, aspect='auto', extent=[0, xdim*clone, 0, total_t])
             ax.set_xlabel('x', fontsize=18)
             ax.set_ylabel('t', fontsize=18)
             ax.set_title('u', fontsize=18)
             fig.colorbar(im, ax=ax)
             fig.tight_layout()
-            fig.savefig(f'{data_dir}/heatmap_u_delta2_{delta2}_du_{du}_xdim{xdim}.png', dpi=300)
+            fig.savefig(f'{data_dir}/heatmap_u.png', dpi=300)
             plt.close()
             fig, ax = plt.subplots(figsize=(8, 8))
-            im = ax.imshow(v[::-1], cmap='jet', vmin=-3, vmax=3, aspect='auto', extent=[0, xdim, 0, total_t])
+            im = ax.imshow(v[::-1], cmap='jet', vmin=-3, vmax=3, aspect='auto', extent=[0, xdim*clone, 0, total_t])
             ax.set_xlabel('x', fontsize=18)
             ax.set_ylabel('t', fontsize=18)
             ax.set_title('v', fontsize=18)
             fig.colorbar(im, ax=ax)
             fig.tight_layout()
-            fig.savefig(f'{data_dir}/heatmap_v_delta2_{delta2}_du_{du}_xdim{xdim}.png', dpi=300)
+            fig.savefig(f'{data_dir}/heatmap_v.png', dpi=300)
             plt.close()
 
             # sample trajectories
@@ -147,10 +160,10 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
             ax.set_xlabel('t / s', fontsize=18)
             ax.set_ylabel('v_x0', fontsize=18)
             plt.subplots_adjust(hspace=0.3)
-            plt.savefig(f'{data_dir}/fhn_delta2_{delta2}_du_{du}_xdim{xdim}.png', dpi=300)
+            plt.savefig(f'{data_dir}/trajectory.png', dpi=300)
             plt.close()
-
-        sol = np.stack((u,v), axis=0).transpose(1,0,2)  # (time_length, 2, xdim)
+        
+        sol = np.stack((u,v), axis=0).transpose(1,0,2)  # (time_length, 2, xdim*clone)
         
         return sol
     
@@ -163,13 +176,13 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
         
     # plot initial condition
     if plot:
+        trace = np.array(trace)
         plt.figure(figsize=(8, 8))
-        for sub_trace in trace:
-            plt.scatter(sub_trace[0, 1, :], sub_trace[0, 0, :])
+        plt.scatter(trace[:, 0, 1, 0], trace[:, 0, 0, 0])
         plt.title('Initial condition')
         plt.xlabel('v')
         plt.ylabel('u')
-        plt.savefig(f'{data_dir}/IC_delta_{delta}_du_{du}_xdim{xdim}.png')
+        plt.savefig(f'{data_dir}/IC.png')
     
     if save: 
         np.savez(f'{data_dir}/origin.npz', trace=trace, dt=dt, T=total_t)

@@ -67,9 +67,8 @@ def Data_Generate(args):
     if 'PNAS17' not in args.system:
         generate_original_data(args.trace_num, args.total_t, args.dt, save=True, plot=True, parallel=args.parallel)
     else:
-        xdim = int(args.system.split('xdim')[-1])
         origin_dir = args.data_dir.replace('data', 'origin')
-        generate_original_data(args.trace_num, args.total_t, args.dt, save=True, plot=True, parallel=args.parallel, xdim=xdim, delta=args.delta, du=args.du, data_dir=origin_dir, init_type=args.init_type)
+        generate_original_data(args.trace_num, args.total_t, args.dt, save=True, plot=True, parallel=args.parallel, xdim=args.xdim, delta=args.delta, du=args.du, data_dir=origin_dir, init_type=args.init_type, clone=args.clone, noise=args.noise)
 
     # generate dataset for ID estimating
     print('Generating training data for ID estimating')
@@ -80,32 +79,29 @@ def Data_Generate(args):
             if 'FHN' in args.system:
                 generate_dataset_slidingwindow(args.trace_num, tau, None, is_print=True, x_num=args.obs_dim)
             elif 'PNAS17' in args.system:
-                xdim = int(args.system.split('xdim')[-1])
-                generate_dataset_slidingwindow(args.trace_num, tau, None, is_print=True, xdim=xdim, data_dir=args.data_dir)
+                generate_dataset_slidingwindow(args.trace_num, tau, None, is_print=True, xdim=args.xdim, data_dir=args.data_dir)
             else:
                 generate_dataset_slidingwindow(args.trace_num, tau, None, is_print=True)
         elif args.sample_type == 'static':
             if 'PNAS17' not in args.system:
                 generate_dataset_static(10000, tau=tau, dt=args.dt, max_tau=args.tau_N, is_print=True, parallel=args.parallel)
             else:
-                xdim = int(args.system.split('xdim')[-1])
-                generate_dataset_static(1000, tau=tau, dt=args.dt, max_tau=args.tau_N, is_print=True, parallel=args.parallel, xdim=xdim, data_dir=args.data_dir, init_type=args.init_type)
+                generate_dataset_static(1000, tau=tau, dt=args.dt, max_tau=args.tau_N, is_print=True, parallel=args.parallel, xdim=args.xdim, data_dir=args.data_dir, init_type=args.init_type)
         else:
             raise NameError(f"{args.sample_type} not implemented!")
     
-    # generate dataset for lea rning fast-slow dynamics
-    print('Generating training data for learning fast-slow dynamics')
-    n = int(args.tau_s/args.tau_unit)
-    if 'FHN' in args.system:
-        generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n, x_num=args.obs_dim) # traning data
-    elif 'PNAS17' in args.system:
-        xdim = int(args.system.split('xdim')[-1])
-        generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n, xdim=xdim, data_dir=args.data_dir)
-    else:
-        generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n) # traning data
-    # for i in range(1, 50+1):
-    #     delta_t = round(args.tau_unit*i, 3)
-    #     generate_dataset_slidingwindow(args.trace_num, delta_t, None, True) # testing data
+    # # generate dataset for learning fast-slow dynamics
+    # print('Generating training data for learning fast-slow dynamics')
+    # n = int(args.tau_s/args.tau_unit)
+    # if 'FHN' in args.system:
+    #     generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n, x_num=args.obs_dim) # traning data
+    # elif 'PNAS17' in args.system:
+    #     generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n, xdim=args.xdim, data_dir=args.data_dir)
+    # else:
+    #     generate_dataset_slidingwindow(args.trace_num, args.tau_unit, None, True, n) # traning data
+    # # for i in range(1, 50+1):
+    # #     delta_t = round(args.tau_unit*i, 3)
+    # #     generate_dataset_slidingwindow(args.trace_num, delta_t, None, True) # testing data
     
     
 def ID_Estimate(args):
@@ -170,7 +166,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default='ours', help='Model: [ours, lstm, tcn, neural_ode]')
     parser.add_argument('--init_type', type=str, default='grf', help='initialization type: [grf, random]')
-    parser.add_argument('--clone', type=int, default=None, help='clone the low-dimension to high-dimension')
+    parser.add_argument('--xdim', type=int, default=1, help='space dimension')
+    parser.add_argument('--clone', type=int, default=1, help='clone the low-dimension to high-dimension')
+    parser.add_argument('--noise', type=int, default=0, help='clone with noise')
     parser.add_argument('--system', type=str, default='2S2F', help='Dynamical System: [1S1F, 1S2F, ToggleSwitch, SignalingCascade, HalfMoon, 2S2F, FHN, SC]')
     parser.add_argument('--channel_num', type=int, default=4, help='Overall featrue number')
     parser.add_argument('--obs_dim', type=int, default=4, help='Obervable feature dimension')

@@ -11,8 +11,9 @@ sample_type=sliding_window
 channel_num=2
 xdim=1
 clone=5
-data_dim=${xdim}
-system=PNAS17_xdim$xdim
+noise=1
+data_dim=$((${xdim}*${clone}))
+system=PNAS17_xdim${xdim}_clone${clone}_noise${noise}
 obs_dim=$data_dim
 trace_num=10000
 total_t=0.01
@@ -72,6 +73,9 @@ CUDA_VISIBLE_DEVICES=$gpu python run.py \
 --delta $delta \
 --du $du \
 --init_type $init_type \
+--xdim $xdim \
+--clone $clone \
+--noise $noise \
 --parallel \
 # --plot_mi \
 # --plot_corr \
