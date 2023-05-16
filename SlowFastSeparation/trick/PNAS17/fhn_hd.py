@@ -10,8 +10,10 @@ from pytorch_lightning import seed_everything
 seed_everything(729)
 
 class SDE_FHN():
-    def __init__(self, a, epsilon, delta1, delta2, du, xdim):
+    def __init__(self, a, b, I, epsilon, delta1, delta2, du, xdim):
         self.a = a
+        self.b = b
+        self.I = I
         self.epsilon = epsilon
         self.delta1 = delta1
         self.delta2 = delta2
@@ -24,15 +26,15 @@ class SDE_FHN():
         # u
         for i in range(self.xdim):
             if i == 0:
-                y.append((x[i] - 1/3*x[i]**3 - x[i+self.xdim] + self.du*(x[i+1]+x[i+self.xdim-1]-2*x[i]))/self.epsilon)
+                y.append((self.I + x[i] - 1/3*x[i]**3 - x[i+self.xdim] + self.du*(x[i+1]+x[i+self.xdim-1]-2*x[i]))/self.epsilon)
             elif i == self.xdim-1:
-                y.append((x[i] - 1/3*x[i]**3 - x[i+self.xdim] + self.du*(x[i-self.xdim+1]+x[i-1]-2*x[i]))/self.epsilon)
+                y.append((self.I + x[i] - 1/3*x[i]**3 - x[i+self.xdim] + self.du*(x[i-self.xdim+1]+x[i-1]-2*x[i]))/self.epsilon)
             else:
-                y.append((x[i] - 1/3*x[i]**3 - x[i+self.xdim] + self.du*(x[i+1]+x[i-1]-2*x[i]))/self.epsilon)
+                y.append((self.I + x[i] - 1/3*x[i]**3 - x[i+self.xdim] + self.du*(x[i+1]+x[i-1]-2*x[i]))/self.epsilon)
         
         # v
         for i in range(self.xdim):
-            y.append(x[i] + self.a)
+            y.append(x[i] + self.a - self.b*x[i+self.xdim])
 
         return np.array(y)
     
@@ -65,11 +67,11 @@ def sample_gaussian_field(n, mu=0.0, sigma=1.0, l=1.0):
     return f
 
 
-xdim, t = 2000, 0.05
+xdim, t = 10, 10.0
 l = 2.0
-a, epsilon, delta1, delta2, du = 1.05, 0.01, 0.2, 0.2, 0.
+a, b, I, epsilon, delta1, delta2, du = 0.7, 0.8, 0.5, 0.01, 0., 0., 0.5
 init_type = 'circle'
-sde = SDE_FHN(a=a, epsilon=epsilon, delta1=delta1, delta2=delta2, du=du, xdim=xdim)
+sde = SDE_FHN(a=a, b=b, I=I, epsilon=epsilon, delta1=delta1, delta2=delta2, du=du, xdim=xdim)
 tspan = np.arange(0, t, 0.001)
 
 # initial condition
@@ -122,17 +124,21 @@ except:
     sol = itoSRI2(sde.f, sde.g, x0, tspan)
     u = sol[:, :xdim]
     v = sol[:, xdim:]
-    np.savez(f'fhn_hd_delta2_{delta2}_du_{du}_xdim_{xdim}_t{t}.npz', u=u, v=v)
+    # np.savez(f'fhn_hd_delta2_{delta2}_du_{du}_xdim_{xdim}_t{t}.npz', u=u, v=v)
     
-# slow manifold
+# fast nullcline (slow manifold)
 u_s = np.linspace(-2.4, 2.4, 100)
-v_s = -u_s**3/3 + u_s
+v_s = -u_s**3/3 + u_s + I
+
+# slow nullcline
+v_f = (u_s + a) / b
 
 # phase
 plt.figure(figsize=(8, 8))
 for i in range(xdim):
     plt.plot(v[:, i], u[:, i], alpha=0.5)
     plt.plot(v_s, u_s, 'k--')
+    plt.plot(v_f, u_s, 'k--')
     plt.xlabel('v', fontsize=18)
     plt.ylabel('u', fontsize=18)
 plt.savefig(f'phase_delta{delta2}_du{du}.png', dpi=300)
@@ -154,19 +160,19 @@ plt.colorbar(im, ax=ax)
 plt.savefig(f'heatmap_delta{delta2}_du{du}.png', dpi=300)
 plt.close()
 
-# # sample trajectories
-# plt.figure(figsize=(10,12))
-# ax = plt.subplot(211)
-# ax.plot(tspan, u[:, 0])
-# ax.set_xlabel('t / s', fontsize=18)
-# ax.set_ylabel('u_x0', fontsize=18)
-# ax = plt.subplot(212)
-# ax.plot(tspan, v[:, 0])
-# ax.set_xlabel('t / s', fontsize=18)
-# ax.set_ylabel('v_x0', fontsize=18)
-# plt.subplots_adjust(hspace=0.3)
-# plt.savefig(f'x0trace_delta{delta2}_du{du}.png', dpi=300)
-# plt.close()
+# sample trajectories
+plt.figure(figsize=(10,12))
+ax = plt.subplot(211)
+ax.plot(tspan, u[:, 0])
+ax.set_xlabel('t / s', fontsize=18)
+ax.set_ylabel('u_x0', fontsize=18)
+ax = plt.subplot(212)
+ax.plot(tspan, v[:, 0])
+ax.set_xlabel('t / s', fontsize=18)
+ax.set_ylabel('v_x0', fontsize=18)
+plt.subplots_adjust(hspace=0.3)
+plt.savefig(f'x0trace_delta{delta2}_du{du}.png', dpi=300)
+plt.close()
 
 # # 3D plot
 # plt.figure(figsize=(10, 10))

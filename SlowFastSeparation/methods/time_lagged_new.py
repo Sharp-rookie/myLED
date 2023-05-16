@@ -29,11 +29,13 @@ def train_time_lagged(
         batch_size=128,
         enc_net='MLP',
         e1_layer_n=3,
-        sliding_window=True
+        sliding_window=True,
+        start_t=0.0,
+        end_t=None
         ):
     
     # prepare
-    data_filepath = data_dir + 'tau_' + str(tau)
+    data_filepath = data_dir + f'st{start_t}_et{end_t}/' + 'tau_' + str(tau)
     log_dir = log_dir + 'tau_' + str(tau) + f'/seed{random_seed}'
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(log_dir+"/checkpoints/", exist_ok=True)
@@ -141,11 +143,13 @@ def test_and_save_embeddings_of_time_lagged(
         e1_layer_n=3,
         sliding_window=True,
         tau_unit=0.001,
-        total_t=0.9
+        total_t=0.9,
+        start_t=0.0,
+        end_t=None
         ):
     
     # prepare
-    data_filepath = data_dir + 'tau_' + str(tau)
+    data_filepath = data_dir + f'st{start_t}_et{end_t}/' + 'tau_' + str(tau)
     
     # testing params
     loss_func = nn.MSELoss()
@@ -255,7 +259,7 @@ def test_and_save_embeddings_of_time_lagged(
             plt.savefig(var_log_dir+"/result.png", dpi=300)
             plt.close()
 
-            point_num = int(total_t/(tau if tau!=0. else tau_unit))
+            point_num = int(((end_t if end_t else total_t)-start_t)/(tau if tau!=0. else tau_unit))
 
             # heatmap
             plt.figure(figsize=(13,18))
@@ -263,43 +267,37 @@ def test_and_save_embeddings_of_time_lagged(
             ax1.set_xlabel('x', fontsize=16)
             ax1.set_ylabel('t', fontsize=16)
             ax1.set_title('true u', fontsize=16)
-            im1 = ax1.imshow((test_targets[:point_num,0,0,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1)
-            ax1.invert_yaxis()
+            im1 = ax1.imshow((test_targets[:point_num,0,0,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1, extent=[0, test_targets.shape[-1], start_t, end_t])
             plt.colorbar(im1, ax=ax1)
             ax2 = plt.subplot(322)
             ax2.set_title('true v', fontsize=16)
             ax2.set_xlabel('x', fontsize=16)
             ax2.set_ylabel('t', fontsize=16)
-            im2 = ax2.imshow((test_targets[:point_num,0,1,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1)
-            ax2.invert_yaxis()
+            im2 = ax2.imshow((test_targets[:point_num,0,1,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1, extent=[0, test_targets.shape[-1], start_t, end_t])
             plt.colorbar(im2, ax=ax2)
             ax3 = plt.subplot(323)
             ax3.set_xlabel('x', fontsize=16)
             ax3.set_ylabel('t', fontsize=16)
             ax3.set_title('pred u', fontsize=16)
-            im3 = ax3.imshow((test_outputs[:point_num,0,0,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1)
-            ax3.invert_yaxis()
+            im3 = ax3.imshow((test_outputs[:point_num,0,0,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1, extent=[0, test_targets.shape[-1], start_t, end_t])
             plt.colorbar(im3, ax=ax3)
             ax4 = plt.subplot(324)
             ax4.set_title('pred v', fontsize=16)
             ax4.set_xlabel('x', fontsize=16)
             ax4.set_ylabel('t', fontsize=16)
-            im4 = ax4.imshow((test_outputs[:point_num,0,1,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1)
-            ax4.invert_yaxis()
+            im4 = ax4.imshow((test_outputs[:point_num,0,1,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=0, vmax=1, extent=[0, test_targets.shape[-1], start_t, end_t])
             plt.colorbar(im4, ax=ax4)
             ax5 = plt.subplot(325)
             ax5.set_title('error u', fontsize=16)
             ax5.set_xlabel('x', fontsize=16)
             ax5.set_ylabel('t', fontsize=16)
-            im5 = ax5.imshow((test_outputs[:point_num,0,0,:]-test_targets[:point_num,0,0,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=-0.3, vmax=0.3)
-            ax5.invert_yaxis()
+            im5 = ax5.imshow((test_outputs[:point_num,0,0,:]-test_targets[:point_num,0,0,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=-0.3, vmax=0.3, extent=[0, test_targets.shape[-1], start_t, end_t])
             plt.colorbar(im5, ax=ax5)
             ax6 = plt.subplot(326)
             ax6.set_title('error v', fontsize=16)
             ax6.set_xlabel('x', fontsize=16)
             ax6.set_ylabel('t', fontsize=16)
-            im6 = ax6.imshow((test_outputs[:point_num,0,1,:]-test_targets[:point_num,0,1,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=-0.3, vmax=0.3)
-            ax6.invert_yaxis()
+            im6 = ax6.imshow((test_outputs[:point_num,0,1,:]-test_targets[:point_num,0,1,:]).cpu().numpy(), aspect='auto', cmap='jet', vmin=-0.3, vmax=0.3, extent=[0, test_targets.shape[-1], start_t, end_t])
             plt.colorbar(im6, ax=ax6)
             plt.savefig(var_log_dir+"/error_heatmap.png", dpi=300)
             plt.close()
@@ -337,7 +335,8 @@ def test_and_save_embeddings_of_time_lagged(
             MLE_id.append(cal_id_embedding('MLE', is_print=False, max_point=max_point, k_list=k_list))
             MADA_id.append(cal_id_embedding('MADA', is_print=False, max_point=max_point, k_list=k_list))
             MiND_id.append(cal_id_embedding('MiND_ML', is_print=False, max_point=max_point, k_list=k_list))
-            DANCo_id.append(cal_id_embedding('DANCo', is_print=False, max_point=max_point, k_list=k_list))
+            # DANCo_id.append(cal_id_embedding('DANCo', is_print=False, max_point=max_point, k_list=k_list))
+            DANCo_id = 0.
             print(f'iter[{i}] | MLE={MLE_id[-1]:.1f}, MADA={MADA_id[-1]:.1f}, MiND_ML={MiND_id[-1]:.1f}')
         MLE_id, MADA_id, MiND_id, DANCo_id = np.mean(MLE_id), np.mean(MADA_id), np.mean(MiND_id), np.mean(DANCo_id)
         print(f'\rTau[{tau}] | Test epoch[{epoch}/{max_epoch}] | MLE={MLE_id:.1f}, MADA={MADA_id:.1f}, DANCo={DANCo_id:.1f}, MiND_ML={MiND_id:.1f}', end='')
