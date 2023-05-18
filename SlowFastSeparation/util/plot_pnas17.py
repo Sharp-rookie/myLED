@@ -112,40 +112,56 @@ def plot_id_per_tau(tau_list, id_epoch, log_dir):
     plt.savefig(log_dir + 'id_per_tau.pdf', dpi=300)
 
 
-def plot_id_per_slice(slice_id_list, id_epoch, log_dir):
+def plot_id_per_slice():
+    
+    log_dir = 'logs/PNAS17_xdim10_clone1_noise0_random_fhn0_delta0.1_du0.0-sliding_window-circle/'
+    
+    start_t_list = [0.001, 0.005] + [0.02*i for i in range(1,5)] + [0.2*i for i in range(1,5)] + [1.0+2.0*i for i in range(1,7)]
+    id_list = [[] for _ in start_t_list]
 
-    id_per_slice_id = [[] for _ in slice_id_list]
-    for i, slice_id in enumerate(slice_id_list):
-        fp = open(log_dir + f'slice_id{slice_id}/tau_0.0/test_log.txt', 'r')
+    for i, start_t in enumerate(start_t_list):
+        
+        if start_t == 0.001:
+            fp = open(log_dir + f'st0.001_et0.005/TimeSelection/tau_0.0/test_log.txt', 'r')
+        elif start_t == 0.005:
+            fp = open(log_dir + f'st0.005_et0.01/TimeSelection/tau_0.0/test_log.txt', 'r')
+        elif start_t > 0.01 and start_t < 0.1:
+            fp = open(log_dir + f'st{round(start_t,3)}_et{round(start_t+0.02,3)}/TimeSelection/tau_0.0/test_log.txt', 'r')
+        elif start_t > 0.1 and start_t < 1.0:
+            fp = open(log_dir + f'st{round(start_t,3)}_et{round(start_t+0.2,3)}/TimeSelection/tau_0.0/test_log.txt', 'r')
+        elif start_t >= 1.0:
+            fp = open(log_dir + f'st{round(start_t,3)}_et{round(start_t+2.0,3)}/TimeSelection/tau_0.0/test_log.txt', 'r')
+        
         for line in fp.readlines():
             seed = int(line[:-1].split(',')[1])
             epoch = int(line[:-1].split(',')[4])
             MLE_id = float(line[:-1].split(',')[5])
             MiND_id = float(line[:-1].split(',')[6])
-            # DANCo_id = float(line[:-1].split(',')[7])
-            MADA_id = float(line[:-1].split(',')[8])
-
-            if epoch in id_epoch:
-                # id_per_slice_id[i].append([MLE_id, MiND_id, DANCo_id, MADA_id])
-                id_per_slice_id[i].append([MLE_id, MiND_id, MADA_id])
+            MADA_id = float(line[:-1].split(',')[7])
+            # DANCo_id = float(line[:-1].split(',')[8])
+            
+            id_list[i].append([MLE_id, MiND_id, MADA_id])
     
-    for i in range(len(slice_id_list)):
-        id_per_slice_id[i] = np.mean(id_per_slice_id[i], axis=0)
-    id_per_slice_id = np.array(id_per_slice_id)
+    result = []
+    for i in range(len(id_list)):
+        result.append(np.mean(id_list[i], axis=0))
+    result = np.array(result)
 
 
     plt.figure(figsize=(6,6))
-    plt.plot(slice_id_list, id_per_slice_id[:,0], marker="+", markersize=6, label="MLE")
-    plt.plot(slice_id_list, id_per_slice_id[:,1], marker="^", markersize=6, label="MiND_ML")
-    # plt.plot(slice_id_list, id_per_slice_id[:,2], marker="o", markersize=6, label="DANCo")
-    plt.plot(slice_id_list, id_per_slice_id[:,2], marker="*", markersize=6, label="MADA")
+    plt.plot(start_t_list, result[:,0], marker="+", markersize=6, label="MLE")
+    plt.plot(start_t_list, result[:,1], marker="^", markersize=6, label="MiND_ML")
+    # plt.plot(start_t_list, result[:,2], marker="o", markersize=6, label="DANCo")
+    plt.plot(start_t_list, result[:,2], marker="*", markersize=6, label="MADA")
     plt.xticks(fontsize=16)
     plt.yticks(fontsize=16)
+    plt.ylim(0, 13)
     plt.legend()
     plt.xlabel('t / s', fontsize=18)
     plt.ylabel('Intrinsic dimensionality', fontsize=18)
-    plt.subplots_adjust(bottom=0.15)
-    plt.savefig(log_dir + 'id_per_slice_id.pdf', dpi=300)
+    plt.savefig(log_dir + 'id_per_slice.pdf', dpi=300)
+    plt.xscale("log")
+    plt.savefig(log_dir + 'id_per_slice_log.pdf', dpi=300)
 
 
 def plot_id_per_xdim(xdim_list, id_epoch, log_dir):
@@ -360,5 +376,6 @@ def plot_evolve(length):
 
 if __name__ == '__main__':
     
-    plot_fhn_autocorr(T=15)
+    # plot_fhn_autocorr(T=15)
     # plot_evolve(0.8)
+    plot_id_per_slice()

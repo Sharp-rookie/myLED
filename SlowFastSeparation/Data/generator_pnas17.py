@@ -114,7 +114,7 @@ def generate_original_data(trace_num, total_t=6280, dt=0.001, save=True, plot=Fa
             sde = SDE_FHN(a=a, epsilon=epsilon, delta1=delta, delta2=delta, du=du, xdim=xdim)
         else:
             a, b, I, epsilon = 0.7, 0.8, 0.5, 0.01
-            sde = ODE_FHN(a=a, b=b, I=I, epsilon=epsilon, delta1=0., delta2=0., du=du, xdim=xdim)
+            sde = ODE_FHN(a=a, b=b, I=I, epsilon=epsilon, delta1=delta, delta2=delta, du=du, xdim=xdim)
         
         # initial condition
         if init_type=='random':
@@ -358,9 +358,9 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
     ##################################
     # Create [train,val,test] dataset
     ##################################
-    train_num = int(0.45*trace_num)
-    val_num = int(0.05*trace_num)
-    test_num = int(0.5*trace_num)
+    train_num = int(0.6*trace_num)
+    val_num = int(0.1*trace_num)
+    test_num = int(0.3*trace_num)
     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
     for item in ['train','val','test']:                
         # select trace num
@@ -457,113 +457,3 @@ def generate_dataset_slidingwindow(trace_num, tau, sample_num=None, is_print=Fal
                 plt.plot(sequences[:,sequence_length-1,1,0], label='v_x0')
                 plt.legend()
                 plt.savefig(data_dir+f'/{item}_target.pdf', dpi=300)
-
-
-# def generate_dataset_slidingwindow_slice(trace_num, tau, sample_num=None, is_print=False, sequence_length=None, xdim=1, data_dir='Data/PNAS17_xdim1/data'):
-    
-#     # load original data
-#     if is_print: print('loading original trace data:')
-#     origin_dir = data_dir.replace('data', 'origin')
-#     tmp = np.load(f"{origin_dir}/origin.npz")
-#     dt = tmp['dt']
-#     data = tmp['trace']
-#     total_t = tmp['T']
-#     if is_print: print(f'tau[{tau}]', 'data shape', data.shape, '# (trace_num, time_length, channel, feature_num)')
-
-#     # single-sample time steps
-#     if sequence_length is None:
-#         sequence_length = 2 if tau != 0. else 1
-#         seq_none = True
-#     else:
-#         seq_none = False
-    
-#     ##################################
-#     # Create [train,val,test] dataset
-#     ##################################
-#     train_num = int(0.7*trace_num)
-#     val_num = int(0.1*trace_num)
-#     test_num = int(0.2*trace_num)
-#     trace_list = {'train':range(train_num), 'val':range(train_num,train_num+val_num), 'test':range(train_num+val_num,train_num+val_num+test_num)}
-#     for item in ['train','val','test']:
-#         for slice_id in range(int(total_t)):
-
-#             data_dir_tmp = f"{data_dir}/slice_id{slice_id}/tau_{tau}"
-
-#             if os.path.exists(f"{data_dir_tmp}/{item}.npz"): continue
-
-#             # save statistic information
-#             os.makedirs(data_dir_tmp, exist_ok=True)
-#             np.savetxt(data_dir_tmp + "/data_mean.txt", np.mean(data, axis=(0,1)).reshape(1,-1))
-#             np.savetxt(data_dir_tmp + "/data_std.txt", np.std(data, axis=(0,1)).reshape(1,-1))
-#             np.savetxt(data_dir_tmp + "/data_max.txt", np.max(data, axis=(0,1)).reshape(1,-1))
-#             np.savetxt(data_dir_tmp + "/data_min.txt", np.min(data, axis=(0,1)).reshape(1,-1))
-#             np.savetxt(data_dir_tmp + "/tau.txt", [tau]) # Save the timestep
-                
-#             # select trace num
-#             N_TRACE = len(trace_list[item])
-#             data_item = data[trace_list[item]][:, slice_id*int(1/dt):(slice_id+1)*int(1//dt)]
-
-#             # subsampling
-#             step_length = int(tau/dt) if tau!=0. else 1
-
-#             # select sliding window index from N trace
-#             idxs_timestep = []
-#             idxs_ic = []
-#             for ic in range(N_TRACE):
-#                 seq_data = data_item[ic]
-#                 idxs = np.arange(0, np.shape(seq_data)[0]-step_length*(sequence_length-1), 1)
-#                 for idx_ in idxs:
-#                     idxs_ic.append(ic)
-#                     idxs_timestep.append(idx_)
-
-#             # generator item dataset
-#             sequences = []
-#             parallel_sequences = [[] for _ in range(N_TRACE)]
-#             for bn in range(len(idxs_timestep)):
-#                 idx_ic = idxs_ic[bn]
-#                 idx_timestep = idxs_timestep[bn]
-#                 tmp = data_item[idx_ic, idx_timestep : idx_timestep+step_length*(sequence_length-1)+1 : step_length]
-#                 sequences.append(tmp)
-#                 parallel_sequences[idx_ic].append(tmp)
-#                 if is_print: print(f'\rtau[{tau}] sliding window for {item} data [{bn+1}/{len(idxs_timestep)}]', end='')
-#             if is_print: print()
-
-#             sequences = np.array(sequences) 
-#             if is_print: print(f'tau[{tau}]', f"{item} dataset (sequence_length={sequence_length}, step_length={step_length})", np.shape(sequences))
-
-#             # keep sequences_length equal to sample_num
-#             if sample_num is not None:
-#                 repeat_num = int(np.floor(N_TRACE*sample_num/len(sequences)))
-#                 idx = np.random.choice(range(len(sequences)), N_TRACE*sample_num-len(sequences)*repeat_num, replace=False)
-#                 idx = np.sort(idx)
-#                 tmp1 = sequences[idx]
-#                 tmp2 = None
-#                 for i in range(repeat_num):
-#                     if i == 0:
-#                         tmp2 = sequences
-#                     else:
-#                         tmp2 = np.concatenate((tmp2, sequences), axis=0)
-#                 sequences = tmp1 if tmp2 is None else np.concatenate((tmp1, tmp2), axis=0)
-#             if is_print: print(f'tau[{tau}]', f"after process", np.shape(sequences))
-
-#             # save
-#             if not seq_none:
-#                 np.savez(data_dir_tmp+f'/{item}_{sequence_length}.npz', data=sequences)
-#             else:
-#                 np.savez(data_dir_tmp+f'/{item}.npz', data=sequences)
-
-#                 # plot
-#                 if seq_none:
-#                     plt.figure(figsize=(16,10))
-#                     plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-#                     plt.plot(sequences[:,0,0,0], label='u_x0')
-#                     plt.plot(sequences[:,0,1,0], label='v_x0')
-#                     plt.legend()
-#                     plt.savefig(data_dir_tmp+f'/{item}_input.pdf', dpi=300)
-
-#                     plt.figure(figsize=(16,10))
-#                     plt.title(f'{item.capitalize()} Data' + f' | sample_num[{len(sequences) if sample_num is None else sample_num}]')
-#                     plt.plot(sequences[:,sequence_length-1,0,0], label='u_x0')
-#                     plt.plot(sequences[:,sequence_length-1,1,0], label='v_x0')
-#                     plt.legend()
-#                     plt.savefig(data_dir_tmp+f'/{item}_target.pdf', dpi=300)
